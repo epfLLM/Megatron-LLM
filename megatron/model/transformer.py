@@ -15,6 +15,9 @@ from megatron.model.fused_softmax import FusedScaleMaskSoftmax
 from megatron.model.fused_bias_gelu import bias_gelu_impl
 from megatron.model.utils import attention_mask_func, openai_gelu, erf_gelu
 
+# Extracted from: https://github.com/bigscience-workshop/Megatron-DeepSpeed
+from .glu_activations import GLU_ACTIVATIONS
+
 try:
     from einops import rearrange
 except ImportError:
@@ -90,7 +93,8 @@ class ParallelMLP(MegatronModule):
         # Project to 4h.
         self.dense_h_to_4h = tensor_parallel.ColumnParallelLinear(
             args.hidden_size,
-            args.ffn_hidden_size,
+            # GLU is a special activation that divides the dimension by a factor 2.
+            2 * args.ffn_hidden_size if args.glu_activation else args.ffn_hidden_size,
             gather_output=False,
             init_method=init_method,
             skip_bias_add=True,
@@ -99,7 +103,10 @@ class ParallelMLP(MegatronModule):
 
         self.bias_gelu_fusion = args.bias_gelu_fusion
         self.activation_func = F.gelu
-        if args.openai_gelu:
+
+        if args.glu_activation:
+            self.activation_func = GLU_ACTIVATIONS[args.glu_activation]
+        elif args.openai_gelu:
             self.activation_func = openai_gelu
         elif args.onnx_safe:
             self.activation_func = erf_gelu

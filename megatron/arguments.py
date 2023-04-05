@@ -7,6 +7,8 @@ import os
 
 import torch
 
+import megatron
+
 def parse_args(extra_args_provider=None, ignore_unknown_args=False):
     """Parse all arguments."""
     parser = argparse.ArgumentParser(description='Megatron-LM Arguments',
@@ -457,6 +459,12 @@ def _add_network_size_args(parser):
                        dest='bert_binary_head')
     group.add_argument('--num-experts', type=int, default=None,
                        help='Number of Experts in Switch Transformer (None means no Switch)')
+    # Extracted from: https://github.com/bigscience-workshop/Megatron-DeepSpeed
+    group.add_argument('--glu-activation', type=str,
+                       choices=megatron.model.glu_activations.GLU_ACTIVATIONS.keys(),
+                       help='GLU activations to use.'
+                       )
+
     return parser
 
 

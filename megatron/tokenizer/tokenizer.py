@@ -31,8 +31,8 @@ def build_tokenizer(args):
         assert args.merge_file is not None
         tokenizer = _GPT2BPETokenizer(args.vocab_file, args.merge_file)
     elif args.tokenizer_type == 'SentencePieceTokenizer':
-        assert args.tokenizer_model is not None
-        tokenizer = _SentencePieceTokenizer(args.tokenizer_model, vocab_extra_ids=args.vocab_extra_ids)
+        assert args.vocab_file is not None
+        tokenizer = _SentencePieceTokenizer(args.vocab_file, vocab_extra_ids=args.vocab_extra_ids)
     else:
         raise NotImplementedError('{} tokenizer is not '
                                   'implemented.'.format(args.tokenizer_type))
@@ -283,6 +283,7 @@ class _GPT2BPETokenizer(AbstractTokenizer):
         return self.eod_id
 
 
+
 class _SentencePieceTokenizer(AbstractTokenizer):
     """SentencePieceTokenizer-Megatron wrapper"""
 
@@ -403,7 +404,6 @@ class _SentencePieceTokenizer(AbstractTokenizer):
                 text += self._tokenizer.decode_ids(ids[last_i:i]) + " "
                 text += self._inv_special_tokens[id] + " "
                 last_i = i + 1
-
         text += self._tokenizer.decode_ids(ids[last_i:])
         return text.strip()
 

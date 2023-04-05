@@ -7,6 +7,8 @@ import os
 
 import torch
 
+import megatron
+
 def parse_args(extra_args_provider=None, ignore_unknown_args=False):
     """Parse all arguments."""
     parser = argparse.ArgumentParser(description='Megatron-LM Arguments',
@@ -451,6 +453,11 @@ def _add_network_size_args(parser):
                        'reasons.')
     group.add_argument('--use_bias', action='store_true',
                        help='If set then use bias.') # Added during hackathon                 
+    # Extracted from: https://github.com/facebookresearch/llama/blob/main/llama/model.py
+    group.add_argument('--use-rms-norm',
+                       action='store_true',
+                       help='If set, use RMSNorm instead of LayerNorm.'
+                       )
     group.add_argument('--onnx-safe', type=bool, required=False,
                        help='Use workarounds for known problems with '
                        'Torch ONNX exporter')
@@ -459,6 +466,12 @@ def _add_network_size_args(parser):
                        dest='bert_binary_head')
     group.add_argument('--num-experts', type=int, default=None,
                        help='Number of Experts in Switch Transformer (None means no Switch)')
+    # Extracted from: https://github.com/bigscience-workshop/Megatron-DeepSpeed
+    group.add_argument('--glu-activation', type=str,
+                       choices=megatron.model.glu_activations.GLU_ACTIVATIONS.keys(),
+                       help='GLU activations to use.'
+                       )
+
     return parser
 
 

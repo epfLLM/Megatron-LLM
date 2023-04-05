@@ -5,6 +5,7 @@
 import random
 import os
 import time
+import wandb
 
 import numpy as np
 import torch
@@ -44,9 +45,17 @@ def initialize_megatron(extra_args_provider=None, args_defaults={},
         load_args_from_checkpoint(args)
 
     validate_args(args, args_defaults)
-        
-    # set global args, build tokenizer, and set adlr-autoresume,
-    # tensorboard-writer, and timers.
+    
+    if hasattr(args, 'use_wandb') and args.rank == (args.world_size - 1):
+        project_name = args.wandb_project_name if hasattr(args, 'wandb_project_name') else "default-project"
+        wandb.init(
+            # set the wandb project where this run will be logged
+            project=project_name,
+            # track hyperparameters and run metadata
+            config=vars(args),
+        )
+
+    # set global args, build tokenizer, and set adlr-autoresume, and timers.
     set_global_variables(args)
 
     # torch.distributed initialization

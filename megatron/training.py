@@ -11,6 +11,8 @@ _TRAIN_START_TIME = time.time()
 import torch
 from torch.nn.parallel.distributed import DistributedDataParallel as torchDDP
 
+import wandb
+
 from megatron import get_args
 from megatron import get_signal_handler
 from megatron import get_timers
@@ -475,7 +477,6 @@ def training_log(loss_dict, total_loss_dict, learning_rate, iteration,
     """Log training information such as losses, timing, ...."""
     args = get_args()
     timers = get_timers()
-    writer = get_tensorboard_writer()
 
     # Advanced, skipped, and Nan iterations.
     advanced_iters_key = 'advanced iterations'
@@ -543,68 +544,34 @@ def training_log(loss_dict, total_loss_dict, learning_rate, iteration,
 
     # Tensorboard values.
     # Timer requires all the ranks to call.
-    if args.log_timers_to_tensorboard and \
-       (iteration % args.tensorboard_log_interval == 0):
-        timers.write(timers_to_log, writer, iteration,
-                     normalizer=total_iterations)
-    if writer and (iteration % args.tensorboard_log_interval == 0):
-        if args.log_learning_rate_to_tensorboard:
-            writer.add_scalar('learning-rate', learning_rate, iteration)
-            writer.add_scalar('learning-rate vs samples', learning_rate,
-                              args.consumed_train_samples)
-        if args.log_batch_size_to_tensorboard:
-            writer.add_scalar('batch-size', batch_size, iteration)
-            writer.add_scalar('batch-size vs samples', batch_size,
-                              args.consumed_train_samples)
-        for key in loss_dict:
-            writer.add_scalar(key , loss_dict[key], iteration)
-            writer.add_scalar(key + ' vs samples', loss_dict[key],
-                              args.consumed_train_samples)
-        if args.log_loss_scale_to_tensorboard:
-            writer.add_scalar('loss-scale', loss_scale, iteration)
-            writer.add_scalar('loss-scale vs samples', loss_scale,
-                              args.consumed_train_samples)
-        if args.log_world_size_to_tensorboard:
-            writer.add_scalar('world-size', args.world_size, iteration)
-            writer.add_scalar('world-size vs samples', args.world_size,
-                              args.consumed_train_samples)
-        if grad_norm is not None:
-            writer.add_scalar('grad-norm', grad_norm, iteration)
-            writer.add_scalar('grad-norm vs samples', grad_norm,
-                              args.consumed_train_samples)
-        if num_zeros_in_grad is not None:
-            writer.add_scalar('num-zeros', num_zeros_in_grad, iteration)
-            writer.add_scalar('num-zeros vs samples', num_zeros_in_grad,
-                              args.consumed_train_samples)
-        if params_norm is not None:
-            writer.add_scalar('params-norm', params_norm, iteration)
-            writer.add_scalar('params-norm vs samples', params_norm,
-                              args.consumed_train_samples)
-        if args.log_memory_to_tensorboard:
-            mem_stats = torch.cuda.memory_stats()
-            writer.add_scalar(
-                "mem-reserved-bytes",
-                mem_stats["reserved_bytes.all.current"],
-                iteration,
-            )
-            writer.add_scalar(
-                "mem-allocated-bytes",
-                mem_stats["allocated_bytes.all.current"],
-                iteration,
-            )
-            writer.add_scalar(
-                "mem-allocated-count",
-                mem_stats["allocation.all.current"],
-                iteration,
-            )
+    # if args.log_timers_to_tensorboard and \
+    #    (iteration % args.tensorboard_log_interval == 0):
+    #     timers.write(timers_to_log, writer, iteration,
+    #                  normalizer=total_iterations)
+
+    if args.rank == (args.world_size - 1) and (iteration % args.log_interval == 0):
+
+        mem_stats = torch.cuda.memory_stats()
+
+        metrics_dict = {
+            'learning-rate': learning_rate,
+            'batch-size': batch_size,
+            'loss-scale': loss_scale,
+            'grad-norm': grad_norm,
+            'params-norm': params_norm,
+            'mem-reserved-bytes': mem_stats["reserved_bytes.all.current"],
+            'mem-allocated-bytes': mem_stats["allocated_bytes.all.current"],
+            'mem-allocated-count': mem_stats["allocation.all.current"],
+        } | loss_dict
+
+        wandb.log(metrics_dict, step=iteration)
+            # writer.add_scalar('learning-rate vs samples', learning_rate,
+            #                   args.consumed_train_samples)
+
 
     if iteration % args.log_interval == 0:
         elapsed_time = timers('interval-time').elapsed(barrier=True)
         elapsed_time_per_iteration = elapsed_time / total_iterations
-        if writer:
-            if args.log_timers_to_tensorboard:
-                writer.add_scalar('iteration-time',
-                                  elapsed_time_per_iteration, iteration)
         log_string = ' iteration {:8d}/{:8d} |'.format(
             iteration, args.train_iters)
         log_string += ' consumed samples: {:12d} |'.format(

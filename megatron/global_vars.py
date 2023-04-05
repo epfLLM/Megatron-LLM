@@ -14,7 +14,6 @@ from .timers import Timers
 _GLOBAL_ARGS = None
 _GLOBAL_NUM_MICROBATCHES_CALCULATOR = None
 _GLOBAL_TOKENIZER = None
-_GLOBAL_TENSORBOARD_WRITER = None
 _GLOBAL_ADLR_AUTORESUME = None
 _GLOBAL_TIMERS = None
 _GLOBAL_SIGNAL_HANDLER = None
@@ -42,12 +41,6 @@ def get_tokenizer():
     """Return tokenizer."""
     _ensure_var_is_initialized(_GLOBAL_TOKENIZER, 'tokenizer')
     return _GLOBAL_TOKENIZER
-
-
-def get_tensorboard_writer():
-    """Return tensorboard writer. It can be None so no need
-    to check if it is initialized."""
-    return _GLOBAL_TENSORBOARD_WRITER
 
 
 def get_adlr_autoresume():
@@ -85,7 +78,6 @@ def set_global_variables(args):
     _build_num_microbatches_calculator(args)
     if args.vocab_file:
         _ = _build_tokenizer(args)
-    _set_tensorboard_writer(args)
     _set_adlr_autoresume(args)
     _set_timers(args)
 
@@ -120,26 +112,6 @@ def rebuild_tokenizer(args):
     global _GLOBAL_TOKENIZER
     _GLOBAL_TOKENIZER = None
     return _build_tokenizer(args)
-
-
-def _set_tensorboard_writer(args):
-    """Set tensorboard writer."""
-    global _GLOBAL_TENSORBOARD_WRITER
-    _ensure_var_is_not_initialized(_GLOBAL_TENSORBOARD_WRITER,
-                                   'tensorboard writer')
-
-    if hasattr(args, 'tensorboard_dir') and \
-       args.tensorboard_dir and args.rank == (args.world_size - 1):
-        try:
-            from torch.utils.tensorboard import SummaryWriter
-            print('> setting tensorboard ...')
-            _GLOBAL_TENSORBOARD_WRITER = SummaryWriter(
-                log_dir=args.tensorboard_dir,
-                max_queue=args.tensorboard_queue_size)
-        except ModuleNotFoundError:
-            print('WARNING: TensorBoard writing requested but is not '
-                  'available (are you using PyTorch 1.1.0 or later?), '
-                  'no TensorBoard logs will be written.', flush=True)
 
 
 def _set_adlr_autoresume(args):

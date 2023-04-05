@@ -86,11 +86,11 @@ class ParallelMLP(MegatronModule):
         super(ParallelMLP, self).__init__()
         args = get_args()
 
-
         # Project to 4h.
         self.dense_h_to_4h = tensor_parallel.ColumnParallelLinear(
             args.hidden_size,
             args.ffn_hidden_size,
+            bias=args.use_bias,
             gather_output=False,
             init_method=init_method,
             skip_bias_add=True,
@@ -108,6 +108,7 @@ class ParallelMLP(MegatronModule):
         self.dense_4h_to_h = tensor_parallel.RowParallelLinear(
             args.ffn_hidden_size,
             args.hidden_size,
+            bias=args.use_bias,
             input_is_parallel=True,
             init_method=output_layer_init_method,
             skip_bias_add=True,
@@ -402,6 +403,7 @@ class ParallelAttention(MegatronModule):
             self.query_key_value = tensor_parallel.ColumnParallelLinear(
                 args.hidden_size,
                 3 * projection_size,
+                bias=args.use_bias,
                 gather_output=False,
                 init_method=init_method,
                 async_tensor_model_parallel_allreduce=args.async_tensor_model_parallel_allreduce,
@@ -411,6 +413,7 @@ class ParallelAttention(MegatronModule):
             self.query = tensor_parallel.ColumnParallelLinear(
                 args.hidden_size,
                 projection_size,
+                bias=args.use_bias,
                 gather_output=False,
                 init_method=init_method,
                 async_tensor_model_parallel_allreduce=args.async_tensor_model_parallel_allreduce,
@@ -420,6 +423,7 @@ class ParallelAttention(MegatronModule):
             self.key_value = tensor_parallel.ColumnParallelLinear(
                 args.hidden_size,
                 2 * projection_size,
+                bias=args.use_bias,
                 gather_output=False,
                 init_method=init_method,
                 async_tensor_model_parallel_allreduce=args.async_tensor_model_parallel_allreduce,
@@ -438,6 +442,7 @@ class ParallelAttention(MegatronModule):
         self.dense = tensor_parallel.RowParallelLinear(
             projection_size,
             args.hidden_size,
+            bias=args.use_bias,
             input_is_parallel=True,
             init_method=output_layer_init_method,
             skip_bias_add=True,

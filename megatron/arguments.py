@@ -481,7 +481,7 @@ def _add_network_size_args(parser):
     group.add_argument('--position-embedding-type', type=lambda x: PositionEmbeddingType[x],
                        choices=list(PositionEmbeddingType),
                        default=PositionEmbeddingType.absolute,
-                       help='Define position embedding type ("absolute" | "rotary" | "alibi"). "absolute" by default.'
+                       help='Define position embedding type ("absolute" | "rotary"). "absolute" by default.'
                        )
 
     return parser

@@ -8,6 +8,8 @@ import os
 import torch
 
 import megatron
+from megatron.enums import PositionEmbeddingType
+
 
 def parse_args(extra_args_provider=None, ignore_unknown_args=False):
     """Parse all arguments."""
@@ -257,10 +259,15 @@ def validate_args(args, defaults={}):
         assert args.encoder_seq_length is not None
         args.seq_length = args.encoder_seq_length
 
-    if args.seq_length is not None:
-        assert args.max_position_embeddings >= args.seq_length
-    if args.decoder_seq_length is not None:
-        assert args.max_position_embeddings >= args.decoder_seq_length
+    if args.position_embedding_type == PositionEmbeddingType.absolute:
+        assert args.max_position_embeddings is not None
+        if args.seq_length is not None:
+            assert args.max_position_embeddings >= args.seq_length
+        if args.decoder_seq_length is not None:
+            assert args.max_position_embeddings >= args.decoder_seq_length
+    else:
+        assert args.max_position_embeddings is None
+
     if args.lr is not None:
         assert args.min_lr <= args.lr
     if args.save is not None:
@@ -470,6 +477,11 @@ def _add_network_size_args(parser):
     group.add_argument('--glu-activation', type=str,
                        choices=megatron.model.glu_activations.GLU_ACTIVATIONS.keys(),
                        help='GLU activations to use.'
+                       )
+    group.add_argument('--position-embedding-type', type=lambda x: PositionEmbeddingType[x],
+                       choices=list(PositionEmbeddingType),
+                       default=PositionEmbeddingType.absolute,
+                       help='Define position embedding type ("absolute" | "rotary"). "absolute" by default.'
                        )
 
     return parser

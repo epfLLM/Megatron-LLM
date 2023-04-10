@@ -10,7 +10,7 @@ import torch.nn as nn
 from megatron import get_timers, get_args, core, get_num_microbatches
 from .module import MegatronModule
 from megatron.core import mpu, tensor_parallel
-from megatron.model.enums import AttnMaskType, ModelType, LayerType, AttnType
+from megatron.model.enums import AttnMaskType, ModelType, LayerType, AttnType, PositionEmbeddingType
 from megatron.model import LayerNorm
 from megatron.model import RMSNorm
 from megatron.model.fused_softmax import FusedScaleMaskSoftmax
@@ -19,6 +19,7 @@ from megatron.model.utils import attention_mask_func, openai_gelu, erf_gelu
 
 # Extracted from: https://github.com/bigscience-workshop/Megatron-DeepSpeed
 from .glu_activations import GLU_ACTIVATIONS
+from megatron.model.positional_embeddings import precompute_freqs_cis, apply_rotary_emb
 
 try:
     from einops import rearrange
@@ -455,6 +456,13 @@ class ParallelAttention(MegatronModule):
             init_method=output_layer_init_method,
             skip_bias_add=True,
             **_args_to_kwargs())
+        
+        self.position_embedding_type = args.position_embedding_type
+        if self.position_embedding_type == PositionEmbeddingType.rotary:
+            self.freqs_cis = precompute_freqs_cis(
+                # self.params.dim // self.params.n_heads, self.params.max_seq_len * 2 # NOTE: LLaMA version
+                args.hidden_size // args.num_attention_heads, self.seq_length * 2
+            )
 
     def _checkpointed_attention_forward(self, query_layer, key_layer,
                                         value_layer, attention_mask):
@@ -564,6 +572,12 @@ class ParallelAttention(MegatronModule):
                 :sequence_end, batch_start:batch_end, ...]
             value_layer = inference_value_memory[
                 :sequence_end, batch_start:batch_end, ...]
+        
+        # ==================================
+        # Rotary embeddings
+        # ==================================
+        if self.position_embedding_type == PositionEmbeddingType.rotary:
+            query_layer, key_layer = apply_rotary_emb(query_layer, key_layer, self.freq_cis)
 
         # ==================================
         # core attention computation

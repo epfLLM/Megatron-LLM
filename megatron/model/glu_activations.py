@@ -1,14 +1,16 @@
 # Extracted from: https://github.com/bigscience-workshop/Megatron-DeepSpeed
 
+import logging
 
 import torch
 from torch import nn
 from torch.nn import functional as F
 
-from megatron import logging
-from megatron.model.utils import log_debug_usage
+#from megatron import logging
+# from megatron.model.utils import log_debug_usage
 
-logger = logging.get_logger(__name__)
+logger = logging.getLogger(__name__)
+
 
 class _GLUBaseModule(nn.Module):
     def __init__(self, activation_fn):
@@ -40,11 +42,10 @@ class SwiGLU(_GLUBaseModule):
     def __init__(self):
         super().__init__(F.silu)
 
-
-liglu = log_debug_usage(logger, "Using GLU activation: LiGLU.")(torch.jit.script(LiGLU()))
-geglu = log_debug_usage(logger, "Using GLU activation: GELU.")(torch.jit.script(GEGLU()))
-reglu = log_debug_usage(logger, "Using GLU activation: ReGLU.")(torch.jit.script(ReGLU()))
-swiglu = log_debug_usage(logger, "Using GLU activation: SwiGLU.")(torch.jit.script(SwiGLU()))
+liglu = torch.jit.script(LiGLU())
+geglu = torch.jit.script(GEGLU())
+reglu = torch.jit.script(ReGLU())
+swiglu = torch.jit.script(SwiGLU())
 
 
 GLU_ACTIVATIONS = {

@@ -10,7 +10,7 @@ from megatron.model.enums import AttnMaskType
 from megatron.model.language_model import parallel_lm_logits
 from megatron.model.language_model import get_language_model
 from megatron.model import LayerNorm
-from megatron.model.utils import openai_gelu, erf_gelu
+from megatron.model.utils import erf_gelu
 from megatron.model.utils import get_linear_layer
 from megatron.model.utils import init_method_normal
 from megatron.model.utils import scaled_init_method_normal
@@ -72,9 +72,7 @@ class BertLMHead(MegatronModule):
                                    eps=layernorm_epsilon,
                                    sequence_parallel=args.sequence_parallel)
         self.gelu = torch.nn.functional.gelu
-        if args.openai_gelu:
-            self.gelu = openai_gelu
-        elif args.onnx_safe:
+        if args.onnx_safe:
             self.gelu = erf_gelu
 
     def forward(self, hidden_states, word_embeddings_weight):

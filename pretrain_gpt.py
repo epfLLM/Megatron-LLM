@@ -1,9 +1,10 @@
 # Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
 
 """Pretrain GPT"""
+from functools import partial
 
 import torch
-from functools import partial
+
 from megatron import get_args
 from megatron import print_rank_0
 from megatron import get_timers
@@ -14,6 +15,7 @@ from megatron.model import GPTModel, ModelType
 from megatron.training import pretrain
 from megatron.utils import get_ltor_masks_and_position_ids
 from megatron.utils import average_losses_across_data_parallel_group
+
 
 def model_provider(pre_process=True, post_process=True):
     """Build the model."""

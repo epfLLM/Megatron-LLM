@@ -76,75 +76,6 @@ class ClassificationTransform():
         return output
 
 
-class InpaintingTransform():
-    def __init__(self, image_size, train=True):
-
-        args = get_args()
-        self.mask_factor = args.mask_factor
-        self.mask_type = args.mask_type
-        self.image_size = image_size
-        self.patch_size = args.patch_dim
-        self.mask_size = int(self.mask_factor*(image_size[0]/self.patch_size)*(image_size[1]/self.patch_size))
-        self.train = train
-        assert args.fp16 or args.bf16
-        self.data_type = torch.half if args.fp16 else torch.bfloat16
-     
-        if self.train:
-            self.transform = T.Compose([
-                T.RandomResizedCrop(self.image_size),
-                T.RandomHorizontalFlip(),
-                T.ColorJitter(0.4, 0.4, 0.4, 0.1),
-                ImageNetPolicy(),
-                T.ToTensor(),
-                T.ConvertImageDtype(self.data_type)
-            ])
-        else:
-            self.transform = T.Compose([
-                T.Resize(self.image_size, interpolation=2),
-                T.CenterCrop(self.image_size),
-                T.ToTensor(),
-                T.ConvertImageDtype(self.data_type)
-            ])
-
-    def gen_mask(self, image_size, mask_size, mask_type, patch_size):
-        # output: mask as a list with indices for missing patches
-        action_list = [[0, 1], [0, -1], [1, 0], [-1, 0]]
-        assert image_size[0] == image_size[1]
-        img_size_patch = image_size[0] // patch_size
-
-        # drop masked patches
-        mask = torch.zeros((image_size[0], image_size[1]), dtype=torch.float)
-
-        if mask_type == 'random':
-            x = torch.randint(0, img_size_patch, ())
-            y = torch.randint(0, img_size_patch, ())
-            for i in range(mask_size):
-                r = torch.randint(0, len(action_list), ())
-                x = torch.clamp(x + action_list[r][0], min=0, max=img_size_patch - 1)
-                y = torch.clamp(y + action_list[r][1], min=0, max=img_size_patch - 1)
-                x_offset = x * patch_size
-                y_offset = y * patch_size
-                mask[x_offset:x_offset+patch_size, y_offset:y_offset+patch_size] = 1
-        else:
-            assert mask_type == 'row'
-            count = 0
-            for x in reversed(range(img_size_patch)):
-                for y in reversed(range(img_size_patch)):
-                    if (count < mask_size):
-                        count += 1
-                        x_offset = x * patch_size
-                        y_offset = y * patch_size
-                        mask[x_offset:x_offset+patch_size, y_offset:y_offset+patch_size] = 1
-        return mask
-
-    def __call__(self, input):
-        trans_input = self.transform(input)
-        mask = self.gen_mask(self.image_size, self.mask_size, 
-			     self.mask_type, self.patch_size)
-        mask = mask.unsqueeze(dim=0)
-        return trans_input, mask
-
-
 class DinoTransform(object):
     def __init__(self, image_size, train=True):
         args = get_args()
@@ -218,9 +149,6 @@ def build_train_valid_datasets(data_path, image_size=224):
     if args.vision_pretraining_type == 'classify':
         train_transform = ClassificationTransform(image_size)
         val_transform = ClassificationTransform(image_size, train=False)
-    elif args.vision_pretraining_type == 'inpaint':
-        train_transform = InpaintingTransform(image_size, train=False)
-        val_transform = InpaintingTransform(image_size, train=False)
     elif args.vision_pretraining_type == 'dino':
         train_transform = DinoTransform(image_size, train=True)
         val_transform = ClassificationTransform(image_size, train=False)

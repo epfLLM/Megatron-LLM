@@ -3,7 +3,6 @@
 """Transformer based language model."""
 
 import torch
-import torch.nn.functional as F
 
 from megatron import get_args
 from megatron.core import mpu, tensor_parallel

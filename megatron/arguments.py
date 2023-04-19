@@ -88,26 +88,6 @@ def validate_args(args, defaults={}):
                     ' to be less than pipeline model parallel size ({})'.format(
                             args.pipeline_model_parallel_size)
 
-    # Deprecated arguments
-    assert args.batch_size is None, '--batch-size argument is no longer ' \
-        'valid, use --micro-batch-size instead'
-    del args.batch_size
-    assert args.warmup is None, '--warmup argument is no longer valid, use ' \
-        '--lr-warmup-fraction instead'
-    del args.warmup
-    assert args.model_parallel_size is None, '--model-parallel-size is no ' \
-        'longer valid, use --tensor-model-parallel-size instead'
-    del args.model_parallel_size
-
-    if args.checkpoint_activations:
-        args.recompute_granularity = 'full'
-        args.recompute_method = 'uniform'
-        if args.rank == 0:
-            print('--checkpoint-activations is no longer valid, '
-                  'use --recompute-granularity and --recompute-method  instead. '
-                  'Defaulting to recompute-granularity=full and recompute-method=uniform.')
-    del args.checkpoint_activations
-
     if args.recompute_activations:
         args.recompute_granularity = 'selective'
     del args.recompute_activations
@@ -342,7 +322,6 @@ def validate_args(args, defaults={}):
     if args.sequence_parallel:
         args.async_tensor_model_parallel_allreduce = False
 
-
     if os.environ.get('CUDA_DEVICE_MAX_CONNECTIONS') != "1":
         if args.sequence_parallel:
             raise RuntimeError(
@@ -401,12 +380,11 @@ def _add_transformer_engine_args(parser):
                        choices=['most_recent', 'max'],
                        help='Algorithm for computing amax from history',
                        dest='fp8_amax_compute_algo')
-
     return parser
+
 
 def _add_inference_args(parser):
     group = parser.add_argument_group(title='inference')
-
     group.add_argument('--inference-batch-times-seqlen-threshold',
                        type=int, default=512,
                        help='During inference, if batch-size times '
@@ -423,7 +401,6 @@ def _add_inference_args(parser):
     
 def _add_network_size_args(parser):
     group = parser.add_argument_group(title='network size')
-
     group.add_argument('--num-layers', type=int, default=None,
                        help='Number of transformer layers.')
     group.add_argument('--encoder-num-layers', type=int, default=None,
@@ -452,12 +429,8 @@ def _add_network_size_args(parser):
                        help='Layer norm epsilon.')
     group.add_argument('--apply-residual-connection-post-layernorm',
                        action='store_true',
-                       help='If set, use original BERT residula connection '
+                       help='If set, use original BERT residual connection '
                        'ordering.')
-    group.add_argument('--openai-gelu', action='store_true',
-                       help='Use OpenAIs GeLU implementation. This option'
-                       'should not be used unless for backward compatibility'
-                       'reasons.')
     group.add_argument('--use_bias', action='store_true',
                        help='If set then use bias.') # Added during hackathon                 
     # Extracted from: https://github.com/facebookresearch/llama/blob/main/llama/model.py
@@ -471,8 +444,6 @@ def _add_network_size_args(parser):
     group.add_argument('--bert-no-binary-head', action='store_false',
                        help='Disable BERT binary head.',
                        dest='bert_binary_head')
-    group.add_argument('--num-experts', type=int, default=None,
-                       help='Number of Experts in Switch Transformer (None means no Switch)')
     # Extracted from: https://github.com/bigscience-workshop/Megatron-DeepSpeed
     group.add_argument('--glu-activation', type=str,
                        choices=megatron.model.glu_activations.GLU_ACTIVATIONS.keys(),
@@ -644,10 +615,6 @@ def _add_training_args(parser):
                        '2) block: the number of individual Transformer layers '
                        'to recompute within each pipeline stage.')
 
-    # deprecated
-    group.add_argument('--checkpoint-activations', action='store_true',
-                       help='Checkpoint activation to allow for training '
-                       'with larger models, sequences, and batch sizes.')
     group.add_argument('--train-iters', type=int, default=None,
                        help='Total number of iterations to train over all '
                        'training runs. Note that either train-iters or '
@@ -1105,14 +1072,7 @@ def _add_vision_args(parser):
     group.add_argument('--swin-backbone-type', type=str, default='tiny',
                        choices=['tiny', 'base', 'h3'],
                        help='pretraining objectives')
-    
-    # inpainting arguments
-    group.add_argument('--mask-type', type=str, default='random',
-                       choices=['random', 'row'],
-                       help='mask types')
-    group.add_argument('--mask-factor', type=float, default=1.0,
-                       help='mask size scaling parameter')
- 
+
     # dino arguments
     group.add_argument('--iter-per-epoch', type=int, default=1250,
                        help='iterations per epoch')

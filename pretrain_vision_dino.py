@@ -1,11 +1,10 @@
 # Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
 
+from functools import partial
+
 import torch
 import torch.nn.functional as F
-import torch.nn as nn
-import numpy as np
-import torch.distributed as dist
-from functools import partial
+
 from megatron import get_args, get_timers, print_rank_0
 from megatron.data.vit_dataset import build_train_valid_datasets
 from megatron.model.vision.dino import DINOPretrainModel

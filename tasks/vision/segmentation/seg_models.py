@@ -1,13 +1,9 @@
 # Copyright (c) 2022, NVIDIA CORPORATION. All rights reserved.
-import math
-import einops
-import torch
-import apex
-import torch.nn.functional as F
+
 from megatron import get_args
 from megatron.model.module import MegatronModule
-from megatron.model.vision.vit_backbone import VitBackbone, VitMlpHead
-from megatron.model.vision.mit_backbone import mit_b3, mit_b5
+from megatron.model.vision.vit_backbone import VitBackbone
+from megatron.model.vision.mit_backbone import mit_b5
 from tasks.vision.segmentation.seg_heads import SetrSegmentationHead, SegformerSegmentationHead
 
 

@@ -3,7 +3,6 @@
 """Finetune utilities."""
 
 import torch
-import torch.nn.functional as F
 from megatron import get_args
 from megatron import print_rank_0
 from megatron import get_timers
@@ -16,10 +15,7 @@ from megatron.training import setup_model_and_optimizer
 from megatron.training import train_step
 from megatron.training import training_log
 from megatron.utils import check_adlr_autoresume_termination
-from megatron.utils import average_losses_across_data_parallel_group, print_params_min_max_norm
-from torch.nn.parallel.distributed import DistributedDataParallel as torchDDP
-from megatron.model import DistributedDataParallel as LocalDDP
-from megatron.model import Float16Module, ModelType
+from megatron.model import ModelType
 
 
 def process_batch(batch):

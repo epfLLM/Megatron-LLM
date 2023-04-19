@@ -5,9 +5,9 @@ import math
 from contextlib import nullcontext
 import torch
 import torch.nn.functional as F
-import torch.nn as nn
+from einops import rearrange
 
-from megatron import get_timers, get_args, core, get_num_microbatches
+from megatron import get_args, core, get_num_microbatches
 from .module import MegatronModule
 from megatron.core import mpu, tensor_parallel
 from megatron.model.enums import AttnMaskType, ModelType, LayerType, AttnType, PositionEmbeddingType
@@ -15,16 +15,12 @@ from megatron.model import LayerNorm
 from megatron.model import RMSNorm
 from megatron.model.fused_softmax import FusedScaleMaskSoftmax
 from megatron.model.fused_bias_gelu import bias_gelu_impl
-from megatron.model.utils import attention_mask_func, openai_gelu, erf_gelu
+from megatron.model.utils import attention_mask_func, erf_gelu
 
 # Extracted from: https://github.com/bigscience-workshop/Megatron-DeepSpeed
 from .glu_activations import GLU_ACTIVATIONS
 from megatron.model.positional_embeddings import precompute_freqs_cis, apply_rotary_emb
 
-try:
-    from einops import rearrange
-except ImportError:
-    rearrange = None
 
 try:
     from flash_attn.flash_attn_interface import flash_attn_unpadded_func
@@ -109,8 +105,6 @@ class ParallelMLP(MegatronModule):
 
         if args.glu_activation:
             self.activation_func = GLU_ACTIVATIONS[args.glu_activation]
-        elif args.openai_gelu:
-            self.activation_func = openai_gelu
         elif args.onnx_safe:
             self.activation_func = erf_gelu
 
@@ -140,53 +134,6 @@ class ParallelMLP(MegatronModule):
         output, output_bias = self.dense_4h_to_h(intermediate_parallel)
         return output, output_bias
 
-class SwitchMLP(MegatronModule):
-    """
-    Routes input to one of N MLP "experts"
-    """
-    def __init__(self, init_method, output_layer_init_method):
-        super(SwitchMLP, self).__init__()
-        args = get_args()
-        self.router = torch.nn.Linear(args.hidden_size, args.num_experts)
-        self.experts = torch.nn.ModuleList()
-        for i in range(args.num_experts):
-            self.experts.append(ParallelMLP(init_method, output_layer_init_method))
-
-    def forward(self, hidden_states):
-        # hidden_states: [s, b, h]
-        s = hidden_states.size(0)
-        b = hidden_states.size(1)
-        h = hidden_states.size(2)
-        route = self.router(hidden_states)
-        route = torch.nn.functional.softmax(route, dim=2)
-        max_prob, max_ind = torch.max(route, dim=2)
-        max_prob = torch.unsqueeze(max_prob, 2) # [s b 1]
-
-        # TODO (rprenger) TODO this could be made easier to read
-        # Converting [s, b, h] to [s*b, h].
-        # Each vector could be routed differently
-        hidden_states = hidden_states.view(-1, hidden_states.size(2)) # [s*b h]
-        max_prob = max_prob.view(-1, max_prob.size(2)) # [s*b 1]
-        max_ind = max_ind.view(-1) # [s*b]
-
-        output_total = torch.empty_like(hidden_states)
-        output_bias_total = torch.empty_like(hidden_states)
-        #TODO (rprenger) This does each expert in serial, but it could be parallelized
-
-        for expert_num, expert in enumerate(self.experts):
-            local_indices = (max_ind == expert_num).nonzero()
-            hidden = hidden_states[local_indices,:]
-            output, output_bias = expert(hidden)
-            output_bias = output_bias.expand_as(output)
-            output_total[local_indices,:] = output
-            output_bias_total[local_indices,:] = output_bias
-
-        output_total = output_total*max_prob
-        output_bias_total = output_bias_total*max_prob
-        output_total = output_total.view(s, b, h)
-        output_bias_total = output_bias_total.view(s, b, h)
-
-        return output_total, output_bias_total
 
 class CoreAttention(MegatronModule):
 
@@ -340,7 +287,6 @@ class FlashSelfAttention(torch.nn.Module):
         super().__init__()
         assert flash_attn_unpadded_func is not None, ('Please install FlashAttention first, '
                                                       'e.g., with pip install flash-attn')
-        assert rearrange is not None, 'Please install einops first, e.g., with pip install einops'
         self.causal = causal
         self.softmax_scale = softmax_scale
         self.dropout_p = attention_dropout
@@ -395,8 +341,6 @@ class ParallelAttention(MegatronModule):
                                                           'self-attention for now')
             assert self.attn_mask_type == AttnMaskType.causal, ('FlashAttention code path only '
                                                                 'supports causal mask for now')
-            if rearrange is None:
-                raise ImportError('einops is not installed, please install with pip install einops')
 
         projection_size = args.kv_channels * args.num_attention_heads
 
@@ -717,10 +661,7 @@ class ParallelTransformerLayer(MegatronModule):
                     eps=args.layernorm_epsilon,
                 )
         # MLP
-        if args.num_experts is not None:
-            self.mlp = SwitchMLP(init_method, output_layer_init_method)
-        else:
-            self.mlp = ParallelMLP(init_method, output_layer_init_method)
+        self.mlp = ParallelMLP(init_method, output_layer_init_method)
 
         # Set bias+dropout+add fusion grad_enable execution handler.
         TORCH_MAJOR = int(torch.__version__.split('.')[0])
@@ -935,7 +876,7 @@ class ParallelTransformer(MegatronModule):
         self.drop_path_rate = drop_path_rate
         self.transformer_impl = args.transformer_impl
 
-        # Store activation checkpoiting flag.
+        # Store activation checkpointing flag.
         self.recompute_granularity = args.recompute_granularity
         self.recompute_method = args.recompute_method
         self.recompute_num_layers = args.recompute_num_layers

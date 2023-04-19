@@ -10,7 +10,6 @@ from megatron.model.enums import AttnMaskType
 from megatron.model.language_model import parallel_lm_logits, get_language_model
 from megatron.model.transformer import LayerNorm
 from megatron.model.utils import (
-    openai_gelu,
     get_linear_layer,
     init_method_normal,
     scaled_init_method_normal

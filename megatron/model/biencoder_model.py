@@ -182,7 +182,7 @@ class BiEncoderModel(MegatronModule):
         args = get_args()
 
         if args.bert_load is None:
-            print_rank_0("bert-load argument is None")
+            print_rank_0("bert_load argument is None")
             return
 
         tracker_filename = get_checkpoint_tracker_filename(args.bert_load)

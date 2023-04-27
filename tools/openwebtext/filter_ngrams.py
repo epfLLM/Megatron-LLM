@@ -409,35 +409,36 @@ if __name__ == '__main__':
     print('parsing the arguments ...')
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--tasks', nargs = '*', required=True, default=None, \
-                        help = 'Tasks to use for deduplication: currently '
+    parser.add_argument('--tasks', nargs='*', required=True, default=None, \
+                        help='Tasks to use for deduplication: currently '
                         ' suuport [lambada, squad, natural_questions,'
                         ' triviaqa, webqa, race, drop, coqa, and piqa]')
-    parser.add_argument('--lambada-path', type=str, default=None,
+    parser.add_argument('--lambada_path', type=str, default=None,
                        help='Only Lambada task needs the path')
-    parser.add_argument('--dedup-dataset', nargs = '*', default=None,
+    parser.add_argument('--dedup_dataset', nargs = '*', default=None,
                        help='Dataset to deduplicate with the key to use'
                         ' e.g. cc.json text')
     parser.add_argument('--output', type=str, default=None,
                        help='Output file name to save dedup dataset')
-    parser.add_argument('--num-threads', type=int, default=40,
+    parser.add_argument('--num_threads', type=int, default=40,
                        help='Number of threads to use')
+
     # Default dedup values
-    parser.add_argument('--max-ngram-size', type=int, default=13,
+    parser.add_argument('--max_ngram_size', type=int, default=13,
                        help='Maximum size of ngram to use.')
-    parser.add_argument('--min-ngram-size', type=int, default=8,
+    parser.add_argument('--min_ngram_size', type=int, default=8,
                        help='Minimum size of ngram to use.')
-    parser.add_argument('--filter-text-char-len', type=int, default=200,
+    parser.add_argument('--filter_text_char_len', type=int, default=200,
                        help='Remove any text below this length.')
-    parser.add_argument('--key-threshold', type=int, default=10,
+    parser.add_argument('--key_threshold', type=int, default=10,
                        help='Number of keys to consider as threshold')
-    parser.add_argument('--save-dictionary', type=str, default=None,
+    parser.add_argument('--save_dictionary', type=str, default=None,
                        help='Save the dictionary')
-    parser.add_argument('--load-dictionary', type=str, default=None,
+    parser.add_argument('--load_dictionary', type=str, default=None,
                        help='Load the dictionary')
-    parser.add_argument('--splits-count', type=int, default=10,
+    parser.add_argument('--splits_count', type=int, default=10,
                        help='Remove any documents more than this many splits')
-    parser.add_argument('--remove-char-each-side', type=int, default=200,
+    parser.add_argument('--remove_char_each_side', type=int, default=200,
                        help='Maximum size of ngram to use.')
 
     args = parser.parse_args()
@@ -449,7 +450,6 @@ if __name__ == '__main__':
     # Setup multi-processing
     num_workers = args.num_threads
     if args.load_dictionary is None:
-
         # Build ngrams
         ngrams = {}
         compute_tasks_ngrams(args, ngrams)

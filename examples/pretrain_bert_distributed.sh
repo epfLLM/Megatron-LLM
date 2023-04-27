@@ -15,30 +15,30 @@ DISTRIBUTED_ARGS="--nproc_per_node $GPUS_PER_NODE --nnodes $NNODES --node_rank $
 
 python -m torch.distributed.launch $DISTRIBUTED_ARGS \
        pretrain_bert.py \
-       --num-layers 24 \
-       --hidden-size 1024 \
-       --num-attention-heads 16 \
-       --micro-batch-size 4 \
-       --global-batch-size 32 \
-       --seq-length 512 \
-       --max-position-embeddings 512 \
-       --train-iters 1000000 \
+       --num_layers 24 \
+       --hidden_size 1024 \
+       --num_attention_heads 16 \
+       --micro_batch_size 4 \
+       --global_batch_size 32 \
+       --seq_length 512 \
+       --max_position_embeddings 512 \
+       --train_iters 1000000 \
        --save $CHECKPOINT_PATH \
        --load $CHECKPOINT_PATH \
-       --data-path $DATA_PATH \
-       --vocab-file bert-vocab.txt \
-       --data-impl mmap \
+       --data_path $DATA_PATH \
+       --vocab_file bert-vocab.txt \
+       --data_impl mmap \
        --split 949,50,1 \
-       --distributed-backend nccl \
+       --distributed_backend nccl \
        --lr 0.0001 \
-       --lr-decay-style linear \
-       --min-lr 1.0e-5 \
-       --lr-decay-iters 990000 \
-       --weight-decay 1e-2 \
-       --clip-grad 1.0 \
-       --lr-warmup-fraction .01 \
-       --log-interval 100 \
-       --save-interval 10000 \
-       --eval-interval 1000 \
-       --eval-iters 10 \
+       --lr_decay_style linear \
+       --min_lr 1.0e-5 \
+       --lr_decay_iters 990000 \
+       --weight_decay 1e-2 \
+       --clip_grad 1.0 \
+       --lr_warmup_fraction .01 \
+       --log_interval 100 \
+       --save_interval 10000 \
+       --eval_interval 1000 \
+       --eval_iters 10 \
        --fp16

@@ -16,41 +16,40 @@ DATASET="0.2 ${DATASET_1} 0.3 ${DATASET_2} 0.5 ${DATASET_3}"
 
 
 options=" \
-	--tensor-model-parallel-size 8 \
-	--pipeline-model-parallel-size 16 \
-        --num-layers 96 \
-        --hidden-size 12288 \
-        --num-attention-heads 96 \
-        --seq-length 2048 \
-        --max-position-embeddings 2048 \
-	--micro-batch-size 1 \
-	--global-batch-size 1536 \
-	--rampup-batch-size 16 16 5859375 \
-	--train-samples 146484375 \
-       	--lr-decay-samples 126953125 \
-        --lr-warmup-samples 183105 \
-        --lr 6.0e-5 \
-	--min-lr 6.0e-6 \
-        --lr-decay-style cosine \
-        --log-interval 10 \
-        --eval-iters 40 \
-        --eval-interval 1000 \
-	--data-path ${DATASET} \
-	--vocab-file <PATH TO gpt-vocab.json> \
-	--merge-file <PATH TO gpt-merges.txt> \
-	--save-interval 1000 \
+	--tensor_model_parallel_size 8 \
+	--pipeline_model_parallel_size 16 \
+  --num_layers 96 \
+  --hidden_size 12288 \
+  --num_attention_heads 96 \
+  --seq_length 2048 \
+  --max_position_embeddings 2048 \
+	--micro_batch_size 1 \
+	--global_batch_size 1536 \
+	--rampup_batch_size 16 16 5859375 \
+	--train_samples 146484375 \
+  --lr_decay_samples 126953125 \
+  --lr_warmup_samples 183105 \
+  --lr 6.0e-5 \
+	--min_lr 6.0e-6 \
+  --lr_decay_style cosine \
+  --log_interval 10 \
+  --eval_iters 40 \
+  --eval_interval 1000 \
+	--data_path ${DATASET} \
+	--vocab_file <PATH TO gpt-vocab.json> \
+	--merge_file <PATH TO gpt-merges.txt> \
+	--save_interval 1000 \
 	--save <PATH TO CHECKPOINTS DIRECTORY> \
 	--load <PATH TO CHECKPOINTS DIRECTORY> \
-        --split 98,2,0 \
-        --clip-grad 1.0 \
-	--weight-decay 0.1 \
-	--adam-beta1 0.9 \
-	--adam-beta2 0.95 \
-	--init-method-std 0.006 \
-	--tensorboard-dir <TENSORBOARD DIRECTORY> \
-        --fp16 \
-	--activations-checkpoint-method uniform "
-
+  --split 98,2,0 \
+  --clip_grad 1.0 \
+	--weight_decay 0.1 \
+	--adam_beta1 0.9 \
+	--adam_beta2 0.95 \
+	--init_method_std 0.006 \
+	--tensorboard_dir <TENSORBOARD DIRECTORY> \
+  --fp16 \
+	--activations_checkpoint_method uniform "
 
 run_cmd="python -u ${DIR}/pretrain_gpt.py $@ ${options}"
 

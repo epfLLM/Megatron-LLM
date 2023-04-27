@@ -184,10 +184,10 @@ if __name__ == '__main__':
     parser.add_argument('--inputs', nargs = '*', default=None, help = \
                         'Pairwise list of the input files and keys, '
                         'e.g. --inputs cc.json cc_id news.json news_id')
-    parser.add_argument('--load-fingerprints', nargs = '*', default=None,
+    parser.add_argument('--load_fingerprints', nargs = '*', default=None,
                        help='Load fingerprints from a list of pickle files,'
                         ' e.g. cc.pkl news.pkl')
-    parser.add_argument('--save-fingerprints', type=str, default=None,
+    parser.add_argument('--save_fingerprints', type=str, default=None,
                        help='Save the fingerprints of the inputs.')
     parser.add_argument('--output', type=str, default=None,
                        help='Output file name that consists of all ids'
@@ -195,15 +195,15 @@ if __name__ == '__main__':
     parser.add_argument('--jaccard', type=str, default='union',
                         choices=['union', 'min', 'max'], help='Jaccard'\
                         ' similarity computation')
-    parser.add_argument('--heuristic-iter', type=int, default=1,
+    parser.add_argument('--heuristic_iter', type=int, default=1,
                        help='Number of iterations to run the heuristics'
                         ': use -1 for exact')
-    parser.add_argument('--num-bands', type=int, default=10,
+    parser.add_argument('--num_bands', type=int, default=10,
                        help='Number of bands to use in cache')
-    parser.add_argument('--num-seeds', type=int, default=100,
+    parser.add_argument('--num_seeds', type=int, default=100,
                        help='Number of seeds to use for minhash. Note that'
-                        ' this value should be divisible by num-bands')
-    parser.add_argument('--jaccard-parallel', action='store_true',
+                        ' this value should be divisible by num_bands')
+    parser.add_argument('--jaccard_parallel', action='store_true',
                        help='Use this to process large number of documents.')
     args = parser.parse_args()
 

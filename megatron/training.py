@@ -169,6 +169,7 @@ def pretrain(train_valid_test_dataset_provider,
                                    0, process_non_loss_data_func,
                                    True)
 
+
 def update_train_iters(args):
 
     # For iteration-based training, we don't need to do anything
@@ -337,7 +338,7 @@ def get_optimizer_param_scheduler(optimizer):
             lr_warmup_steps = args.lr_warmup_samples
     else:
         raise Exception(
-            'either train-iters or train-samples should be provided.')
+            'either train_iters or train_samples should be provided.')
 
     opt_param_scheduler = OptimizerParamScheduler(
         optimizer,
@@ -550,36 +551,36 @@ def training_log(loss_dict, total_loss_dict, learning_rate, iteration,
                      normalizer=total_iterations)
     if writer and (iteration % args.tensorboard_log_interval == 0):
         if args.log_learning_rate_to_tensorboard:
-            writer.add_scalar('learning-rate', learning_rate, iteration)
-            writer.add_scalar('learning-rate vs samples', learning_rate,
+            writer.add_scalar('learning_rate', learning_rate, iteration)
+            writer.add_scalar('learning_rate vs samples', learning_rate,
                               args.consumed_train_samples)
         if args.log_batch_size_to_tensorboard:
-            writer.add_scalar('batch-size', batch_size, iteration)
-            writer.add_scalar('batch-size vs samples', batch_size,
+            writer.add_scalar('batch_size', batch_size, iteration)
+            writer.add_scalar('batch_size vs samples', batch_size,
                               args.consumed_train_samples)
         for key in loss_dict:
-            writer.add_scalar(key , loss_dict[key], iteration)
+            writer.add_scalar(key, loss_dict[key], iteration)
             writer.add_scalar(key + ' vs samples', loss_dict[key],
                               args.consumed_train_samples)
         if args.log_loss_scale_to_tensorboard:
-            writer.add_scalar('loss-scale', loss_scale, iteration)
-            writer.add_scalar('loss-scale vs samples', loss_scale,
+            writer.add_scalar('loss_scale', loss_scale, iteration)
+            writer.add_scalar('loss_scale vs samples', loss_scale,
                               args.consumed_train_samples)
         if args.log_world_size_to_tensorboard:
-            writer.add_scalar('world-size', args.world_size, iteration)
-            writer.add_scalar('world-size vs samples', args.world_size,
+            writer.add_scalar('world_size', args.world_size, iteration)
+            writer.add_scalar('world_size vs samples', args.world_size,
                               args.consumed_train_samples)
         if grad_norm is not None:
-            writer.add_scalar('grad-norm', grad_norm, iteration)
-            writer.add_scalar('grad-norm vs samples', grad_norm,
+            writer.add_scalar('grad_norm', grad_norm, iteration)
+            writer.add_scalar('grad_norm vs samples', grad_norm,
                               args.consumed_train_samples)
         if num_zeros_in_grad is not None:
-            writer.add_scalar('num-zeros', num_zeros_in_grad, iteration)
-            writer.add_scalar('num-zeros vs samples', num_zeros_in_grad,
+            writer.add_scalar('num_zeros', num_zeros_in_grad, iteration)
+            writer.add_scalar('num_zeros vs samples', num_zeros_in_grad,
                               args.consumed_train_samples)
         if params_norm is not None:
-            writer.add_scalar('params-norm', params_norm, iteration)
-            writer.add_scalar('params-norm vs samples', params_norm,
+            writer.add_scalar('params_norm', params_norm, iteration)
+            writer.add_scalar('params_norm vs samples', params_norm,
                               args.consumed_train_samples)
         if args.log_memory_to_tensorboard:
             mem_stats = torch.cuda.memory_stats()

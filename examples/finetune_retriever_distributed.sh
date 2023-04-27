@@ -20,37 +20,37 @@ PRETRAINED_CHECKPOINT=<Path of Pretrained ICT model>
 
 python -m torch.distributed.launch $DISTRIBUTED_ARGS ./tasks/main.py \
         --task RET-FINETUNE-NQ \
-        --train-with-neg \
-        --train-hard-neg 1 \
-        --pretrained-checkpoint ${PRETRAINED_CHECKPOINT} \
-        --num-layers 12 \
-        --hidden-size 768 \
-        --num-attention-heads 12 \
-        --tensor-model-parallel-size 1 \
-        --tokenizer-type BertWordPieceLowerCase \
-        --train-data nq-train.json \
-        --valid-data nq-dev.json \
+        --train_with_neg \
+        --train_hard_neg 1 \
+        --pretrained_checkpoint ${PRETRAINED_CHECKPOINT} \
+        --num_layers 12 \
+        --hidden_size 768 \
+        --num_attention_heads 12 \
+        --tensor_model_parallel_size 1 \
+        --tokenizer_type BertWordPieceLowerCase \
+        --train_data nq-train.json \
+        --valid_data nq-dev.json \
         --save ${CHECKPOINT_PATH} \
         --load ${CHECKPOINT_PATH} \
-        --vocab-file bert-vocab.txt \
-        --bert-load ${BERT_LOAD_PATH} \
-        --save-interval 5000 \
-        --log-interval 10 \
-        --eval-interval 20000 \
-        --eval-iters 100 \
-        --indexer-log-interval 1000 \
-        --faiss-use-gpu \
-        --DDP-impl torch \
+        --vocab_file bert-vocab.txt \
+        --bert_load ${BERT_LOAD_PATH} \
+        --save_interval 5000 \
+        --log_interval 10 \
+        --eval_interval 20000 \
+        --eval_iters 100 \
+        --indexer_log_interval 1000 \
+        --faiss_use_gpu \
+        --DDP_impl torch \
         --fp16 \
-        --retriever-report-topk-accuracies 1 5 10 20 100 \
-        --seq-length 512 \
-        --retriever-seq-length 256 \
-        --max-position-embeddings 512 \
-        --retriever-score-scaling \
+        --retriever_report_topk_accuracies 1 5 10 20 100 \
+        --seq_length 512 \
+        --retriever_seq_length 256 \
+        --max_position_embeddings 512 \
+        --retriever_score_scaling \
         --epochs 80 \
-        --micro-batch-size 8 \
-        --eval-micro-batch-size 16 \
-        --indexer-batch-size 128 \
+        --micro_batch_size 8 \
+        --eval_micro_batch_size 16 \
+        --indexer_batch_size 128 \
         --lr 2e-5 \
-        --lr-warmup-fraction 0.01 \
-        --weight-decay 1e-1
+        --lr_warmup_fraction 0.01 \
+        --weight_decay 1e-1

@@ -169,7 +169,7 @@ def generate_samples_by_prompting_input_from_file(model):
         input_count = len(all_raw_text)
         if args.sample_output_file is None:
             sample_output_file = args.sample_input_file + ".out"
-            print('`sample-output-file` not specified, setting '
+            print('`sample_output_file` not specified, setting '
                     'it to {}'.format(sample_output_file))
         else:
             sample_output_file = args.sample_output_file

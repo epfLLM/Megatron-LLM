@@ -418,8 +418,8 @@ def _load_base_checkpoint(load_dir, use_distributed_optimizer, rank0=False):
         print_rank_0('could not load the checkpoint')
         print_rank_0(e)
         sys.exit()
-
     return model_state_dict, optim_state_dict, release
+
 
 def load_args_from_checkpoint(args, load_arg='load'):
     """Set required arguments from the checkpoint specified in the
@@ -500,7 +500,6 @@ def load_checkpoint(model, optimizer, opt_param_scheduler, load_arg='load', stri
     """
     args = get_args()
     load_dir = getattr(args, load_arg)
-
     model = unwrap_model(model)
 
     model_state_dict, optim_state_dict, release = \
@@ -607,7 +606,7 @@ def load_checkpoint(model, optimizer, opt_param_scheduler, load_arg='load', stri
                     model_state_dict['rng_tracker_states'])
         except KeyError:
             print_rank_0('Unable to load rng state from checkpoint {}. '
-                         'Specify --no-load-rng or --finetune to prevent '
+                         'Specify --no_load_rng or --finetune to prevent '
                          'attempting to load the rng state, '
                          'exiting ...'.format(checkpoint_name))
             sys.exit()

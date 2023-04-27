@@ -64,7 +64,6 @@ class ForwardStep:
         self.pipelining_batch_x_seqlen = \
             args.inference_batch_times_seqlen_threshold
 
-
     def __call__(self, tokens, position_ids, attention_mask):
         """Invocation of the forward methods. Note that self.inference_params
         is being modified by the forward step."""

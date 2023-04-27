@@ -16,6 +16,7 @@ sys.path.append(
 from megatron import get_args
 from megatron.initialize import initialize_megatron
 
+
 def get_tasks_args(parser):
     """Provide extra arguments required for tasks."""
     group = parser.add_argument_group(title="tasks")
@@ -26,12 +27,12 @@ def get_tasks_args(parser):
     group.add_argument("--epochs", type=int, default=None,
                        help="Number of finetunning epochs. Zero results in "
                        "evaluation only.")
-    group.add_argument('--pretrained-checkpoint-type', type=str, default='default',
+    group.add_argument('--pretrained_checkpoint_type', type=str, default='default',
                        choices=['default', 'external', 'constrastive'],
                        help='Type of pretrained checkpoint')
-    group.add_argument("--pretrained-checkpoint", type=str, default=None,
+    group.add_argument("--pretrained_checkpoint", type=str, default=None,
                        help="Pretrained checkpoint used for finetunning.")
-    group.add_argument('--seg-stride', type=int, default=None,
+    group.add_argument('--seg_stride', type=int, default=None,
                        help='sliding window stride during evaluation')
     return parser
 

@@ -51,7 +51,7 @@ if __name__ == '__main__':
                        help='Path to directory containing all document files to merge')
 
     group = parser.add_argument_group(title='output data')
-    group.add_argument('--output-prefix', type=str, required=True,
+    group.add_argument('--output_prefix', type=str, required=True,
                        help='Path to binary output file without suffix')
 
     args = parser.parse_args()

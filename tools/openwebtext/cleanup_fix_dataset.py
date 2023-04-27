@@ -139,25 +139,24 @@ def process_set(args, input_file, output_f_cleaned, output_f_filtered):
         num_remove_512_non_english, num_ftfy_fix_text, \
         num_general_cleaning), flush=True)
 
+
 if __name__ == '__main__':
-
-
     print('parsing the arguments ...')
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--input-files', nargs = '*', required=True, default=\
+    parser.add_argument('--input_files', nargs = '*', required=True, default=\
                         None, help = 'Input json files that needs to be'\
                         ' cleaned')
     parser.add_argument('--tasks', nargs = '*', required=True, default=None,\
-                        help = 'Tasks to perform on the input files, ' \
+                        help='Tasks to perform on the input files, ' \
                         'such as remove_512, remove_256_javascript, ' \
                         'remove_512_non_english, ftfy_fix_text, and ' \
                         'general_cleaning. 256 or 512 means the number' \
                         ' of characters.')
 
-    parser.add_argument('--output-path', type=str, default=None,
+    parser.add_argument('--output_path', type=str, default=None,
                        help='Directory where the output should go')
-    parser.add_argument('--log-interval', type=int, default=100,
+    parser.add_argument('--log_interval', type=int, default=100,
                        help='Log interval')
 
     args = parser.parse_args()

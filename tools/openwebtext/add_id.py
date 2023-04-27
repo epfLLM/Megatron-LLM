@@ -15,13 +15,13 @@ if __name__ == '__main__':
     print('parsing the arguments ...')
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--input-file', type=str, default=None, help='Input'\
+    parser.add_argument('--input_file', type=str, default=None, help='Input'\
         ' json file where id needs to be added')
-    parser.add_argument('--output-file', type=str, default=None, help=\
+    parser.add_argument('--output_file', type=str, default=None, help=\
         'Output file name with id')
-    parser.add_argument('--id-prefix', type=str, default=None, help=\
+    parser.add_argument('--id_prefix', type=str, default=None, help=\
         'Id prefix')
-    parser.add_argument('--log-interval', type=int, default=100,
+    parser.add_argument('--log_interval', type=int, default=100,
                        help='Log interval')
     args = parser.parse_args()
 

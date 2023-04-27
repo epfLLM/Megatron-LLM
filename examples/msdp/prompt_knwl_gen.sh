@@ -23,24 +23,24 @@ OUTPUT_PATH=<PATH_OF_OUTPUT_GENERATION_FILE> \
         (e.g., /testseen_knowledge_generations.txt)
 
 python -m torch.distributed.launch $DISTRIBUTED_ARGS ./tasks/msdp/main.py \
-        --num-layers 24 \
-        --hidden-size 1024 \
-        --num-attention-heads 16 \
-        --seq-length 2048 \
-        --max-position-embeddings 2048 \
-        --micro-batch-size 1 \
-        --vocab-file ${VOCAB_PATH} \
-        --merge-file ${MERGE_PATH} \
+        --num_layers 24 \
+        --hidden_size 1024 \
+        --num_attention_heads 16 \
+        --seq_length 2048 \
+        --max_position_embeddings 2048 \
+        --micro_batch_size 1 \
+        --vocab_file ${VOCAB_PATH} \
+        --merge_file ${MERGE_PATH} \
         --load ${CHECKPOINT_PATH} \
         --fp16 \
-        --DDP-impl torch \
-        --tokenizer-type GPT2BPETokenizer \
-        --sample-input-file ${INPUT_PATH} \
-        --sample-output-file ${OUTPUT_PATH} \
-        --prompt-file ${PROMPT_PATH} \
-        --prompt-type knowledge \
-        --num-prompt-examples 10 \
+        --DDP_impl torch \
+        --tokenizer_type GPT2BPETokenizer \
+        --sample_input_file ${INPUT_PATH} \
+        --sample_output_file ${OUTPUT_PATH} \
+        --prompt_file ${PROMPT_PATH} \
+        --prompt_type knowledge \
+        --num_prompt_examples 10 \
         --task MSDP-PROMPT 
 
 # NOTE: If you use api for the model generation, please use 
-# the "--api-prompt" flag (setting this value as True). 
+# the "--api_prompt" flag (setting this value as True).

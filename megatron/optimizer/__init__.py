@@ -99,10 +99,10 @@ def get_megatron_optimizer(model,
     if args.fp16 or args.bf16 or args.use_distributed_optimizer:
 
         # Grad scaler:
-        #    if loss-scale is provided, instantiate the constant scaler.
-        #    if we are using fp16 and loss-scale is not present, use a
+        #    if loss_scale is provided, instantiate the constant scaler.
+        #    if we are using fp16 and loss_scale is not present, use a
         #       dynamic scaler.
-        #    otherwise we are running in bf16 with no loss-scale so
+        #    otherwise we are running in bf16 with no loss_scale so
         #       leave it as None.
         grad_scaler = None
 

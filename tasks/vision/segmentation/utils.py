@@ -1,7 +1,9 @@
 import math
+
 import torch
-import numpy as np
+
 from megatron import get_args
+
 
 def slidingcrops(img, mask):
     # img: [b c h w]

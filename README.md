@@ -93,90 +93,89 @@ The training data requires preprocessing. First, place your training data in a l
 
 The name of the `text` field of the json can be changed by using the `--json-key` flag in [`preprocess_data.py`](./tools/preprocess_data.py) The other metadata are optional and are not used in training.
 
-The loose json is then processed into a binary format for training. To convert the json into mmap, cached index file, or the lazy loader format use `preprocess_data.py`. Set the `--dataset-impl` flag to `mmap`, `cached`, or `lazy`, respectively (default is `mmap`). An example script to prepare data for BERT training is:
+The loose json is then processed into a binary format for training. To convert the json into mmap, cached index file, or the lazy loader format use `preprocess_data.py`. Set the `--dataset_impl` flag to `mmap`, `cached`, or `lazy`, respectively (default is `mmap`). An example script to prepare data for BERT training is:
 <pre>
 python tools/preprocess_data.py \
        --input my-corpus.json \
-       --output-prefix my-bert \
+       --output_prefix my-bert \
        --vocab bert-vocab.txt \
-       --dataset-impl mmap \
-       --tokenizer-type BertWordPieceLowerCase \
-       --split-sentences
+       --dataset_impl mmap \
+       --tokenizer_type BertWordPieceLowerCase \
+       --split_sentences
 </pre>
 
-The output will be two files named, in this case, `my-bert_text_sentence.bin` and `my-bert_text_sentence.idx`. The `--data-path` specified in later BERT training is the full path and new filename, but without the file extension.
+The output will be two files named, in this case, `my-bert_text_sentence.bin` and `my-bert_text_sentence.idx`. The `--data_path` specified in later BERT training is the full path and new filename, but without the file extension.
 
 For T5 use the same preprocessing as BERT, perhaps renaming it to:
 <pre>
-       --output-prefix my-t5 \
+       --output_prefix my-t5 \
 </pre>
 
 Some minor modifications are required for GPT data preprocessing, namely, the addition of a merge table, an end-of-document token, removal of sentence splitting, and a change to the tokenizer type:
 <pre>
 python tools/preprocess_data.py \
        --input my-corpus.json \
-       --output-prefix my-gpt2 \
+       --output_prefix my-gpt2 \
        --vocab gpt2-vocab.json \
-       --dataset-impl mmap \
-       --tokenizer-type GPT2BPETokenizer \
-       --merge-file gpt2-merges.txt \
-       --append-eod
+       --dataset_impl mmap \
+       --tokenizer_type GPT2BPETokenizer \
+       --merge_file gpt2-merges.txt \
+       --append_eod
 </pre>
 
-Here the output files are named `my-gpt2_text_document.bin` and `my-gpt2_text_document.idx`. As before, in GPT training, use the longer name without the extension as `--data-path`.
+Here the output files are named `my-gpt2_text_document.bin` and `my-gpt2_text_document.idx`. As before, in GPT training, use the longer name without the extension as `--data_path`.
 
 Further command line arguments are described in the source file [`preprocess_data.py`](./tools/preprocess_data.py).
 
 ## BERT Pretraining
 
 
-The `examples/pretrain_bert.sh` script runs single GPU 345M parameter BERT pretraining. Debugging is the primary use for single GPU training, as the code base and command line arguments are optimized for highly distributed training. Most of the arguments are fairly self-explanatory. By default, the learning rate decays linearly over the training iterations starting at `--lr` to a minimum set by `--min-lr` over `--lr-decay-iters` iterations. The fraction of training iterations used for warmup is set by `--lr-warmup-fraction`. While this is single GPU training, the batch size specified by `--micro-batch-size` is a single forward-backward path batch-size and the code will perform gradient accumulation steps until it reaches `global-batch-size` which is the batch size per iteration. The data is partitioned into a 949:50:1 ratio for training/validation/test sets (default is 969:30:1). This partitioning happens on the fly, but is consistent across runs with the same random seed (1234 by default, or specified manually with `--seed`). We use `train-iters` as the training iterations requested. Alternatively, one can provide `--train-samples` which is total number of samples to train on. If this option is present, then instead of providing `--lr-decay-iters`, one will need to provide `--lr-decay-samples`.
+The `examples/pretrain_bert.sh` script runs single GPU 345M parameter BERT pretraining. Debugging is the primary use for single GPU training, as the code base and command line arguments are optimized for highly distributed training. Most of the arguments are fairly self-explanatory. By default, the learning rate decays linearly over the training iterations starting at `--lr` to a minimum set by `--min_lr` over `--lr_decay_iters` iterations. The fraction of training iterations used for warmup is set by `--lr_warmup_fraction`. While this is single GPU training, the batch size specified by `--micro_batch_size` is a single forward-backward path batch-size and the code will perform gradient accumulation steps until it reaches `global_batch_size` which is the batch size per iteration. The data is partitioned into a 949:50:1 ratio for training/validation/test sets (default is 969:30:1). This partitioning happens on the fly, but is consistent across runs with the same random seed (1234 by default, or specified manually with `--seed`). We use `train_iters` as the training iterations requested. Alternatively, one can provide `--train_samples` which is total number of samples to train on. If this option is present, then instead of providing `--lr_decay_iters`, one will need to provide `--lr_decay_samples`.
 
-The logging, checkpoint-saving, and evaluation intervals are specified. Checkpointing the activations facilitates the training of larger models and/or batches. Note that the `--data-path` now includes the additional `_text_sentence` suffix added in preprocessing, but does not include the file extensions.
+The logging, checkpoint-saving, and evaluation intervals are specified. Checkpointing the activations facilitates the training of larger models and/or batches. Note that the `--data_path` now includes the additional `_text_sentence` suffix added in preprocessing, but does not include the file extensions.
 
 <pre>
 CHECKPOINT_PATH=checkpoints/bert_345m
 VOCAB_FILE=bert-vocab.txt
 DATA_PATH=my-bert_text_sentence
 
-BERT_ARGS="--num-layers 24 \
-           --hidden-size 1024 \
-           --num-attention-heads 16 \
-           --seq-length 512 \
-           --max-position-embeddings 512 \
+BERT_ARGS="--num_layers 24 \
+           --hidden_size 1024 \
+           --num_attention_heads 16 \
+           --seq_length 512 \
+           --max_position_embeddings 512 \
            --lr 0.0001 \
-           --lr-decay-iters 990000 \
-           --train-iters 2000000 \
-           --min-lr 0.00001 \
-           --lr-warmup-fraction 0.01 \
-	   --micro-batch-size 4 \
-           --global-batch-size 8 \
-           --vocab-file $VOCAB_FILE \
+           --lr_decay_iters 990000 \
+           --train_iters 2000000 \
+           --min_lr 0.00001 \
+           --lr_warmup_fraction 0.01 \
+	       --micro_batch_size 4 \
+           --global_batch_size 8 \
+           --vocab_file $VOCAB_FILE \
            --split 949,50,1 \
            --fp16"
 
-OUTPUT_ARGS="--log-interval 10 \
-             --save-interval 500 \
-             --eval-interval 100 \
-             --eval-iters 10 \
-             --activations-checkpoint-method uniform"
+OUTPUT_ARGS="--log_interval 10 \
+             --save_interval 500 \
+             --eval_interval 100 \
+             --eval_iters 10 \
+             --activations_checkpoint_method uniform"
 
 python pretrain_bert.py \
        $BERT_ARGS \
        $OUTPUT_ARGS \
        --save $CHECKPOINT_PATH \
        --load $CHECKPOINT_PATH \
-       --data-path $DATA_PATH
+       --data_path $DATA_PATH
 </pre>
 
 Further command line arguments are described in the source file [`arguments.py`](./megatron/arguments.py).
-
 
 ## GPT Pretraining
 
 The `examples/pretrain_gpt.sh` script runs single GPU 345M parameter GPT pretraining. As mentioned above, single GPU training is primarily intended for debugging purposes, as the code is optimized for distributed training.
 
-It follows largely the same format as the previous BERT script with a few notable differences: the tokenization scheme used is BPE (which requires a merge table and a `json` vocabulary file) instead of WordPiece, the model architecture allows for longer sequences (note that the max position embedding must be greater than or equal to the maximum sequence length), and the `--lr-decay-style` has been set to cosine decay.  Note that the `--data-path` now includes the additional `_text_document` suffix added in preprocessing, but does not include the file extensions.
+It follows largely the same format as the previous BERT script with a few notable differences: the tokenization scheme used is BPE (which requires a merge table and a `json` vocabulary file) instead of WordPiece, the model architecture allows for longer sequences (note that the max position embedding must be greater than or equal to the maximum sequence length), and the `--lr_decay_style` has been set to cosine decay.  Note that the `--data_path` now includes the additional `_text_document` suffix added in preprocessing, but does not include the file extensions.
 
 <pre>
 CHECKPOINT_PATH=checkpoints/gpt2_345m
@@ -184,20 +183,20 @@ VOCAB_FILE=gpt2-vocab.json
 MERGE_FILE=gpt2-merges.txt
 DATA_PATH=my-gpt2_text_document
 
-GPT_ARGS="--num-layers 24 \
-          --hidden-size 1024 \
-          --num-attention-heads 16 \
-          --seq-length 1024 \
-          --max-position-embeddings 1024 \
-          --micro-batch-size 4 \
-          --global-batch-size 8 \
+GPT_ARGS="--num_layers 24 \
+          --hidden_size 1024 \
+          --num_attention_heads 16 \
+          --seq_length 1024 \
+          --max_position_embeddings 1024 \
+          --micro_batch_size 4 \
+          --global_batch_size 8 \
           --lr 0.00015 \
-          --train-iters 500000 \
-          --lr-decay-iters 320000 \
-          --lr-decay-style cosine \
-          --vocab-file $VOCAB_FILE \
-          --merge-file $MERGE_FILE \
-          --lr-warmup-fraction .01 \
+          --train_iters 500000 \
+          --lr_decay_iters 320000 \
+          --lr_decay_style cosine \
+          --vocab_file $VOCAB_FILE \
+          --merge_file $MERGE_FILE \
+          --lr_warmup_fraction .01 \
           --fp16"
 
 OUTPUT_ARGS=&#60;same as those in <a href="#bert-pretraining">BERT pretraining</a> above&#62;
@@ -207,7 +206,7 @@ python pretrain_gpt.py \
        $OUTPUT_ARGS \
        --save $CHECKPOINT_PATH \
        --load $CHECKPOINT_PATH \
-       --data-path $DATA_PATH \
+       --data_path $DATA_PATH \
 </pre>
 
 Further command line arguments are described in the source file [`arguments.py`](./megatron/arguments.py).
@@ -216,11 +215,11 @@ Further command line arguments are described in the source file [`arguments.py`]
 
 Very similar to BERT and GPT, the `examples/pretrain_t5.sh` script runs single GPU "base" (~220M parameter) T5 pretraining. The primary difference from BERT and GPT is the addition of the following arguments to accommodate the T5 architecture:
 
-* `--kv-channels` sets the inner dimension of the "key" and "value" matrices of all attention mechanisms in the model. For BERT and GPT this defaults to the hidden size divided by the number of attention heads, but can be configured for T5.
+* `--kv_channels` sets the inner dimension of the "key" and "value" matrices of all attention mechanisms in the model. For BERT and GPT this defaults to the hidden size divided by the number of attention heads, but can be configured for T5.
 
-* `--ffn-hidden-size` sets the hidden size in the feed-forward networks within a transformer layer. For BERT and GPT this defaults to 4 times the transformer hidden size, but can be configured for T5.
+* `--ffn_hidden_size` sets the hidden size in the feed-forward networks within a transformer layer. For BERT and GPT this defaults to 4 times the transformer hidden size, but can be configured for T5.
 
-* `--encoder-seq-length` and `--decoder-seq-length` set the sequence length for the encoder and decoder separately.
+* `--encoder_seq_length` and `--decoder_seq_length` set the sequence length for the encoder and decoder separately.
 
 All of the other arguments remain as they were for BERT and GPT pretraining.
 
@@ -229,23 +228,23 @@ CHECKPOINT_PATH=checkpoints/t5_base
 VOCAB_FILE=t5-vocab.txt
 DATA_PATH=my-t5_text_sentence
 
-T5_ARGS="--num-layers 24 \
-         --hidden-size 1024 \
-         --num-attention-heads 16 \
-         --kv-channels 64 \
-         --ffn-hidden-size 3072 \
-         --encoder-seq-length 512 \
-         --decoder-seq-length 128 \
-         --max-position-embeddings 512 \
+T5_ARGS="--num_layers 24 \
+         --hidden_size 1024 \
+         --num_attention_heads 16 \
+         --kv_channels 64 \
+         --ffn_hidden_size 3072 \
+         --encoder_seq_length 512 \
+         --decoder_seq_length 128 \
+         --max_position_embeddings 512 \
          --lr 0.0001 \
-         --lr-decay-iters 990000 \
-         --train-iters 2000000 \
-         --min-lr 0.00001 \
-         --lr-warmup-fraction 0.01 \
-         --micro-batch-size 16 \
-         --global-batch-size 2048 \
-         --vocab-file $VOCAB_FILE \
-         --vocab-extra-ids 100 \
+         --lr_decay_iters 990000 \
+         --train_iters 2000000 \
+         --min_lr 0.00001 \
+         --lr_warmup_fraction 0.01 \
+         --micro_batch_size 16 \
+         --global_batch_size 2048 \
+         --vocab_file $VOCAB_FILE \
+         --vocab_extra_ids 100 \
          --split 949,50,1 \
          --fp16"
 
@@ -256,7 +255,7 @@ python pretrain_t5.py \
        $OUTPUT_ARGS \
        --save $CHECKPOINT_PATH \
        --load $CHECKPOINT_PATH \
-       --data-path $DATA_PATH
+       --data_path $DATA_PATH
 </pre>
 
 
@@ -264,13 +263,13 @@ python pretrain_t5.py \
 
 The `examples/pretrain_{bert,gpt,t5}_distributed.sh` scripts use the PyTorch distributed launcher for distributed training. As such, multi-node training can be achieved by properly setting environment variables and using `init_method='env://'` in the launcher. See the official PyTorch [documentation](https://pytorch.org/docs/stable/distributed.html#launch-utility) for further description of these [environment variables](https://pytorch.org/docs/stable/distributed.html#environment-variable-initialization). By default, multi-node training uses the [nccl](https://developer.nvidia.com/nccl) distributed backend. A simple set of additional arguments and the use of the PyTorch distributed module with the Python flag `-m torch.distributed.launch`, detailed below, are the only additional requirements to adopt distributed training.
 
-We use two types of parallelism: data and model parallelism. We facilitate two distributed data parallel implementations: a simple one of our own that performs gradient all-reduce at the end of back propagation step, and Torch's distributed data parallel wrapper that overlaps gradient reduction with back propagation computation. To switch between these two options use `--DDP-impl local` or `--DDP-impl torch`, respectively. As expected, Torch distributed data parallelism is more efficient at larger model sizes. For example, for the 8.3 billion parameters model running on 512 GPUs, the scaling increases from 60% to 76% when Torch's distributed data parallel is used. However, the overlapping method requires more memory and for some configurations (e.g., 2.5 billion parameters using 2-way model parallel and 1.2 billion parameters with no model parallel) can make the overall training slower as a result. We empirically found that using a smaller model in those cases improves the training time.
+We use two types of parallelism: data and model parallelism. We facilitate two distributed data parallel implementations: a simple one of our own that performs gradient all-reduce at the end of back propagation step, and Torch's distributed data parallel wrapper that overlaps gradient reduction with back propagation computation. To switch between these two options use `--DDP_impl local` or `--DDP_impl torch`, respectively. As expected, Torch distributed data parallelism is more efficient at larger model sizes. For example, for the 8.3 billion parameters model running on 512 GPUs, the scaling increases from 60% to 76% when Torch's distributed data parallel is used. However, the overlapping method requires more memory and for some configurations (e.g., 2.5 billion parameters using 2-way model parallel and 1.2 billion parameters with no model parallel) can make the overall training slower as a result. We empirically found that using a smaller model in those cases improves the training time.
 
-Second, we developed a simple and efficient two-dimensional model-parallel approach. To use tensor model parallelism (splitting execution of a single transformer module over multiple GPUs), add the `--tensor-model-parallel-size` flag to specify the number of GPUs among which to split the model, along with the arguments passed to the distributed launcher as mentioned above. To use sequence parallelism specify `--sequence-parallel`, which requires tensor model parallel as it split among the same GPUs.
+Second, we developed a simple and efficient two-dimensional model-parallel approach. To use tensor model parallelism (splitting execution of a single transformer module over multiple GPUs), add the `--tensor_model_parallel_size` flag to specify the number of GPUs among which to split the model, along with the arguments passed to the distributed launcher as mentioned above. To use sequence parallelism specify `--sequence_parallel`, which requires tensor model parallel as it split among the same GPUs.
 
-To use pipeline model parallelism (sharding the transformer modules into stages with an equal number of transformer modules on each stage, and then pipelining execution by breaking the batch into smaller microbatches), use the `--pipeline-model-parallel-size` flag to specify the number of stages to split the model into (e.g., splitting a model with 24 transformer layers across 4 stages would mean each stage gets 6 transformer layers each).
+To use pipeline model parallelism (sharding the transformer modules into stages with an equal number of transformer modules on each stage, and then pipelining execution by breaking the batch into smaller microbatches), use the `--pipeline_model_parallel_size` flag to specify the number of stages to split the model into (e.g., splitting a model with 24 transformer layers across 4 stages would mean each stage gets 6 transformer layers each).
 
-<!-- The number of microbatches in a per-pipeline minibatch is controlled by the `--num-microbatches-in-minibatch` argument. With `WORLD_SIZE` GPUs, `TENSOR_MP_SIZE` tensor-model-parallel size, `PIPELINE_MP_SIZE` pipeline-model-parallel-size, `WORLD_SIZE`/(`TENSOR_MP_SIZE` * `PIPELINE_MP_SIZE`) GPUs will be used for data parallelism. The default values for `--tensor-model-parallel-size` and `--pipeline-model-parallel-size` is 1, which will not implement either form of model parallelism. -->
+<!-- The number of microbatches in a per-pipeline minibatch is controlled by the `--num_microbatches_in_minibatch` argument. With `WORLD_SIZE` GPUs, `TENSOR_MP_SIZE` tensor_model_parallel size, `PIPELINE_MP_SIZE` pipeline_model_parallel_size, `WORLD_SIZE`/(`TENSOR_MP_SIZE` * `PIPELINE_MP_SIZE`) GPUs will be used for data parallelism. The default values for `--tensor-model-parallel-size` and `--pipeline-model-parallel-size` is 1, which will not implement either form of model parallelism. -->
 
 We have examples of how to use these two different forms of model parallelism the example scripts ending in `distributed_with_mp.sh`:
 
@@ -299,20 +298,20 @@ python -m torch.distributed.launch $DISTRIBUTED_ARGS ./pretrain_<model>.py \
                 $OUTPUT_ARGS \
                 --save $CHECKPOINT_PATH \
                 --load $CHECKPOINT_PATH \
-                --data-path $DATA_PATH \
-                --tensor-model-parallel-size $TENSOR_MP_SIZE \
-                --pipeline-model-parallel-size $PIPELINE_MP_SIZE \
-                --sequence-parallel \
-                --DDP-impl torch
+                --data_path $DATA_PATH \
+                --tensor_model_parallel_size $TENSOR_MP_SIZE \
+                --pipeline_model_parallel_size $PIPELINE_MP_SIZE \
+                --sequence_parallel \
+                --DDP_impl torch
 </pre>
 
-The interleaved pipelining schedule (more details in Section 2.2.2 of [our paper](https://arxiv.org/pdf/2104.04473.pdf)) can be enabled using the `--num-layers-per-virtual-pipeline-stage` argument, which controls the number of transformer layers in a virtual stage (by default with the non-interleaved schedule, each GPU will execute a single virtual stage with `NUM_LAYERS / PIPELINE_MP_SIZE` transformer layers). The total number of layers in the transformer model should be divisible by this argument value. Additionally, the number of microbatches in the pipeline (computed as `GLOBAL_BATCH_SIZE / (DATA_PARALLEL_SIZE * MICRO_BATCH_SIZE)`) should be divisible by the `PIPELINE_MP_SIZE` when using this schedule (this condition is checked in an assertion in the code). The interleaved schedule is not supported for pipelines with 2 stages (`PIPELINE_MP_SIZE=2`).
+The interleaved pipelining schedule (more details in Section 2.2.2 of [our paper](https://arxiv.org/pdf/2104.04473.pdf)) can be enabled using the `--num_layers-per-virtual-pipeline-stage` argument, which controls the number of transformer layers in a virtual stage (by default with the non-interleaved schedule, each GPU will execute a single virtual stage with `NUM_LAYERS / PIPELINE_MP_SIZE` transformer layers). The total number of layers in the transformer model should be divisible by this argument value. Additionally, the number of microbatches in the pipeline (computed as `GLOBAL_BATCH_SIZE / (DATA_PARALLEL_SIZE * MICRO_BATCH_SIZE)`) should be divisible by the `PIPELINE_MP_SIZE` when using this schedule (this condition is checked in an assertion in the code). The interleaved schedule is not supported for pipelines with 2 stages (`PIPELINE_MP_SIZE=2`).
 
 ## Activation Checkpointing and Recomputation
 
-To reduce GPU memory usage so deploy a large model to a training system, we support activation checkpointing and recomputation. We support two levels of recompute granularity: `selective` and `full`. Selective recomputation is the default and recommended in almost all cases. It saves the activations that take less space and are expensive to recompute and recomputes activations that take a lot of space but are relatively cheap to recompute (see [our paper](https://arxiv.org/pdf/2205.05198) for details). To enable selective activation recompute simply use `--recompute-activations`.
+To reduce GPU memory usage so deploy a large model to a training system, we support activation checkpointing and recomputation. We support two levels of recompute granularity: `selective` and `full`. Selective recomputation is the default and recommended in almost all cases. It saves the activations that take less space and are expensive to recompute and recomputes activations that take a lot of space but are relatively cheap to recompute (see [our paper](https://arxiv.org/pdf/2205.05198) for details). To enable selective activation recompute simply use `--recompute_activations`.
 
-For cases where memory is very tight, `full` checkpointing saves just the inputs to a transformer layer, or a block of transformer layers, and recomputes everything else. To turn on full activation recompute use `--recompute-granularity full`. When using full activation recomputation, there are two methods: `uniform` and `block`, chosen using the `--recompute-method` argument.
+For cases where memory is very tight, `full` checkpointing saves just the inputs to a transformer layer, or a block of transformer layers, and recomputes everything else. To turn on full activation recompute use `--recompute_granularity full`. When using full activation recomputation, there are two methods: `uniform` and `block`, chosen using the `--recompute_method` argument.
 
 * Uniform method uniformly divides the Transformer layers into groups of layers and stores the input activations of each group in the memory. The baseline group size is 1 and, in this case, the input activation of each Transformer layer is checkpointed. When the GPU memory is insufficient, increasing the number of layers per group reduces the memory usage thus enables running a bigger model. For example, when using the number of layers per group of 4, the input activation of each group of 4 Transformer layers is checkpointed.
 
@@ -321,7 +320,7 @@ For cases where memory is very tight, `full` checkpointing saves just the inputs
 
 ## Distributed Optimizer
 
-Usage: `--use-distributed-optimizer`. Compatible with all model and data types.
+Usage: `--use_distributed_optimizer`. Compatible with all model and data types.
 
 The distributed optimizer is a memory savings technique, whereby the optimizer state is evenly distributed across data parallel ranks (versus the traditional method of replicating the optimizer state across data parallel ranks). As described in [ZeRO: Memory Optimizations Toward Training Trillion Parameter Models](https://arxiv.org/abs/1910.02054), our implementation distributes all optimizer state that does not overlap with the model state. For example, when using fp16 model params, the distributed optimizer maintains its own separate copy of fp32 main params & grads, which are distributed across DP ranks. When using bf16 model params, however, the distributed optimizer's fp32 main grads are the same as the model's fp32 grads, and so the grads in this case are not distributed (although the fp32 main params are still distributed, as they are separate from the bf16 model params).
 
@@ -348,7 +347,7 @@ pip install flash-attn
 
 ## GPT-3 Example
 
-In `examples/pretrain_gpt3_175B.sh` we have provided an example of how to configure Megatron to run [GPT-3](https://arxiv.org/abs/2005.14165) with 175 billion parameters on 1024 GPUs. The script is designed for [slurm](https://slurm.schedmd.com/documentation.html) with [pyxis](https://github.com/NVIDIA/pyxis) plugin but can be easily adopted to any other scheduler. It uses 8-way and 16-way tensor and pipeline parallelism, respectively. With options `global-batch-size 1536` and `rampup-batch-size 16 16 5859375`, the training will start with global batch size 16 and linearly increase the global batch size to 1536 over 5,859,375 samples with incrmeental steps 16. The training dataset can be either a single set or a multiple datasets combined with a set of weights.
+In `examples/pretrain_gpt3_175B.sh` we have provided an example of how to configure Megatron to run [GPT-3](https://arxiv.org/abs/2005.14165) with 175 billion parameters on 1024 GPUs. The script is designed for [slurm](https://slurm.schedmd.com/documentation.html) with [pyxis](https://github.com/NVIDIA/pyxis) plugin but can be easily adopted to any other scheduler. It uses 8-way and 16-way tensor and pipeline parallelism, respectively. With options `global_batch_size 1536` and `rampup_batch_size 16 16 5859375`, the training will start with global batch size 16 and linearly increase the global batch size to 1536 over 5,859,375 samples with incrmeental steps 16. The training dataset can be either a single set or a multiple datasets combined with a set of weights.
 
 With full global batch size of 1536 on 1024 A100 GPUs, each iteration takes around 32 seconds resulting in 138 teraFLOPs per GPU which is 44% of the theoretical peak FLOPs.
 
@@ -360,16 +359,16 @@ Loosely, they are pretraining the retriever modules, then jointly training the l
 
 ### Inverse Cloze Task (ICT) Pretraining
 1. Have a corpus in loose JSON format with the intention of creating a collection of fixed-size blocks of text as the fundamental units of data. For a corpus like Wikipedia, this will mean multiple sentences per block but also multiple blocks per document.
-Run `tools/preprocess_data.py` to construct one or more indexed datasets with the `--split-sentences` argument to make sentences the basic unit. For the original REALM system, we construct two datasets, one with the title of every document, and another with the body.
+Run `tools/preprocess_data.py` to construct one or more indexed datasets with the `--split_sentences` argument to make sentences the basic unit. For the original REALM system, we construct two datasets, one with the title of every document, and another with the body.
 Refer to the following script
 <pre>
 python preprocess_data.py \
     --input /path/to/corpus.json \
-    --json-keys text title \
-    --split-sentences \
-    --tokenizer-type BertWordPieceLowerCase \
-    --vocab-file /path/to/vocab.txt \
-    --output-prefix corpus_indexed \
+    --json_keys text title \
+    --split_sentences \
+    --tokenizer_type BertWordPieceLowerCase \
+    --vocab_file /path/to/vocab.txt \
+    --output_prefix corpus_indexed \
     --workers 5  # works well for 10 CPU cores. Scale up accordingly.
 </pre>
 
@@ -378,32 +377,32 @@ python preprocess_data.py \
 3. Pretrain a BERT language model using `pretrain_bert.py`, with the sequence length equal to the block size in token ids. This model should be trained on the same indexed dataset that is used to supply the blocks for the information retrieval task.
 In REALM, this is an uncased bert base model trained with the standard hyperparameters.
 4. Use `pretrain_ict.py` to train an `ICTBertModel` which uses two BERT-based encoders to encode queries and blocks to perform retrieval with.
-The script below trains the ICT model from REALM. It refrences a pretrained BERT model (step 3) in the `--bert-load` argument. The batch size used in the paper is 4096, so this would need to be run with data parallel world size 32.
+The script below trains the ICT model from REALM. It refrences a pretrained BERT model (step 3) in the `--bert_load` argument. The batch size used in the paper is 4096, so this would need to be run with data parallel world size 32.
 <pre>
 python pretrain_ict.py \
-    --num-layers 12 \
-    --num-attention-heads 12 \
-    --hidden-size 768 \
-    --batch-size 128 \
-    --seq-length 256 \
-    --max-position-embeddings 256 \
-    --ict-head-size 128 \
-    --train-iters 100000 \
-    --activations-checkpoint-method uniform \
-    --bert-load /path/to/pretrained_bert \
+    --num_layers 12 \
+    --num_attention_heads 12 \
+    --hidden_size 768 \
+    --batch_size 128 \
+    --seq_length 256 \
+    --max_position_embeddings 256 \
+    --ict_head_size 128 \
+    --train_iters 100000 \
+    --activations_checkpoint_method uniform \
+    --bert_load /path/to/pretrained_bert \
     --load checkpoints \
     --save checkpoints \
-    --data-path /path/to/indexed_dataset \
-    --titles-data-path /path/to/titles_indexed_dataset \
-    --vocab-file /path/to/vocab.txt \
+    --data_path /path/to/indexed_dataset \
+    --titles_data_path /path/to/titles_indexed_dataset \
+    --vocab_file /path/to/vocab.txt \
     --lr 0.0001 \
-    --num-workers 2 \
-    --lr-decay-style linear \
-    --weight-decay 1e-2 \
-    --clip-grad 1.0 \
-    --lr-warmup-fraction .01 \
-    --save-interval 3000 \
-    --query-in-block-prob 0.1 \
+    --num_workers 2 \
+    --lr_decay_style linear \
+    --weight_decay 1e-2 \
+    --clip_grad 1.0 \
+    --lr_warmup_fraction .01 \
+    --save_interval 3000 \
+    --query_in_block_prob 0.1 \
     --fp16
 
 </pre>
@@ -414,22 +413,22 @@ and wrap it with a `FaissMIPSIndex` to do fast similarity search which is key in
 
 <pre>
 python tools/create_doc_index.py \
-    --num-layers 12 \
-    --hidden-size 768 \
-    --ict-head-size 128 \
-    --num-attention-heads 12 \
-    --batch-size 128 \
-    --activations-checkpoint-method uniform \
-    --seq-length 256 \
-    --max-position-embeddings 256 \
-    --ict-load /path/to/pretrained_ict \
-    --data-path /path/to/indexed_dataset \
-    --titles-data-path /path/to/titles_indexed_dataset \
-    --block-data-path embedded_blocks.pkl \
-    --indexer-log-interval 1000 \
-    --indexer-batch-size 128 \
-    --vocab-file /path/to/vocab.txt \
-    --num-workers 2 \
+    --num_layers 12 \
+    --hidden_size 768 \
+    --ict_head_size 128 \
+    --num_attention_heads 12 \
+    --batch_size 128 \
+    --activations_checkpoint_method uniform \
+    --seq_length 256 \
+    --max_position_embeddings 256 \
+    --ict_load /path/to/pretrained_ict \
+    --data_path /path/to/indexed_dataset \
+    --titles_data_path /path/to/titles_indexed_dataset \
+    --block_data_path embedded_blocks.pkl \
+    --indexer_log_interval 1000 \
+    --indexer_batch_size 128 \
+    --vocab_file /path/to/vocab.txt \
+    --num_workers 2 \
     --fp16
 </pre>
 
@@ -443,10 +442,10 @@ Because evaluation requires substantially less memory than training, it may be a
 
 <pre>
 python tools/checkpoint_util.py \
-        --model-type GPT \
-        --load-dir checkpoints/gpt3_tp4_pp4 \
-        --save-dir checkpoints/gpt3_tp2_pp2 \
-        --target-tensor-parallel-size 2 \
+        --model_type GPT \
+        --load_dir checkpoints/gpt3_tp4_pp4 \
+        --save_dir checkpoints/gpt3_tp2_pp2 \
+        --target_tensor_parallel_size 2 \
         --target-pipeline-paralle-size 2
 
 </pre>
@@ -471,12 +470,6 @@ curl 'http://localhost:5000/api' -X 'PUT' -H 'Content-Type: application/json; ch
 
 See [megatron/text_generation_server.py](megatron/text_generation_server.py) for more API options.
 
-### Detoxify GPT via Self-generation
-We include an example in `examples/detxoify_lm/` to detoxify language models by leveraging the generative power of language models.
-
-See [examples/detxoify_lm/README.md](examples/detxoify_lm/README.md) for step-by-step tutorials on how to perform domain-adaptive training and detoxify LM using self-generated corpus. 
-
-
 ## GPT Evaluation
 We include example scripts for GPT evaluation on WikiText perplexity evaluation and LAMBADA Cloze accuracy.
 
@@ -492,33 +485,33 @@ VOCAB_FILE=gpt2-vocab.json
 MERGE_FILE=gpt2-merges.txt
 CHECKPOINT_PATH=checkpoints/gpt2_345m
 
-COMMON_TASK_ARGS="--num-layers 24 \
-                  --hidden-size 1024 \
-                  --num-attention-heads 16 \
-                  --seq-length 1024 \
-                  --max-position-embeddings 1024 \
+COMMON_TASK_ARGS="--num_layers 24 \
+                  --hidden_size 1024 \
+                  --num_attention_heads 16 \
+                  --seq_length 1024 \
+                  --max_position_embeddings 1024 \
                   --fp16 \
-                  --vocab-file $VOCAB_FILE"
+                  --vocab_file $VOCAB_FILE"
 
 python tasks/main.py \
        --task $TASK \
        $COMMON_TASK_ARGS \
-       --valid-data $VALID_DATA \
-       --tokenizer-type GPT2BPETokenizer \
-       --merge-file $MERGE_FILE \
+       --valid_data $VALID_DATA \
+       --tokenizer_type GPT2BPETokenizer \
+       --merge_file $MERGE_FILE \
        --load $CHECKPOINT_PATH \
-       --micro-batch-size 8 \
-       --activations-checkpoint-method uniform \
-       --log-interval 10 \
-       --no-load-optim \
-       --no-load-rng
+       --micro_batch_size 8 \
+       --activations_checkpoint_method uniform \
+       --log_interval 10 \
+       --no_load_optim \
+       --no_load_rng
 </pre>
 
 
 ### LAMBADA Cloze Accuracy
 To compute LAMBADA cloze accuracy (the accuracy of predicting the last token given the preceding tokens) we utilize a detokenized, processed version of the [LAMBADA dataset](https://github.com/cybertronai/bflm/blob/master/lambada_test.jsonl).
 
-We use the following command to run LAMBADA evaluation on a 345M parameter model. Note that the `--strict-lambada` flag should be used to require whole word matching. Make that `lambada` is part of the file path.
+We use the following command to run LAMBADA evaluation on a 345M parameter model. Note that the `--strict_lambada` flag should be used to require whole word matching. Make that `lambada` is part of the file path.
 
 <pre>
 TASK="LAMBADA"
@@ -532,16 +525,16 @@ COMMON_TASK_ARGS=&#60;same as those in <a href="#wikitext-perplexity-evaluation"
 python tasks/main.py \
        --task $TASK \
        $COMMON_TASK_ARGS \
-       --valid-data $VALID_DATA \
-       --tokenizer-type GPT2BPETokenizer \
-       --strict-lambada \
-       --merge-file $MERGE_FILE \
+       --valid_data $VALID_DATA \
+       --tokenizer_type GPT2BPETokenizer \
+       --strict_lambada \
+       --merge_file $MERGE_FILE \
        --load $CHECKPOINT_PATH \
-       --micro-batch-size 8 \
-       --activations-checkpoint-method uniform \
-       --log-interval 10 \
-       --no-load-optim \
-       --no-load-rng
+       --micro_batch_size 8 \
+       --activations_checkpoint_method uniform \
+       --log_interval 10 \
+       --no_load_optim \
+       --no_load_rng
 </pre>
 
 Further command line arguments are described in the source file [`main.py`](./tasks/main.py)
@@ -557,34 +550,34 @@ VALID_DATA="data/RACE/dev/middle \
 VOCAB_FILE=bert-vocab.txt
 PRETRAINED_CHECKPOINT=checkpoints/bert_345m
 CHECKPOINT_PATH=checkpoints/bert_345m_race
-COMMON_TASK_ARGS="--num-layers 24 \
-                  --hidden-size 1024 \
-                  --num-attention-heads 16 \
-                  --seq-length 512 \
-                  --max-position-embeddings 512 \
+COMMON_TASK_ARGS="--num_layers 24 \
+                  --hidden_size 1024 \
+                  --num_attention_heads 16 \
+                  --seq_length 512 \
+                  --max_position_embeddings 512 \
                   --fp16 \
-                  --vocab-file $VOCAB_FILE"
+                  --vocab_file $VOCAB_FILE"
 
-COMMON_TASK_ARGS_EXT="--train-data $TRAIN_DATA \
-                      --valid-data $VALID_DATA \
-                      --pretrained-checkpoint $PRETRAINED_CHECKPOINT \
-                      --activations-checkpoint-method uniform \
-                      --save-interval 10000 \
+COMMON_TASK_ARGS_EXT="--train_data $TRAIN_DATA \
+                      --valid_data $VALID_DATA \
+                      --pretrained_checkpoint $PRETRAINED_CHECKPOINT \
+                      --activations_checkpoint_method uniform \
+                      --save_interval 10000 \
                       --save $CHECKPOINT_PATH \
-                      --log-interval 100 \
-                      --eval-interval 1000 \
-                      --eval-iters 10 \
-                      --weight-decay 1.0e-1"
+                      --log_interval 100 \
+                      --eval_interval 1000 \
+                      --eval_iters 10 \
+                      --weight_decay 1.0e-1"
 
 python tasks/main.py \
        --task RACE \
        $COMMON_TASK_ARGS \
        $COMMON_TASK_ARGS_EXT \
-       --tokenizer-type BertWordPieceLowerCase \
+       --tokenizer_type BertWordPieceLowerCase \
        --epochs 3 \
-       --micro-batch-size 4 \
+       --micro_batch_size 4 \
        --lr 1.0e-5 \
-       --lr-warmup-fraction 0.06
+       --lr_warmup_fraction 0.06
 </pre>
 
 ### MNLI Evaluation
@@ -605,11 +598,11 @@ python tasks/main.py \
        --task MNLI \
        $COMMON_TASK_ARGS \
        $COMMON_TASK_ARGS_EXT \
-       --tokenizer-type BertWordPieceLowerCase \
+       --tokenizer_type BertWordPieceLowerCase \
        --epochs 5 \
-       --micro-batch-size 8 \
+       --micro_batch_size 8 \
        --lr 5.0e-5 \
-       --lr-warmup-fraction 0.065
+       --lr_warmup_fraction 0.065
 </pre>
 
 # Datasets
@@ -618,7 +611,7 @@ We do not host any datasets for GPT or BERT training, however, we detail their c
 ## Collecting Wikipedia Training Data
 We recommend following the Wikipedia data extraction process specified by Google research: "the recommended pre-processing is to download [the latest dump](https://dumps.wikimedia.org/enwiki/latest/enwiki-latest-pages-articles.xml.bz2), extract the text with [WikiExtractor.py](https://github.com/attardi/wikiextractor), and then apply any necessary cleanup to convert it into plain text."
 
-We recommend using the `--json` argument when using WikiExtractor, which will dump the Wikipedia data into loose json format (one json per line), making it more manageable on the file system and also readily consumable by our codebase. We recommend further preprocessing this json dataset by nltk punctuation standardization. For BERT training, use the `--split-sentences` flag to `preprocess_data.py` as described [above](#data-preprocessing) to include sentence breaks in the produced index. If you'd like to use Wikipedia data for GPT training you should still clean it with nltk/spacy/ftfy, but do not use the `--split-sentences` flag.
+We recommend using the `--json` argument when using WikiExtractor, which will dump the Wikipedia data into loose json format (one json per line), making it more manageable on the file system and also readily consumable by our codebase. We recommend further preprocessing this json dataset by nltk punctuation standardization. For BERT training, use the `--split_sentences` flag to `preprocess_data.py` as described [above](#data-preprocessing) to include sentence breaks in the produced index. If you'd like to use Wikipedia data for GPT training you should still clean it with nltk/spacy/ftfy, but do not use the `--split-sentences` flag.
 
 ## Collecting GPT Webtext Data
 We utilize the publicly available [OpenWebText](https://github.com/eukaryote31/openwebtext) library from [jcpeterson](https://github.com/jcpeterson/openwebtext) and [eukaryote31's](https://github.com/eukaryote31/openwebtext) work to download urls. We then filtered, cleaned, and deduplicated all downloaded content according to the procedure described in our [openwebtext](./tools/openwebtext) directory. For reddit URLs corresponding to content up to October 2018 we arrived at approximately 37GB of content.

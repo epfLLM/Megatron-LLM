@@ -76,7 +76,7 @@ elif [ ${MODEL_SIZE} == "76B" ]; then
     NAH=80
     DDP=local
     NNODES=128
-    MEGATRON_EXTRA_PARAMS="--activations-checkpoint-method uniform --num-layers-per-virtual-pipeline-stage 5"
+    MEGATRON_EXTRA_PARAMS="--activations-checkpoint-method uniform --num_layers_per_virtual_pipeline_stage 5"
 elif [ ${MODEL_SIZE} == "145B" ]; then
     TP=8
     PP=8
@@ -87,7 +87,7 @@ elif [ ${MODEL_SIZE} == "145B" ]; then
     NAH=96
     DDP=local
     NNODES=192
-    MEGATRON_EXTRA_PARAMS="--activations-checkpoint-method uniform --num-layers-per-virtual-pipeline-stage 5 "
+    MEGATRON_EXTRA_PARAMS="--activations-checkpoint-method uniform --num_layers_per_virtual_pipeline_stage 5 "
 elif [ ${MODEL_SIZE} == "310B" ]; then
     TP=8
     PP=16
@@ -98,7 +98,7 @@ elif [ ${MODEL_SIZE} == "310B" ]; then
     NAH=128
     DDP=local
     NNODES=240
-    MEGATRON_EXTRA_PARAMS="--activations-checkpoint-method uniform --num-layers-per-virtual-pipeline-stage 3 "
+    MEGATRON_EXTRA_PARAMS="--activations-checkpoint-method uniform --num_layers_per_virtual_pipeline_stage 3 "
 elif [ ${MODEL_SIZE} == "530B" ]; then
     TP=8
     PP=35
@@ -109,7 +109,7 @@ elif [ ${MODEL_SIZE} == "530B" ]; then
     NAH=128
     DDP=local
     NNODES=315
-    MEGATRON_EXTRA_PARAMS="--activations-checkpoint-method uniform --num-layers-per-virtual-pipeline-stage 1 "
+    MEGATRON_EXTRA_PARAMS="--activations-checkpoint-method uniform --num_layers_per_virtual_pipeline_stage 1 "
 elif [ ${MODEL_SIZE} == "1T" ]; then
     TP=8
     PP=64

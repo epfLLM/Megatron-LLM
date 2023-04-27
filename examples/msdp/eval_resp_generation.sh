@@ -17,15 +17,15 @@ GROUND_TRUTH_PATH=<PATH_OF_THE_GROUND_TRUTH_RESPONSE> \
         (e.g., /testseen_response_reference.txt)
 
 python -m torch.distributed.launch $DISTRIBUTED_ARGS ./tasks/msdp/main.py \
-        --num-layers 24 \
-        --hidden-size 1024 \
-        --num-attention-heads 16 \
-        --seq-length 2048 \
-        --max-position-embeddings 2048 \
-        --micro-batch-size 4 \
+        --num_layers 24 \
+        --hidden_size 1024 \
+        --num_attention_heads 16 \
+        --seq_length 2048 \
+        --max_position_embeddings 2048 \
+        --micro_batch_size 4 \
         --task MSDP-EVAL-F1 \
-        --guess-file ${MODEL_GEN_PATH} \
-        --answer-file ${GROUND_TRUTH_PATH}
+        --guess_file ${MODEL_GEN_PATH} \
+        --answer_file ${GROUND_TRUTH_PATH}
 
 
 ##########################
@@ -38,15 +38,15 @@ GROUND_TRUTH_PATH=<PATH_OF_THE_GROUND_TRUTH_KNOWLEDGE> \
         (e.g., /testseen_knowledge_reference.txt)
 
 python -m torch.distributed.launch $DISTRIBUTED_ARGS ./tasks/msdp/main.py \
-        --num-layers 24 \
-        --hidden-size 1024 \
-        --num-attention-heads 16 \
-        --seq-length 2048 \
-        --max-position-embeddings 2048 \
-        --micro-batch-size 4 \
+        --num_layers 24 \
+        --hidden_size 1024 \
+        --num_attention_heads 16 \
+        --seq_length 2048 \
+        --max_position_embeddings 2048 \
+        --micro_batch_size 4 \
         --task MSDP-EVAL-F1 \
-        --guess-file ${MODEL_GEN_PATH} \
-        --answer-file ${GROUND_TRUTH_PATH}
+        --guess_file ${MODEL_GEN_PATH} \
+        --answer_file ${GROUND_TRUTH_PATH}
 
 
 ############################################

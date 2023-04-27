@@ -27,31 +27,31 @@ BPE_MERGE_FILE=<path to bpe merges file>
 # `MEGATRON_EXTRA_PARAMS` can be used to provide any extra parameters
 # that are not listed here. 
 export MEGATRON_PARAMS=" ${MEGATRON_EXTRA_PARAMS} \
-	--tensor-model-parallel-size ${TP} \
-	--pipeline-model-parallel-size ${PP} \
-	--micro-batch-size ${MBS} \
-	--global-batch-size ${GBS} \
-        --num-layers ${NLS} \
-        --hidden-size ${HS} \
-        --num-attention-heads ${NAH} \
-	--DDP-impl ${DDP} \
-	--data-path ${MEGATRON_DATA} \
-	--vocab-file ${BPE_VOCAB_FILE} \
-	--merge-file ${BPE_MERGE_FILE} \
-        --log-interval 5 \
-        --seq-length 2048 \
-        --max-position-embeddings 2048 \
-        --train-iters 500 \
-        --lr-decay-iters 320 \
-        --lr 0.0001 \
-	--min-lr 0.00001 \
-        --lr-decay-style cosine \
-        --lr-warmup-fraction 0.01 \
-        --split 969,30,1 \
-        --eval-iters 100 \
-        --eval-interval 1000 \
-        --clip-grad 1.0 \
-        --fp16 \
-	--loss-scale 8192 "
+	--tensor_model_parallel_size ${TP} \
+	--pipeline_model_parallel_size ${PP} \
+	--micro_batch_size ${MBS} \
+	--global_batch_size ${GBS} \
+  --num_layers ${NLS} \
+  --hidden_size ${HS} \
+  --num_attention_heads ${NAH} \
+	--DDP_impl ${DDP} \
+	--data_path ${MEGATRON_DATA} \
+	--vocab_file ${BPE_VOCAB_FILE} \
+	--merge_file ${BPE_MERGE_FILE} \
+  --log_interval 5 \
+  --seq_length 2048 \
+  --max_position_embeddings 2048 \
+  --train_iters 500 \
+  --lr_decay_iters 320 \
+  --lr 0.0001 \
+	--min_lr 0.00001 \
+  --lr_decay_style cosine \
+  --lr_warmup_fraction 0.01 \
+  --split 969,30,1 \
+  --eval_iters 100 \
+  --eval_interval 1000 \
+  --clip_grad 1.0 \
+  --fp16 \
+	--loss_scale 8192 "
 
 

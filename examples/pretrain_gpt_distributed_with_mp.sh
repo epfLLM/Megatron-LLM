@@ -17,35 +17,35 @@ DISTRIBUTED_ARGS="--nproc_per_node $GPUS_PER_NODE --nnodes $NNODES --node_rank $
 
 python -m torch.distributed.launch $DISTRIBUTED_ARGS \
        pretrain_gpt.py \
-       --tensor-model-parallel-size 2 \
-       --pipeline-model-parallel-size 2 \
-       --sequence-parallel \
-       --num-layers 24 \
-       --hidden-size 1024 \
-       --num-attention-heads 16 \
-       --micro-batch-size 4 \
-       --global-batch-size 16 \
-       --seq-length 1024 \
-       --max-position-embeddings 1024 \
-       --train-iters 500000 \
-       --lr-decay-iters 320000 \
+       --tensor_model_parallel_size 2 \
+       --pipeline_model_parallel_size 2 \
+       --sequence_parallel \
+       --num_layers 24 \
+       --hidden_size 1024 \
+       --num_attention_heads 16 \
+       --micro_batch_size 4 \
+       --global_batch_size 16 \
+       --seq_length 1024 \
+       --max_position_embeddings 1024 \
+       --train_iters 500000 \
+       --lr_decay_iters 320000 \
        --save $CHECKPOINT_PATH \
        --load $CHECKPOINT_PATH \
-       --data-path $DATA_PATH \
-       --vocab-file gpt2-vocab.json \
-       --merge-file gpt2-merges.txt \
-       --data-impl mmap \
+       --data_path $DATA_PATH \
+       --vocab_file gpt2-vocab.json \
+       --merge_file gpt2-merges.txt \
+       --data_impl mmap \
        --split 949,50,1 \
-       --distributed-backend nccl \
+       --distributed_backend nccl \
        --lr 0.00015 \
-       --lr-decay-style cosine \
-       --min-lr 1.0e-5 \
-       --weight-decay 1e-2 \
-       --clip-grad 1.0 \
-       --lr-warmup-fraction .01 \
-       --activations-checkpoint-method uniform \
-       --log-interval 100 \
-       --save-interval 10000 \
-       --eval-interval 1000 \
-       --eval-iters 10 \
+       --lr_decay_style cosine \
+       --min_lr 1.0e-5 \
+       --weight_decay 1e-2 \
+       --clip_grad 1.0 \
+       --lr_warmup_fraction .01 \
+       --activations_checkpoint_method uniform \
+       --log_interval 100 \
+       --save_interval 10000 \
+       --eval_interval 1000 \
+       --eval_iters 10 \
        --fp16

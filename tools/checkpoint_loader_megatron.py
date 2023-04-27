@@ -5,19 +5,20 @@ import types
 
 import torch
 
+
 def add_arguments(parser):
     group = parser.add_argument_group(title='Megatron loader')
 
-    group.add_argument('--true-vocab-size', type=int, default=None,
+    group.add_argument('--true_vocab_size', type=int, default=None,
                        help='original size of vocab, if specified will trim padding from embedding table.')
-    group.add_argument('--vocab-file', type=str, default=None,
+    group.add_argument('--vocab_file', type=str, default=None,
                        help='Path to the vocab file. If specified will use this to get vocab size and '
                        'trim padding from the embedding table.')
-    group.add_argument('--megatron-path', type=str, default=None,
+    group.add_argument('--megatron_path', type=str, default=None,
                        help='Base directory of deepspeed repository')
 
-def _load_checkpoint(queue, args):
 
+def _load_checkpoint(queue, args):
     # Search in directory above this
     sys.path.append(os.path.abspath(
         os.path.join(os.path.dirname(__file__),
@@ -33,22 +34,22 @@ def _load_checkpoint(queue, args):
         from megatron.core import mpu
         from megatron import fused_kernels
     except ModuleNotFoundError:
-        print("Unable to import Megatron, please specify the path to Megatron using --megatron-path. Exiting.")
+        print("Unable to import Megatron, please specify the path to Megatron using --megatron_path. Exiting.")
         queue.put("exit")
         exit(1)
 
     # We want all arguments to come from us
     sys.argv = ['script.py',
-                '--no-masked-softmax-fusion',
-                '--no-bias-gelu-fusion',
-                '--no-bias-dropout-fusion',
-                '--use-cpu-initialization',
-                '--micro-batch-size', '1',
-                '--no-load-optim',
-                '--no-load-rng',
-                '--no-save-optim',
-                '--no-save-rng',
-                '--no-initialization',
+                '--no_masked_softmax_fusion',
+                '--no_bias_gelu_fusion',
+                '--no_bias_dropout_fusion',
+                '--use_cpu_initialization',
+                '--micro_batch_size', '1',
+                '--no_load_optim',
+                '--no_load_rng',
+                '--no_save_optim',
+                '--no_save_rng',
+                '--no_initialization',
                 '--load', args.load_dir
                 ]
 
@@ -135,7 +136,7 @@ def _load_checkpoint(queue, args):
         vocab = json.load(open(args.vocab_file))
         true_vocab_size = len(vocab)
         if args.true_vocab_size is not None and true_vocab_size != args.true_vocab_size:
-            print("Both --true-vocab-size and --vocab-file specified and the vocab size does not match, aborting.")
+            print("Both --true_vocab_size and --vocab_file specified and the vocab size does not match, aborting.")
             queue.put("exit")
             exit(1)
     else:

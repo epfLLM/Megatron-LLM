@@ -50,10 +50,10 @@ shuf <cleaned deduped data file> -o train_data.json
 To deduplicate the downstream tasks (e.g. lambada, squad) from the training dataset, we run the following command.
 
 ```
-python filter_ngrams.py --tasks <name of the task, e.g. lambada, squad> --dedup-dataset <training dataset to deduplicate> <json key> --output <output training dataset>
+python filter_ngrams.py --tasks <name of the task, e.g. lambada, squad> --dedup_dataset <training dataset to deduplicate> <json key> --output <output training dataset>
 ```
 We use 13-grams by default for the deduplication. When we find a 13-gram match in a training document, we split the document into two pieces and remove the 13-gram along with 200 characters from the both side of the 13-gram. We also remove any splitted document with less than 200 characters or if a document got splitted more than 10 times. These parameters can be changed using corresponding arguments.
 
-Only for the lambada task, we need to provide the path, `--lambada-path <path of the lambada test data>`.
+Only for the lambada task, we need to provide the path, `--lambada_path <path of the lambada test data>`.
 
 Several other features (e.g. save and load dictionary) have been added, look at `python filter_ngrams.py --help` for details.

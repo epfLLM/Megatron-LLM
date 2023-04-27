@@ -28,7 +28,7 @@ compared to architectures like GPT and BERT.
 
 In particular, when pipeline_model_parallel_world_size > 1, each stage
 either executes an encoder block or a decoder block. The
---pipeline-model-parallel-split-rank argument controls the rank at which
+--pipeline_model_parallel_split_rank argument controls the rank at which
 the split happens: all ranks lower than this argument execute the
 encoder block, and all ranks equal to or higher than this argument value
 execute the decoder block.

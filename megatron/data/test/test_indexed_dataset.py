@@ -82,30 +82,29 @@ def test_indexed_dataset_get(args):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--data', type=str, help='prefix to data files')
-    parser.add_argument('--dataset-impl', type=str, default='infer',
+    parser.add_argument('--dataset_impl', type=str, default='infer',
                         choices=['lazy', 'cached', 'mmap', 'infer'])
     parser.add_argument('--count', type=int, default=10,
                         help='Number of samples/documents to print')
 
     group = parser.add_argument_group(title='tokenizer')
-    group.add_argument('--tokenizer-type', type=str, required=True,
+    group.add_argument('--tokenizer_type', type=str, required=True,
                        choices=['BertWordPieceLowerCase',
                                 'GPT2BPETokenizer'],
                        help='What type of tokenizer to use.')
-    group.add_argument('--vocab-file', type=str, default=None,
+    group.add_argument('--vocab_file', type=str, default=None,
                        help='Path to the vocab file')
-    group.add_argument('--merge-file', type=str, default=None,
+    group.add_argument('--merge_file', type=str, default=None,
                        help='Path to the BPE merge file (if necessary).')
-
     parser.add_argument('--epochs', type=int, default=5,
                         help='Number of epochs to plan for')
-    parser.add_argument('--max-num-samples', type=int, default=None,
+    parser.add_argument('--max_num_samples', type=int, default=None,
                         help='Maximum number of samples to plan for')
-    parser.add_argument('--masked-lm-prob', type=float, default=0.15,
+    parser.add_argument('--masked_lm_prob', type=float, default=0.15,
                         help='probability of masking tokens')
-    parser.add_argument('--seq-length', type=int, default=512,
+    parser.add_argument('--seq_length', type=int, default=512,
                         help='maximum sequence length')
-    parser.add_argument('--short-seq-prob', type=float, default=0.1,
+    parser.add_argument('--short_seq_prob', type=float, default=0.1,
                         help='probability of creating a short sequence')
     parser.add_argument('--seed', type=int, default=1234,
                         help='random seed')

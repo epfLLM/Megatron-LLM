@@ -19,7 +19,7 @@ def build_num_microbatches_calculator(args):
 
     else:
         assert len(args.rampup_batch_size) == 3, 'expected the following ' \
-            'format: --rampup-batch-size <start batch size> ' \
+            'format: --rampup_batch_size <start batch size> ' \
             '<batch size incerement> <ramp-up samples>'
         start_batch_size = int(args.rampup_batch_size[0])
         batch_size_increment = int(args.rampup_batch_size[1])
@@ -81,8 +81,8 @@ class RampupBatchsizeNumMicroBatches(NumMicroBatchesCalculator):
                  global_batch_size, micro_batch_size, data_parallel_size):
         """Batch size ramp up.
         Over 
-          steps = (global-batch-size - start-batch-size) / batch_size_increment
-        increment batch size from start-batch-size to global-batch-size using
+          steps = (global_batch_size - start_batch_size) / batch_size_increment
+        increment batch size from start-batch-size to global_batch_size using
           rampup-samples / steps
         samples.
         Arguments:
@@ -136,7 +136,7 @@ class RampupBatchsizeNumMicroBatches(NumMicroBatchesCalculator):
         if consistency_check:
             assert self.current_global_batch_size % \
                 self.micro_batch_times_data_parallel_size == 0, 'current global ' \
-                'batch size ({}) is not divisible by micro-batch-size ({}) times' \
+                'batch size ({}) is not divisible by micro_batch_size ({}) times' \
                 'data parallel size ({})'.format(self.current_global_batch_size,
                                                  self.micro_batch_size,
                                                  self.data_parallel_size)

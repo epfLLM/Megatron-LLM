@@ -1,26 +1,23 @@
-import argparse
-from collections.abc import Mapping
-import concurrent.futures
+
 import os
 import sys
 
 import torch
 
+
 def add_arguments(parser):
     group = parser.add_argument_group(title='Megatron saver')
-
-    group.add_argument('--megatron-path', type=str, default=None,
+    group.add_argument('--megatron_path', type=str, default=None,
                        help='Base directory of Megatron repository')
-
-    group.add_argument('--target-tensor-parallel-size', type=int,
+    group.add_argument('--target_tensor_parallel_size', type=int,
                        help='Target tensor model parallel size, defaults to the tensor parallel size '
                        'in the input checkpoint if provided by the loader, otherwise to 1')
-    group.add_argument('--target-pipeline-parallel-size', type=int,
+    group.add_argument('--target_pipeline_parallel_size', type=int,
                        help='Target tensor model parallel size, default to the pipeline parall size '
                        'in the input checkpoint if provided by the loader, otherwise to 1')
 
-def save_checkpoint(queue, args):
 
+def save_checkpoint(queue, args):
     # Search in directory above this
     sys.path.append(os.path.abspath(
         os.path.join(os.path.dirname(__file__),
@@ -37,7 +34,7 @@ def save_checkpoint(queue, args):
         from megatron import fused_kernels
         from megatron.core import mpu
     except ModuleNotFoundError:
-        print("Unable to import Megatron, please specify the path to Megatron using --megatron-path. Exiting.")
+        print("Unable to import Megatron, please specify the path to Megatron using --megatron_path. Exiting.")
         exit(1)
 
     def queue_get(name=None):
@@ -61,9 +58,8 @@ def save_checkpoint(queue, args):
             print(f"Unexpected values in {msg_name}:")
             for key in msg.keys():
                 print(f"   {key}")
-            print(f"Exiting. If you want to ignore this, use the argument --no-checking.")
+            print(f"Exiting. If you want to ignore this, use the argument --no_checking.")
             exit(1)
-
 
     md = queue_get()
 
@@ -71,7 +67,7 @@ def save_checkpoint(queue, args):
         if hasattr(md, 'previous_tensor_parallel_size'):
             args.target_tensor_parallel_size = md.previous_tensor_parallel_size
         else:
-            print("loader did not provide a tensor parallel size and --target-tensor-parallel-size not provided on command line. "
+            print("loader did not provide a tensor parallel size and --target_tensor_parallel_size not provided on command line. "
                   "Default to 1.")
             args.target_tensor_parallel_size = 1
 
@@ -79,10 +75,9 @@ def save_checkpoint(queue, args):
         if hasattr(md, 'previous_pipeline_parallel_size'):
             args.target_pipeline_parallel_size = md.previous_pipeline_parallel_size
         else:
-            print("loader did not provide a pipeline parallel size and --target-pipeline-parallel-size not provided on command line. "
+            print("loader did not provide a pipeline parallel size and --target_pipeline_parallel_size not provided on command line. "
                   "Default to 1.")
             args.target_pipeline_parallel_size = 1
-
 
     # Arguments do sanity checks on the world size, but we don't care,
     # so trick it into thinking we are plenty of processes
@@ -91,37 +86,34 @@ def save_checkpoint(queue, args):
 
     # We want all arguments to come from us
     sys.argv = ['script.py',
-                '--num-layers', str(md.num_layers),
-                '--hidden-size', str(md.hidden_size),
-                '--seq-length', str(md.seq_length),
-                '--num-attention-heads', str(md.num_attention_heads),
-                '--max-position-embeddings', str(md.max_position_embeddings),
-                '--tokenizer-type', str(md.tokenizer_type),
-                '--tensor-model-parallel-size', str(args.target_tensor_parallel_size),
-                '--pipeline-model-parallel-size', str(args.target_pipeline_parallel_size),
-                '--no-masked-softmax-fusion',
-                '--no-bias-gelu-fusion',
-                '--no-bias-dropout-fusion',
-                '--use-cpu-initialization',
-                '--micro-batch-size', '1',
-                '--no-load-optim',
-                '--no-load-rng',
-                '--no-save-optim',
-                '--no-save-rng',
-                '--no-initialization',
-                '--save-interval', '1',
+                '--num_layers', str(md.num_layers),
+                '--hidden_size', str(md.hidden_size),
+                '--seq_length', str(md.seq_length),
+                '--num_attention_heads', str(md.num_attention_heads),
+                '--max_position_embeddings', str(md.max_position_embeddings),
+                '--tokenizer_type', str(md.tokenizer_type),
+                '--tensor_model_parallel_size', str(args.target_tensor_parallel_size),
+                '--pipeline_model_parallel_size', str(args.target_pipeline_parallel_size),
+                '--no_masked_softmax_fusion',
+                '--no_bias_gelu_fusion',
+                '--no_bias_dropout_fusion',
+                '--use_cpu_initialization',
+                '--micro_batch_size', '1',
+                '--no_load_optim',
+                '--no_load_rng',
+                '--no_save_optim',
+                '--no_save_rng',
+                '--no_initialization',
+                '--save_interval', '1',
                 '--save', args.save_dir
                 ]
 
     if md.make_vocab_size_divisible_by is not None:
-        sys.argv.extend(['--make-vocab-size-divisible-by', str(md.make_vocab_size_divisible_by)])
+        sys.argv.extend(['--make_vocab_size_divisible_by', str(md.make_vocab_size_divisible_by)])
     if md.params_dtype == torch.float16:
         sys.argv.append('--fp16')
     elif md.params_dtype == torch.bfloat16:
         sys.argv.append('--bf16')
-
-    if md.model_type == 'BERT' and not md.bert_binary_head:
-        sys.argv.append('--bert-no-binary-head')
 
     margs = parse_args()
     validate_args(margs)
@@ -160,7 +152,6 @@ def save_checkpoint(queue, args):
     fused_kernels.load(margs)
 
     # Embeddings
-    #-----------
     embeddings_msg = queue_get("embeddings")
 
     pos_embed = embeddings_msg.pop("position embeddings")
@@ -207,7 +198,6 @@ def save_checkpoint(queue, args):
         model.language_model.embedding.position_embeddings.weight.data.copy_(pos_embed)
 
     # Transformer layers
-    #-------------------
     total_layer_num = 0
     for pp_rank in range(args.target_pipeline_parallel_size):
         # For later pipeline parallel ranks, make the new models
@@ -252,7 +242,6 @@ def save_checkpoint(queue, args):
                 l.mlp.dense_4h_to_h.bias.data.copy_(mlp_l1_bias)
             total_layer_num = total_layer_num + 1
             check_message(msg)
-
 
         if post_process:
             msg = queue_get("final layernorm")

@@ -13,20 +13,20 @@ MERGE_FILE=<Path to merges.txt (e.g. /gpt2-merges.txt)>
 pip install flask-restful
 
 python -m torch.distributed.run $DISTRIBUTED_ARGS tools/run_text_generation_server.py   \
-       --tensor-model-parallel-size 1  \
-       --pipeline-model-parallel-size 1  \
-       --num-layers 24  \
-       --hidden-size 1024  \
+       --tensor_model_parallel_size 1  \
+       --pipeline_model_parallel_size 1  \
+       --num_layers 24  \
+       --hidden_size 1024  \
        --load ${CHECKPOINT}  \
-       --num-attention-heads 16  \
-       --max-position-embeddings 1024  \
-       --tokenizer-type GPT2BPETokenizer  \
+       --num_attention_heads 16  \
+       --max_position_embeddings 1024  \
+       --tokenizer_type GPT2BPETokenizer  \
        --fp16  \
-       --micro-batch-size 1  \
-       --seq-length 1024  \
-       --out-seq-length 1024  \
+       --micro_batch_size 1  \
+       --seq_length 1024  \
+       --out_seq_length 1024  \
        --temperature 1.0  \
-       --vocab-file $VOCAB_FILE  \
-       --merge-file $MERGE_FILE  \
+       --vocab_file $VOCAB_FILE  \
+       --merge_file $MERGE_FILE  \
        --top_p 0.9  \
        --seed 42

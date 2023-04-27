@@ -84,40 +84,39 @@ def get_args():
     group = parser.add_argument_group(title='input data')
     group.add_argument('--input', type=str, required=True,
                        help='Path to input JSON')
-    group.add_argument('--json-keys', nargs='+', default=['text'],
+    group.add_argument('--json_keys', nargs='+', default=['text'],
                        help='space separate listed of keys to extract from json')
-    group.add_argument('--split-sentences', action='store_true',
+    group.add_argument('--split_sentences', action='store_true',
                        help='Split documents into sentences.')
-    group.add_argument('--keep-newlines', action='store_true',
+    group.add_argument('--keep_newlines', action='store_true',
                        help='Keep newlines between sentences when splitting.')
 
     group = parser.add_argument_group(title='tokenizer')
-    group.add_argument('--tokenizer-type', type=str, required=True,
+    group.add_argument('--tokenizer_type', type=str, required=True,
                        choices=['BertWordPieceLowerCase','BertWordPieceCase',
                                 'GPT2BPETokenizer', 'SentencePieceTokenizer'],
                        help='What type of tokenizer to use.')
-    group.add_argument('--vocab-file', type=str, default=None,
+    group.add_argument('--vocab_file', type=str, default=None,
                        help='Path to the vocab file')
-    group.add_argument('--merge-file', type=str, default=None,
+    group.add_argument('--merge_file', type=str, default=None,
                        help='Path to the BPE merge file (if necessary).')
-    group.add_argument('--append-eod', action='store_true',
+    group.add_argument('--append_eod', action='store_true',
                        help='Append an <eod> token to the end of a document.')
     group.add_argument('--lang', type=str, default='english',
                        help='Language to use for NLTK-powered sentence splitting.')
 
-
     group = parser.add_argument_group(title='output data')
-    group.add_argument('--output-prefix', type=str, required=True,
+    group.add_argument('--output_prefix', type=str, required=True,
                        help='Path to binary output file without suffix')
-    group.add_argument('--dataset-impl', type=str, default='mmap',
+    group.add_argument('--dataset_impl', type=str, default='mmap',
                        choices=['lazy', 'cached', 'mmap'])
 
     group = parser.add_argument_group(title='runtime')
     group.add_argument('--workers', type=int, required=True,
                        help='Number of worker processes to launch')
-    group.add_argument('--chunk-size', type=int, required=True,
+    group.add_argument('--chunk_size', type=int, required=True,
                        help='Chunk size assigned to each worker process')
-    group.add_argument('--log-interval', type=int, default=100,
+    group.add_argument('--log_interval', type=int, default=100,
                        help='Interval between progress updates')
     args = parser.parse_args()
     args.keep_empty = False
@@ -133,6 +132,7 @@ def get_args():
     args.vocab_extra_ids = 0
 
     return args
+
 
 def main():
     args = get_args()
@@ -192,6 +192,7 @@ def main():
 
     for key in args.json_keys:
         builders[key].finalize(output_idx_files[key])
+
 
 if __name__ == '__main__':
     main()

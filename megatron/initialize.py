@@ -45,7 +45,7 @@ def initialize_megatron(extra_args_provider=None, args_defaults={},
 
     validate_args(args, args_defaults)
         
-    # set global args, build tokenizer, and set adlr-autoresume,
+    # set global args, build tokenizer, and set adlr_autoresume,
     # tensorboard-writer, and timers.
     set_global_variables(args)
 
@@ -61,7 +61,7 @@ def initialize_megatron(extra_args_provider=None, args_defaults={},
         _set_random_seed(args.seed, args.data_parallel_random_init)
 
     args = get_args()
-    if  args.lazy_mpu_init:
+    if args.lazy_mpu_init:
         # TODO is this still a necessary option?
         args.use_cpu_initialization=True
         # delayed initialization of DDP-related stuff

@@ -33,12 +33,11 @@ def pretrain_ict_model_provider(pre_process=True, post_process=True):
 
     return model
 
-def get_group_world_size_rank():
 
+def get_group_world_size_rank():
     group = mpu.get_data_parallel_group()
     rank = torch.distributed.get_rank(group=group)
     world_size = torch.distributed.get_world_size(group=group)
-
     return group, rank, world_size
 
 
@@ -114,10 +113,8 @@ def loss_func(output_tensor):
     return loss, stats_dict
 
 
-
 def forward_step(data_iterator, model):
     """Forward step."""
-    args = get_args()
     timers = get_timers()
 
     # Get the batch.
@@ -135,6 +132,7 @@ def forward_step(data_iterator, model):
                         context_mask, context_types)
 
     return output_tensor, partial(loss_func)
+
 
 def train_valid_test_datasets_provider(train_val_test_num_samples):
     """Build train, valid and test datasets."""

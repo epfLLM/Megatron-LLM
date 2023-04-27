@@ -139,7 +139,7 @@ class IndexedDataset(torch.utils.data.Dataset):
             magic = f.read(8)
             assert magic == self._HDR_MAGIC, (
                 'Index file doesn\'t match expected format. '
-                'Make sure that --dataset-impl is configured properly.'
+                'Make sure that --dataset_impl is configured properly.'
             )
             version = f.read(8)
             assert struct.unpack('<Q', version) == (1,)
@@ -392,7 +392,7 @@ class MMapIndexedDataset(torch.utils.data.Dataset):
                 magic_test = stream.read(9)
                 assert self._HDR_MAGIC == magic_test, (
                     'Index file doesn\'t match expected format. '
-                    'Make sure that --dataset-impl is configured properly.'
+                    'Make sure that --dataset_impl is configured properly.'
                 )
                 version = struct.unpack('<Q', stream.read(8))
                 assert (1,) == version

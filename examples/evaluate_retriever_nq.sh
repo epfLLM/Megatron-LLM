@@ -14,25 +14,25 @@ QA_FILE=<Path of the natural question dev or test dataset>
 
 python tasks/main.py \
     --task RETRIEVER-EVAL \
-    --tokenizer-type BertWordPieceLowerCase \
-    --num-layers 12 \
-    --hidden-size 768 \
-    --num-attention-heads 12 \
-    --tensor-model-parallel-size 1 \
-    --micro-batch-size 128 \
-    --activations-checkpoint-method uniform \
-    --seq-length 512 \
-    --max-position-embeddings 512 \
+    --tokenizer_type BertWordPieceLowerCase \
+    --num_layers 12 \
+    --hidden_size 768 \
+    --num_attention_heads 12 \
+    --tensor_model_parallel_size 1 \
+    --micro_batch_size 128 \
+    --activations_checkpoint_method uniform \
+    --seq_length 512 \
+    --max_position_embeddings 512 \
     --load ${CHECKPOINT_PATH} \
-    --evidence-data-path ${EVIDENCE_DATA_DIR} \
-    --embedding-path ${EMBEDDING_PATH} \
-    --retriever-seq-length 256 \
-    --vocab-file  bert-vocab.txt\
-    --qa-data-test ${QA_FILE} \
-    --faiss-use-gpu \
-    --retriever-report-topk-accuracies 1 5 20 100 \
+    --evidence_data_path ${EVIDENCE_DATA_DIR} \
+    --embedding_path ${EMBEDDING_PATH} \
+    --retriever_seq_length 256 \
+    --vocab_file bert-vocab.txt\
+    --qa_data_test ${QA_FILE} \
+    --faiss_use_gpu \
+    --retriever_report_topk_accuracies 1 5 20 100 \
     --fp16 \
-    --indexer-log-interval 1000 \
-    --indexer-batch-size 128
+    --indexer_log_interval 1000 \
+    --indexer_batch_size 128
 
 

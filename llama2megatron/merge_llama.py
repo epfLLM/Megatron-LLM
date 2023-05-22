@@ -75,13 +75,13 @@ if __name__ == '__main__' :
                     if key_to_dim[short_name] == 0:
                         size = parameter.shape[0]
                         merged_param_shape = [ parameter.shape[0] * num_pth, parameter.shape[1] ]
-                        merged_ckpt[parameter_name] = torch.zeros(merged_param_shape)
+                        # merged_ckpt[parameter_name] = torch.zeros(merged_param_shape)
                         merged_ckpt[parameter_name][size * i : size * (i + 1), :] = parameter
                         del parameter
                     if key_to_dim[short_name] == -1:
                         size = parameter.shape[-1]
                         merged_param_shape = [ parameter.shape[0], parameter.shape[1] * num_pth]
-                        merged_ckpt[parameter_name] = torch.zeros(merged_param_shape)
+                        # merged_ckpt[parameter_name] = torch.zeros(merged_param_shape)
                         merged_ckpt[parameter_name][:, size * i : size * (i + 1)] = parameter
                         del parameter
             i += 1

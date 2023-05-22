@@ -429,8 +429,7 @@ def _add_network_size_args(parser):
     # Extracted from: https://github.com/facebookresearch/llama/blob/main/llama/model.py
     group.add_argument('--use_rms_norm',
                        action='store_true',
-                       help='If set, use RMSNorm instead of LayerNorm.'
-                       )
+                       help='If set, use RMSNorm instead of LayerNorm.')
     group.add_argument('--onnx_safe', type=bool, required=False,
                        help='Use workarounds for known problems with '
                        'Torch ONNX exporter')
@@ -442,8 +441,7 @@ def _add_network_size_args(parser):
     group.add_argument('--position_embedding_type', type=lambda x: PositionEmbeddingType[x],
                        choices=list(PositionEmbeddingType),
                        default=PositionEmbeddingType.absolute,
-                       help='Define position embedding type ("absolute" | "rotary"). "absolute" by default.'
-                       )
+                       help='Define position embedding type ("absolute" | "rotary"). "absolute" by default.')
     return parser
 
 

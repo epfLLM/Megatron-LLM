@@ -6,7 +6,7 @@ import argparse
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--model_name', type=str, required=False, default='13B')
-parser.add_argument('--llama_config_path', type=str, required=False, default='/mlodata1/sfan/')
+parser.add_argument('--llama_config_path', type=str, required=False, default='/mlodata1/llms/llama/')
 args = parser.parse_args()
 
 LLAMA_config_PATH = os.path.join(args.llama_config_path, f'merged_{args.model_name}.pth')
@@ -64,6 +64,8 @@ if __name__ == '__main__' :
     }
     n_layers = scale2layer[args.model_name]
     bar = tqdm(total=n_layers)
+    megatron_dict['model']['language_model']['transformer']['final_layernorm.weight'] = llama_config['norm.weight']
+    megatron_dict['model']['language_model']['transformer']['proj_out.weihgt'] = llama_config['output.weight']
     for layer_idx in range(n_layers):
         layer_prefix = f'layers.{layer_idx}.'
         for megatron_param, llama_param_list in megatron2llama.items():

@@ -2,7 +2,7 @@
 
 # Navigate to the directory containing your Python script
 cd /mlodata1/sfan/
-LLAMA_CONFIG_PATH='/mlodata1/sfan/'
+LLAMA_CONFIG_PATH='/mlodata1/llms/llama/'
 
 for SCALE in 7B 13B 30B 65B
 do

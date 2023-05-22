@@ -11,14 +11,16 @@ set -e
 
 GPUS_PER_NODE=8
 # Change for multinode config
-MASTER_ADDR=gpu011.rcp.epfl.ch
+MASTER_ADDR=gpu012.rcp.epfl.ch
 MASTER_PORT=6000
 NNODES=2
 NODE_RANK=$1
 WORLD_SIZE=$(($GPUS_PER_NODE*$NNODES))
 
-DATA_PATH=/scratch/wikitext_text_document
-CHECKPOINT_PATH=/scratch/$(whoami)/exp
+DATA_PATH=/scratch/wikitext-megatron/wikitext-train_text_document
+EXP_DIR=/scratch/$(whoami)/exp
+CHECKPOINT_PATH=${EXP_DIR}/checkpoint
+TENSORBOARD_PATH=${EXP_DIR}/tensorboard
 
 DISTRIBUTED_ARGS="--nproc_per_node $GPUS_PER_NODE --nnodes $NNODES --node_rank $NODE_RANK --master_addr $MASTER_ADDR --master_port $MASTER_PORT"
 
@@ -26,7 +28,6 @@ torchrun $DISTRIBUTED_ARGS \
        pretrain_gpt.py \
        --tensor_model_parallel_size 2 \
        --pipeline_model_parallel_size 2 \
-       --sequence_parallel \
        --num_layers 24 \
        --hidden_size 1024 \
        --num_attention_heads 16 \
@@ -39,8 +40,8 @@ torchrun $DISTRIBUTED_ARGS \
        --save $CHECKPOINT_PATH \
        --load $CHECKPOINT_PATH \
        --data_path $DATA_PATH \
-       --vocab_file gpt2-vocab.json \
-       --merge_file gpt2-merges.txt \
+       --vocab_file gpt2-vocab/gpt2-vocab.json \
+       --merge_file gpt2-vcoab/gpt2-merges.txt \
        --data_impl mmap \
        --split 949,50,1 \
        --distributed_backend nccl \
@@ -50,9 +51,10 @@ torchrun $DISTRIBUTED_ARGS \
        --weight_decay 1e-2 \
        --clip_grad 1.0 \
        --lr_warmup_fraction .01 \
-       --activations_checkpoint_method uniform \
        --log_interval 100 \
        --save_interval 10000 \
        --eval_interval 1000 \
        --eval_iters 10 \
-       --fp16
+       --use_bias \
+       --tensorboard_dir ${TENSORBOARD_PATH} \
+       --bf16

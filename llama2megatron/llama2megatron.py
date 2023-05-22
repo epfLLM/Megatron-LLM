@@ -64,6 +64,7 @@ if __name__ == '__main__' :
     }
     n_layers = scale2layer[args.model_name]
     bar = tqdm(total=n_layers)
+    megatron_dict['model']['language_model']['embedding']['word_embeddings.weight'] = llama_config['tok_embeddings.weight']
     megatron_dict['model']['language_model']['transformer']['final_layernorm.weight'] = llama_config['norm.weight']
     megatron_dict['model']['language_model']['transformer']['proj_out.weihgt'] = llama_config['output.weight']
     for layer_idx in range(n_layers):

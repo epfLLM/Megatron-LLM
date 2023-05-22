@@ -150,15 +150,12 @@ def _initialize_distributed():
 
     device_count = torch.cuda.device_count()
     if torch.distributed.is_initialized():
-
         if args.rank == 0:
             print('torch distributed is already initialized, '
                   'skipping initialization ...', flush=True)
         args.rank = torch.distributed.get_rank()
         args.world_size = torch.distributed.get_world_size()
-
     else:
-
         if args.rank == 0:
             print('> initializing torch distributed ...', flush=True)
         # Manually set the device ids.
@@ -173,8 +170,10 @@ def _initialize_distributed():
     # Call the init process
     torch.distributed.init_process_group(
         backend=args.distributed_backend,
-        world_size=args.world_size, rank=args.rank,
-        timeout=timedelta(minutes=10))
+        world_size=args.world_size, 
+        rank=args.rank,
+        timeout=timedelta(minutes=10)
+    )
 
     # Set the tensor model-parallel, pipeline model-parallel, and
     # data-parallel communicators.

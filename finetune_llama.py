@@ -15,19 +15,20 @@ from megatron import get_timers
 from megatron import get_tokenizer
 from megatron import print_rank_0
 from megatron.core import mpu
-from megatron.data.blendable_dataset import BlendableDataset
+
 from megatron.data.gpt_dataset import build_train_valid_test_datasets
-from megatron.model import GPTModel
-from megatron.core.enums import ModelType
-from megatron.training import pretrain
+from megatron.model import LlamaModel
+from megatron.model.enums import ModelType
+import megatron.training
+# from megatron.training import pretrain
 from megatron.utils import get_ltor_masks_and_position_ids
 from megatron.utils import average_losses_across_data_parallel_group
 
+
 def model_provider(pre_process=True, post_process=True):
     """Build the model."""
-
-    print_rank_0('building GPT model ...')
-    model = GPTModel(
+    print_rank_0('building Llama model ...')
+    model = LlamaModel(
         num_tokentypes=0,
         parallel_output=True,
         pre_process=pre_process,
@@ -67,6 +68,7 @@ def get_batch(data_iterator):
 
     return tokens, labels, loss_mask, attention_mask, position_ids
 
+
 def loss_func(loss_mask, output_tensor):
     losses = output_tensor.float()
     loss_mask = loss_mask.view(-1).float()
@@ -98,9 +100,8 @@ def forward_step(data_iterator, model):
 def train_valid_test_datasets_provider(train_val_test_num_samples):
     """Build train, valid, and test datasets."""
     args = get_args()
-
-    print_rank_0('> building train, validation, and test datasets '
-                 'for GPT ...')
+    model_name = "llama"
+    print_rank_0(f'> building train, validation, and test datasets for {model_name} ...')
     train_ds, valid_ds1, test_ds = build_train_valid_test_datasets(
         data_prefix=args.data_path,
         data_impl=args.data_impl,
@@ -109,7 +110,7 @@ def train_valid_test_datasets_provider(train_val_test_num_samples):
         seq_length=args.seq_length,
         seed=args.seed,
         skip_warmup=(not args.mmap_warmup))
-    print_rank_0("> finished creating finetuning GPT datasets ...")
+    print_rank_0(f"> finished creating finetuning {model_name} datasets ...")
 
     _, valid_ds, _ = build_train_valid_test_datasets(
         data_prefix=args.data_path2,
@@ -119,8 +120,7 @@ def train_valid_test_datasets_provider(train_val_test_num_samples):
         seq_length=2048,
         seed=1234,
         skip_warmup=(not args.mmap_warmup))
-    print_rank_0("> finished creating pretrained GPT datasets ...")
-
+    print_rank_0(f"> finished creating pretrained {model_name} datasets ...")
     return train_ds, valid_ds, test_ds
 
 
@@ -138,8 +138,9 @@ def add_validation_args(parser):
 
 
 if __name__ == "__main__":
-
-    pretrain(train_valid_test_datasets_provider, model_provider,
-             ModelType.encoder_or_decoder,
-             forward_step, args_defaults={'tokenizer_type': 'GPT2BPETokenizer'},
-             extra_args_provider=add_validation_args,)
+    megatron.training.pretrain(train_valid_test_datasets_provider,
+                               model_provider,
+                               ModelType.encoder_or_decoder,
+                               forward_step,
+                               args_defaults={'tokenizer_type': 'GPT2BPETokenizer'},
+                               extra_args_provider=add_validation_args,)

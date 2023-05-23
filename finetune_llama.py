@@ -29,7 +29,7 @@ def model_provider(pre_process: bool,
                    post_process: bool):
     """Build the model."""
     print_rank_0('building Llama model ...')
-    pre_process = False
+    # pre_process = False
     model = LlamaModel(
         num_tokentypes=0,
         parallel_output=True,

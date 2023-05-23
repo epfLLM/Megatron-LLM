@@ -1006,19 +1006,6 @@ def _add_vision_args(parser):
     group.add_argument('--head_lr_mult', type=float, default=1.0,
                        help='learning rate multiplier for head during finetuning')
 
-    # pretraining type and backbone selection`
-    group.add_argument('--vision_pretraining', action='store_true',
-                       help='flag to indicate vision pretraining')
-    group.add_argument('--vision_pretraining_type', type=str, default='classify',
-                       choices=['classify', 'inpaint', 'dino'],
-                       help='pretraining objectives')
-    group.add_argument('--vision_backbone_type', type=str, default='vit',
-                       choices=['vit', 'mit', 'swin'],
-                       help='backbone types types')
-    group.add_argument('--swin_backbone_type', type=str, default='tiny',
-                       choices=['tiny', 'base', 'h3'],
-                       help='pretraining objectives')
-
     # dino arguments
     group.add_argument('--iter_per_epoch', type=int, default=1250,
                        help='iterations per epoch')

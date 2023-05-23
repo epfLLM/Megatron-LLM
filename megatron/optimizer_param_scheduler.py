@@ -6,6 +6,7 @@ import math
 
 from megatron import print_rank_0
 
+
 class OptimizerParamScheduler(object):
     """Anneals learning rate and weight decay"""
 

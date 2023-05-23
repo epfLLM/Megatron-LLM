@@ -42,7 +42,6 @@ from megatron.data.data_samplers import build_pretraining_data_loader
 from megatron.utils import calc_params_l2_norm
 from megatron.schedules import get_forward_backward_func
 from megatron.utils import report_memory
-from megatron.model.vision.knn_monitor import compute_feature_bank
 
 
 def print_datetime(string):
@@ -351,7 +350,6 @@ def _get_optimizer_param_scheduler(optimizer, args):
         wd_incr_style=args.weight_decay_incr_style,
         use_checkpoint_opt_param_scheduler=args.use_checkpoint_opt_param_scheduler,
         override_opt_param_scheduler=args.override_opt_param_scheduler)
-
     return opt_param_scheduler
 
 
@@ -424,12 +422,6 @@ def train_step(forward_step_func, data_iterator,
     # Reduce gradients.
     optimizer.reduce_model_grads(args, timers)
 
-    # Vision gradients.
-    if args.vision_pretraining and args.vision_pretraining_type == "dino":
-        unwrapped_model = unwrap_model(model[0],
-                                       (torchDDP, LocalDDP, Float16Module))
-        unwrapped_model.cancel_gradients_last_layer(args.curr_iteration)
-
     # Update parameters.
     timers('optimizer', log_level=1).start(barrier=args.barrier_with_L1_time)
     update_successful, grad_norm, num_zeros_in_grad = optimizer.step(args, timers)
@@ -438,12 +430,6 @@ def train_step(forward_step_func, data_iterator,
     # Gather params.
     if update_successful:
         optimizer.gather_model_params(args, timers)
-
-    # Vision momentum.
-    if args.vision_pretraining and args.vision_pretraining_type == "dino":
-        unwrapped_model = unwrap_model(model[0],
-                                       (torchDDP, LocalDDP, Float16Module))
-        unwrapped_model.update_momentum(args.curr_iteration)
 
     # Update learning rate.
     if update_successful:
@@ -769,9 +755,6 @@ def evaluate(forward_step_func,
              verbose=False):
     """Evaluation."""
     args = get_args()
-
-    if args.vision_pretraining and args.vision_pretraining_type == "dino":
-        compute_feature_bank(model)
 
     # Turn on evaluation mode which disables dropout.
     for model_module in model:

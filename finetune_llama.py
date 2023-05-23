@@ -10,7 +10,8 @@ import os
 import sys
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__),
                                              os.path.pardir, os.path.pardir)))
-from megatron import get_args
+
+import megatron
 from megatron import get_timers
 from megatron import get_tokenizer
 from megatron import print_rank_0
@@ -20,14 +21,15 @@ from megatron.data.gpt_dataset import build_train_valid_test_datasets
 from megatron.model import LlamaModel
 from megatron.model.enums import ModelType
 import megatron.training
-# from megatron.training import pretrain
 from megatron.utils import get_ltor_masks_and_position_ids
 from megatron.utils import average_losses_across_data_parallel_group
 
 
-def model_provider(pre_process=True, post_process=True):
+def model_provider(pre_process: bool,
+                   post_process: bool):
     """Build the model."""
     print_rank_0('building Llama model ...')
+    pre_process = False
     model = LlamaModel(
         num_tokentypes=0,
         parallel_output=True,
@@ -39,7 +41,7 @@ def model_provider(pre_process=True, post_process=True):
 
 def get_batch(data_iterator):
     """Generate a batch"""
-    args = get_args()
+    args = megatron.get_args()
     tokenizer = get_tokenizer()
 
     # Items and their type.
@@ -80,9 +82,8 @@ def loss_func(loss_mask, output_tensor):
     return loss, {'lm loss': averaged_loss[0]}
 
 
-def forward_step(data_iterator, model):
+def _forward_step(data_iterator, model):
     """Forward step."""
-    args = get_args()
     timers = get_timers()
 
     # Get the batch.
@@ -99,7 +100,7 @@ def forward_step(data_iterator, model):
 
 def train_valid_test_datasets_provider(train_val_test_num_samples):
     """Build train, valid, and test datasets."""
-    args = get_args()
+    args = megatron.get_args()
     model_name = "llama"
     print_rank_0(f'> building train, validation, and test datasets for {model_name} ...')
     train_ds, valid_ds1, test_ds = build_train_valid_test_datasets(
@@ -141,6 +142,6 @@ if __name__ == "__main__":
     megatron.training.pretrain(train_valid_test_datasets_provider,
                                model_provider,
                                ModelType.encoder_or_decoder,
-                               forward_step,
+                               _forward_step,
                                args_defaults={'tokenizer_type': 'GPT2BPETokenizer'},
                                extra_args_provider=add_validation_args,)

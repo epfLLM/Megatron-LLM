@@ -4,7 +4,6 @@
 
 import os
 import sys
-import torch
 
 from megatron import dist_signal_handler
 from megatron.tokenizer import build_tokenizer

@@ -5,7 +5,8 @@ import os
 import sys
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__),
                                              os.path.pardir)))
-import socket
+import torch
+
 from megatron import get_args
 from megatron import print_rank_0
 from megatron.core import mpu
@@ -16,7 +17,7 @@ from megatron.training import get_model
 from megatron.text_generation_server import MegatronServer
 from megatron.text_generation import generate_and_post_process
 from megatron.text_generation import beam_search_and_post_process
-import torch
+
 
 def model_provider(pre_process=True, post_process=True):
     """Build the model."""
@@ -25,6 +26,7 @@ def model_provider(pre_process=True, post_process=True):
     model = GPTModel(num_tokentypes=0, parallel_output=False, pre_process=pre_process, post_process=post_process)
 
     return model
+
 
 def add_text_generate_args(parser):
     group = parser.add_argument_group(title='text generation')

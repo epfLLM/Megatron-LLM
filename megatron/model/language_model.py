@@ -4,7 +4,7 @@
 
 import torch
 
-from megatron import get_args
+import megatron
 from megatron.core import mpu, tensor_parallel
 from .module import MegatronModule
 from megatron.model.enums import LayerType, AttnMaskType, PositionEmbeddingType
@@ -16,7 +16,7 @@ from megatron.model.utils import init_method_normal, scaled_init_method_normal
 def parallel_lm_logits(input_, word_embeddings_weight, parallel_output,
                        bias=None):
     """LM logits using word embedding weights."""
-    args = get_args()
+    args = megatron.get_args()
     # Parallel logits.
     if args.async_tensor_model_parallel_allreduce or\
             args.sequence_parallel:
@@ -44,14 +44,16 @@ def parallel_lm_logits(input_, word_embeddings_weight, parallel_output,
     return tensor_parallel.gather_from_tensor_model_parallel_region(logits_parallel)
 
 
-def get_language_model(num_tokentypes, add_pooler,
+def get_language_model(num_tokentypes,
+                       add_pooler,
                        encoder_attn_mask_type, init_method=None,
                        scaled_init_method=None, add_encoder=True,
                        add_decoder=False,
                        decoder_attn_mask_type=AttnMaskType.causal,
-                       pre_process=True, post_process=True):
+                       pre_process=True,
+                       post_process=True):
     """Build language model and return along with the key to save."""
-    args = get_args()
+    args = megatron.get_args()
 
     if init_method is None:
         init_method = init_method_normal(args.init_method_std)
@@ -93,7 +95,7 @@ class Pooler(MegatronModule):
 
     def __init__(self, hidden_size, init_method):
         super(Pooler, self).__init__()
-        args = get_args()
+        args = megatron.get_args()
         self.dense = get_linear_layer(hidden_size, hidden_size, init_method)
         self.sequence_parallel = args.sequence_parallel
 
@@ -142,7 +144,7 @@ class Embedding(MegatronModule):
         self.init_method = init_method
         self.num_tokentypes = num_tokentypes
 
-        args = get_args()
+        args = megatron.get_args()
 
         # Word embeddings (parallel).
         self.word_embeddings = tensor_parallel.VocabParallelEmbedding(
@@ -210,7 +212,6 @@ class Embedding(MegatronModule):
         self.tokentype_embeddings = torch.nn.Embedding(num_tokentypes,
                                                        self.hidden_size)
         # Initialize the token-type embeddings.
-        args = get_args()
         self.init_method(self.tokentype_embeddings.weight)
 
     def forward(self, input_ids, position_ids, tokentype_ids=None):
@@ -337,7 +338,7 @@ class TransformerLanguageModel(MegatronModule):
                  pre_process=True,
                  post_process=True):
         super(TransformerLanguageModel, self).__init__()
-        args = get_args()
+        args = megatron.get_args()
 
         self.pre_process = pre_process
         self.post_process = post_process

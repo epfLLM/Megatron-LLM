@@ -22,10 +22,8 @@ from megatron.utils import calc_params_l2_norm
 from megatron.utils import check_adlr_autoresume_termination
 
 
-def process_batch(batch):
+def _process_batch(batch, args):
     """Process batch and produce inputs for the model."""
-    args = get_args()
-
     tokens = batch['text'].long().cuda().contiguous()
     types = batch['types'].long().cuda().contiguous()
     labels = batch['label'].long().cuda().contiguous()
@@ -45,21 +43,20 @@ def cross_entropy_loss_func(labels, output_tensor):
 
     # Reduce loss for logging.
     averaged_loss = average_losses_across_data_parallel_group([loss])
-
     return loss, {'lm loss': averaged_loss[0]}
 
 
 def _cross_entropy_forward_step(batch, model):
     """Simple forward step with cross-entropy loss."""
     timers = get_timers()
-
+    args = get_args()
     # Get the batch.
     timers('batch-generator', log_level=2).start()
     try:
         batch_ = next(batch)
     except BaseException:
         batch_ = batch
-    tokens, types, labels, attention_mask = process_batch(batch_)
+    tokens, types, labels, attention_mask = _process_batch(batch_, args)
     timers('batch-generator').stop()
 
     # Forward model.
@@ -68,7 +65,8 @@ def _cross_entropy_forward_step(batch, model):
     return output_tensor, partial(cross_entropy_loss_func, labels)
 
 
-def build_data_loader(dataset, micro_batch_size, num_workers, drop_last,
+def build_data_loader(dataset,
+                      micro_batch_size, num_workers, drop_last,
         task_collate_fn=None):
     """Data loader. Note that batch-size is the local (per GPU) batch-size."""
 
@@ -141,10 +139,15 @@ def _build_train_valid_dataloaders(train_dataset, valid_dataset,
     return train_dataloader, valid_dataloader
 
 
-def _train(model, optimizer, opt_param_scheduler, forward_step,
-           train_dataloader, valid_dataloader, end_of_epoch_callback):
+def _train(model,
+           optimizer,
+           opt_param_scheduler,
+           forward_step,
+           train_dataloader,
+           valid_dataloader,
+           end_of_epoch_callback,
+           args):
     """Train the model."""
-    args = get_args()
     timers = get_timers()
 
     assert get_num_microbatches() == 1, "finetuning with gradient accumulation doesn't currently work"
@@ -235,7 +238,8 @@ def _train(model, optimizer, opt_param_scheduler, forward_step,
             end_of_epoch_callback(model, epoch)
 
 
-def finetune(train_valid_datasets_provider, model_provider,
+def finetune(train_valid_datasets_provider,
+             model_provider,
              model_type=ModelType.encoder_or_decoder,
              forward_step=_cross_entropy_forward_step,
              end_of_epoch_callback_provider=None,
@@ -294,8 +298,9 @@ def finetune(train_valid_datasets_provider, model_provider,
 
     # Finetune the model.
     if args.epochs > 0:
-        _train(model, optimizer, opt_param_scheduler, forward_step,
-               train_dataloader, valid_dataloader, end_of_epoch_callback)
+        _train(model,
+               optimizer, opt_param_scheduler, forward_step,
+               train_dataloader, valid_dataloader, end_of_epoch_callback, args)
     # Or just evaluate.
     else:
         if end_of_epoch_callback is not None:

@@ -6,12 +6,14 @@ from datetime import datetime
 import math
 import sys
 import time
+from typing import Callable
 
 # The earliest we can measure the start time.
 _TRAIN_START_TIME = time.time()
 import torch
 from torch.nn.parallel.distributed import DistributedDataParallel as torchDDP
 
+import megatron
 from megatron import get_args
 from megatron import get_signal_handler
 from megatron import get_timers
@@ -85,7 +87,6 @@ def pretrain(train_valid_test_dataset_provider,
         args_defaults: a dictionary from argument-name to argument-value. It
             to set already parse arguments.
     """
-
     # Initalize and get arguments, timers, and Tensorboard writer.
     initialize_megatron(extra_args_provider=extra_args_provider,
                         args_defaults=args_defaults)
@@ -104,7 +105,7 @@ def pretrain(train_valid_test_dataset_provider,
         time.time() - _TRAIN_START_TIME))
     print_datetime('after megatron is initialized')
 
-    args = get_args()
+    args = megatron.get_args()
     timers = get_timers()
 
     # Model, optimizer, and learning rate.
@@ -171,7 +172,6 @@ def pretrain(train_valid_test_dataset_provider,
 
 
 def update_train_iters(args):
-
     # For iteration-based training, we don't need to do anything
     if args.train_iters:
         return
@@ -179,7 +179,6 @@ def update_train_iters(args):
     # Constant batch size with sample-based training.
     if args.rampup_batch_size is None:
         args.train_iters = args.train_samples // args.global_batch_size
-
     else:
         # Sample based training with rampup batch size.
         iterations = 0
@@ -196,13 +195,14 @@ def update_train_iters(args):
         iterations += (args.train_samples - consumed_samples) // \
                       args.global_batch_size
         args.train_iters = iterations
-
     print_rank_0('setting training iterations to {}'.format(args.train_iters))
 
 
-def get_model(model_provider_func, model_type=ModelType.encoder_or_decoder, wrap_with_ddp=True):
+def get_model(model_provider_func: Callable,
+              model_type=ModelType.encoder_or_decoder,
+              wrap_with_ddp: bool=True):
     """Build the model."""
-    args = get_args()
+    args = megatron.get_args()
     args.model_type = model_type
 
     # Build model.
@@ -308,10 +308,8 @@ def get_model(model_provider_func, model_type=ModelType.encoder_or_decoder, wrap
     return model
 
 
-def get_optimizer_param_scheduler(optimizer):
+def _get_optimizer_param_scheduler(optimizer, args):
     """Build the learning rate scheduler."""
-    args = get_args()
-
     # Iteration-based training.
     if args.train_iters:
         if args.lr_decay_iters is None:
@@ -371,7 +369,7 @@ def setup_model_and_optimizer(model_provider_func,
 
     optimizer = get_megatron_optimizer(model, no_wd_decay_cond,
                                        scale_lr_cond, lr_mult)
-    opt_param_scheduler = get_optimizer_param_scheduler(optimizer)
+    opt_param_scheduler = _get_optimizer_param_scheduler(optimizer, args)
 
     if args.load is not None:
         timers = get_timers()

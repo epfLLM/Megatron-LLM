@@ -45,10 +45,10 @@ class LlamaModel(MegatronModule):
     """Llama Language model."""
 
     def __init__(self,
-                 num_tokentypes=0,
-                 parallel_output=True,
-                 pre_process=True,
-                 post_process=True):
+                 num_tokentypes: int,
+                 parallel_output: bool,
+                 pre_process: bool,
+                 post_process: bool):
         super(LlamaModel, self).__init__()
         args = get_args()
 

@@ -104,7 +104,7 @@ def post_language_model_processing(lm_output, pooled_output,
         return lm_logits.transpose(0,1).contiguous(), binary_logits
     else:
         # [b s] => [s b]
-        lm_labels = lm_labels.transpose(0,1).contiguous()
+        lm_labels = lm_labels.transpose(0, 1).contiguous()
         # lm_logits : [s, b, h] and lm_labels: [s, b]
         if fp16_lm_cross_entropy:
             assert lm_logits.dtype == torch.half

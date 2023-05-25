@@ -567,7 +567,7 @@ def load_checkpoint(model, optimizer, opt_param_scheduler, load_arg='load', stri
                     opt_param_scheduler.load_state_dict(optim_state_dict['opt_param_scheduler'])
         except KeyError:
             print_rank_0('Unable to load optimizer from checkpoint {}. '
-                         'Specify --no-load-optim or --finetune to prevent '
+                         'Specify --no_load_optim or --finetune to prevent '
                          'attempting to load the optimizer state, '
                          'exiting ...'.format(checkpoint_name))
             sys.exit()

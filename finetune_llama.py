@@ -27,14 +27,19 @@ from megatron.utils import average_losses_across_data_parallel_group
 
 def model_provider(pre_process: bool,
                    post_process: bool):
+
+    args = megatron.get_args()
     """Build the model."""
     print_rank_0('building Llama model ...')
     # pre_process = False
+    parallel_output = True
+    num_tokentypes = 0
     model = LlamaModel(
-        num_tokentypes=0,
-        parallel_output=True,
-        pre_process=pre_process,
-        post_process=post_process
+        num_tokentypes,
+        parallel_output,
+        pre_process,
+        post_process,
+        args
     )
     return model
 
@@ -135,6 +140,7 @@ def add_validation_args(parser):
                        'dataset2-path ...')
     group.add_argument('--eval-ppl', action='store_true', default=False)
     group.add_argument('--stored_params', type=dict, default=dict())
+    # group.add_argument('--padded_vocab_size', type=int, default=100)
     return parser
 
 
@@ -143,5 +149,6 @@ if __name__ == "__main__":
                                model_provider,
                                ModelType.encoder_or_decoder,
                                _forward_step,
-                               args_defaults={'tokenizer_type': 'GPT2BPETokenizer'},
-                               extra_args_provider=add_validation_args,)
+                               args_defaults={'tokenizer_type':
+                                                  'GPT2BPETokenizer'},
+                               extra_args_provider=add_validation_args)

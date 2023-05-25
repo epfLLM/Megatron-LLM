@@ -15,3 +15,12 @@ https://docs.google.com/forms/d/e/1FAIpQLSfqNECQnMkycAp2jP4Z9TFX0cGR4uf7b_fBxjY_
 Alternatively, the MLO lab has a cut of them. 
 
 
+
+
+vocab and merges files are available at
+
+https://s3.amazonaws.com/models.huggingface.co/bert/gpt2-vocab.json
+https://s3.amazonaws.com/models.huggingface.co/bert/gpt2-merges.txt
+
+
+

@@ -4,7 +4,7 @@
 
 import torch
 
-from megatron import get_args
+import megatron
 from megatron.core import tensor_parallel
 from .module import MegatronModule
 
@@ -15,9 +15,11 @@ from .utils import init_method_normal
 from .utils import scaled_init_method_normal
 
 
-def post_language_model_processing(lm_output, labels, logit_weights,
-                                   parallel_output,
-                                   fp16_lm_cross_entropy):
+def _post_language_model_processing(lm_output,
+                                    labels,
+                                    logit_weights,
+                                    parallel_output,
+                                    fp16_lm_cross_entropy):
     # Output. Format [s b h]
     output = parallel_lm_logits(
         lm_output,
@@ -29,7 +31,7 @@ def post_language_model_processing(lm_output, labels, logit_weights,
         return output.transpose(0,1).contiguous()
     else:
         # [b s] => [s b]
-        labels = labels.transpose(0,1).contiguous()
+        labels = labels.transpose(0, 1).contiguous()
         if fp16_lm_cross_entropy:
             assert output.dtype == torch.half
             loss = tensor_parallel.vocab_parallel_cross_entropy(output, labels)
@@ -48,9 +50,9 @@ class LlamaModel(MegatronModule):
                  num_tokentypes: int,
                  parallel_output: bool,
                  pre_process: bool,
-                 post_process: bool):
+                 post_process: bool,
+                 args):
         super(LlamaModel, self).__init__()
-        args = get_args()
 
         self.parallel_output = parallel_output
         self.pre_process = pre_process
@@ -83,7 +85,7 @@ class LlamaModel(MegatronModule):
             inference_params=inference_params)
 
         if self.post_process:
-            return post_language_model_processing(
+            return _post_language_model_processing(
                 lm_output, labels,
                 self.word_embeddings_weight(),
                 self.parallel_output,

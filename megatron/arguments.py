@@ -765,7 +765,8 @@ def _add_mixed_precision_args(parser):
     group.add_argument('--accumulate_allreduce_grads_in_fp32',
                        action='store_true',
                        help='Gradient accumulation and all-reduce in fp32.')
-    group.add_argument('--fp16_lm_cross_entropy', action='store_true',
+    group.add_argument('--fp16_lm_cross_entropy',
+                       action='store_true',
                        help='Move the cross entropy unreduced loss calculation'
                        'for lm head to fp16.')
     return parser

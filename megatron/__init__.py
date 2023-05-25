@@ -10,7 +10,7 @@ from .global_vars import get_tokenizer
 from .global_vars import get_tensorboard_writer
 from .global_vars import get_adlr_autoresume
 from .global_vars import get_timers
-from .initialize  import initialize_megatron
+from .initialize import initialize_megatron
 
 from .utils import (print_rank_0,
                     is_last_rank,

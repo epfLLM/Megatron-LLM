@@ -145,7 +145,7 @@ class T5Model(MegatronModule):
                 return lm_logits.transpose(0,1).contiguous()
             else:
                 # [b s] => [s b]
-                lm_labels = lm_labels.transpose(0,1).contiguous()
+                lm_labels = lm_labels.transpose(0, 1).contiguous()
                 if self.fp16_lm_cross_entropy:
                     assert lm_logits.dtype == torch.half
                     lm_loss = tensor_parallel.vocab_parallel_cross_entropy(lm_logits, lm_labels)

@@ -1,16 +1,16 @@
 # Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
 
-"""Pretrain GPT"""
+""" Pretrain GPT """
 from functools import partial
 
 import torch
 
+import megatron.data.gpt_dataset
 from megatron import get_args
 from megatron import print_rank_0
 from megatron import get_timers
 from megatron import get_tokenizer
 from megatron.core import tensor_parallel
-from megatron.data.gpt_dataset import build_train_valid_test_datasets
 from megatron.model import GPTModel, ModelType
 from megatron.training import pretrain
 from megatron.utils import get_ltor_masks_and_position_ids
@@ -19,7 +19,6 @@ from megatron.utils import average_losses_across_data_parallel_group
 
 def model_provider(pre_process=True, post_process=True):
     """Build the model."""
-
     print_rank_0('building GPT model ...')
     model = GPTModel(
         num_tokentypes=0,
@@ -95,7 +94,7 @@ def train_valid_test_datasets_provider(train_val_test_num_samples):
 
     print_rank_0('> building train, validation, and test datasets '
                  'for GPT ...')
-    train_ds, valid_ds, test_ds = build_train_valid_test_datasets(
+    train_ds, valid_ds, test_ds = megatron.data.gpt_dataset.build_train_valid_test_datasets(
         data_prefix=args.data_path,
         data_impl=args.data_impl,
         splits_string=args.split,

@@ -4,7 +4,6 @@
 
 import torch
 
-import megatron
 from megatron.core import tensor_parallel
 from .module import MegatronModule
 

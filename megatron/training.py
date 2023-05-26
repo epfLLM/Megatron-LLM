@@ -1,7 +1,7 @@
 # Copyright (c) 2022, NVIDIA CORPORATION. All rights reserved.
 
 """Pretrain utilities."""
-
+import argparse
 from datetime import datetime
 import math
 import sys
@@ -100,8 +100,7 @@ def pretrain(train_valid_test_dataset_provider,
     torch.distributed.all_reduce(start_time_tensor,
                                  op=torch.distributed.ReduceOp.MIN)
     _TRAIN_START_TIME = start_time_tensor.item()
-    print_rank_0('time to initialize megatron (seconds): {:.3f}'.format(
-        time.time() - _TRAIN_START_TIME))
+    print_rank_0('time to initialize megatron (seconds): {:.3f}'.format(time.time() - _TRAIN_START_TIME))
     print_datetime('after megatron is initialized')
 
     args = megatron.get_args()
@@ -121,26 +120,22 @@ def pretrain(train_valid_test_dataset_provider,
     if args.virtual_pipeline_model_parallel_size is not None:
         all_data_iterators = [
             build_train_valid_test_data_iterators(
-                train_valid_test_dataset_provider)
+                train_valid_test_dataset_provider, args)
             for _ in range(len(model))
         ]
-        train_data_iterator = [data_iterators[0]
-                               for data_iterators in all_data_iterators]
-        valid_data_iterator = [data_iterators[1]
-                               for data_iterators in all_data_iterators]
-        test_data_iterator = [data_iterators[2]
-                              for data_iterators in all_data_iterators]
+        train_data_iterator = [di[0] for di in all_data_iterators]
+        valid_data_iterator = [di[1] for di in all_data_iterators]
+        test_data_iterator = [di[2] for di in all_data_iterators]
     else:
         train_data_iterator, valid_data_iterator, test_data_iterator \
             = build_train_valid_test_data_iterators(
-                train_valid_test_dataset_provider)
+                train_valid_test_dataset_provider, args)
     timers('train/valid/test-data-iterators-setup').stop()
     print_datetime('after dataloaders are built')
 
     # Print setup timing.
     print_rank_0('done with setup ...')
-    timers.log(['model-and-optimizer-setup',
-                'train/valid/test-data-iterators-setup'], barrier=True)
+    timers.log(['model-and-optimizer-setup', 'train/valid/test-data-iterators-setup'], barrier=True)
     print_rank_0('training ...')
 
     iteration = 0
@@ -847,13 +842,10 @@ def cyclic_iter(iter):
         for x in iter:
             yield x
 
-def build_train_valid_test_data_iterators(
-        build_train_valid_test_datasets_provider):
-    """XXX"""
-    args = get_args()
 
+def build_train_valid_test_data_iterators(build_train_valid_test_datasets_provider: Callable,
+                                          args: argparse.Namespace):
     (train_dataloader, valid_dataloader, test_dataloader) = (None, None, None)
-
     print_rank_0('> building train, validation, and test datasets ...')
 
     # Backward compatibility, assume fixed batch size.
@@ -868,7 +860,6 @@ def build_train_valid_test_data_iterators(
 
     # Data loader only on rank 0 of each model parallel group.
     if mpu.get_tensor_model_parallel_rank() == 0:
-
         # Number of train/valid/test samples.
         if args.train_samples:
             train_samples = args.train_samples

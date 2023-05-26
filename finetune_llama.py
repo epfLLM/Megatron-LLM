@@ -4,10 +4,13 @@
 
 """Fine-tune GPT"""
 
-import torch
 from functools import partial
 import os
 import sys
+import datetime as dt
+from typing import List
+
+import torch
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__),
                                              os.path.pardir, os.path.pardir)))
 
@@ -17,7 +20,7 @@ from megatron import get_tokenizer
 from megatron import print_rank_0
 from megatron.core import mpu
 
-from megatron.data.gpt_dataset import build_train_valid_test_datasets
+import megatron.data.gpt_dataset
 from megatron.model import LlamaModel
 from megatron.model.enums import ModelType
 import megatron.training
@@ -27,7 +30,6 @@ from megatron.utils import average_losses_across_data_parallel_group
 
 def model_provider(pre_process: bool,
                    post_process: bool):
-
     args = megatron.get_args()
     """Build the model."""
     print_rank_0('building Llama model ...')
@@ -83,7 +85,6 @@ def loss_func(loss_mask, output_tensor):
 
     # Reduce loss for logging.
     averaged_loss = average_losses_across_data_parallel_group([loss])
-
     return loss, {'lm loss': averaged_loss[0]}
 
 
@@ -93,22 +94,20 @@ def _forward_step(data_iterator, model):
 
     # Get the batch.
     timers('batch-generator').start()
-    tokens, labels, loss_mask, attention_mask, position_ids = get_batch(
-        data_iterator)
+    tokens, labels, loss_mask, attention_mask, position_ids = get_batch(data_iterator)
     timers('batch-generator').stop()
 
-    output_tensor = model(tokens, position_ids, attention_mask,
-                          labels=labels)
-
+    output_tensor = model(tokens, position_ids, attention_mask, labels=labels)
     return output_tensor, partial(loss_func, loss_mask)
 
 
-def train_valid_test_datasets_provider(train_val_test_num_samples):
+def _train_valid_test_datasets_provider(train_val_test_num_samples: List[int]):
     """Build train, valid, and test datasets."""
     args = megatron.get_args()
     model_name = "llama"
+    assert args.data_path, "Not supporting None data_path"
     print_rank_0(f'> building train, validation, and test datasets for {model_name} ...')
-    train_ds, valid_ds1, test_ds = build_train_valid_test_datasets(
+    train_ds, valid_ds1, test_ds = megatron.data.gpt_dataset.build_train_valid_test_datasets(
         data_prefix=args.data_path,
         data_impl=args.data_impl,
         splits_string=args.split,
@@ -118,12 +117,12 @@ def train_valid_test_datasets_provider(train_val_test_num_samples):
         skip_warmup=(not args.mmap_warmup))
     print_rank_0(f"> finished creating finetuning {model_name} datasets ...")
 
-    _, valid_ds, _ = build_train_valid_test_datasets(
+    _, valid_ds, _ = megatron.data.gpt_dataset.build_train_valid_test_datasets(
         data_prefix=args.data_path2,
         data_impl="mmap",
         splits_string="98,2,0",
         train_valid_test_num_samples=train_val_test_num_samples,
-        seq_length=2048,
+        seq_length=4,
         seed=1234,
         skip_warmup=(not args.mmap_warmup))
     print_rank_0(f"> finished creating pretrained {model_name} datasets ...")
@@ -133,22 +132,24 @@ def train_valid_test_datasets_provider(train_val_test_num_samples):
 def add_validation_args(parser):
     """Text generation arguments."""
     group = parser.add_argument_group(title='validation set')
-    group.add_argument('--data-path2', nargs='*', default=None,
+    group.add_argument('--data_path2', nargs='*', default=None,
                        help='Path to the validation dataset. Accepted format:'
                        '1) a single data path, 2) multiple datasets in the'
                        'form: dataset1-weight dataset1-path dataset2-weight '
                        'dataset2-path ...')
-    group.add_argument('--eval-ppl', action='store_true', default=False)
+    group.add_argument('--eval_ppl', action='store_true', default=False)
     group.add_argument('--stored_params', type=dict, default=dict())
     # group.add_argument('--padded_vocab_size', type=int, default=100)
     return parser
 
 
 if __name__ == "__main__":
-    megatron.training.pretrain(train_valid_test_datasets_provider,
+    megatron.training.pretrain(_train_valid_test_datasets_provider,
                                model_provider,
                                ModelType.encoder_or_decoder,
                                _forward_step,
                                args_defaults={'tokenizer_type':
                                                   'GPT2BPETokenizer'},
                                extra_args_provider=add_validation_args)
+
+    print(f"done {dt.datetime.now(dt.timezone.utc)}")

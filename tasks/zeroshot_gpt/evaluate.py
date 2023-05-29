@@ -12,10 +12,10 @@ from megatron import get_tokenizer
 from megatron.core import parallel_state, tensor_parallel
 from megatron.checkpointing import load_checkpoint
 from megatron.model import GPTModel
-from megatron.training import get_model
 from megatron.utils import get_ltor_masks_and_position_ids, unwrap_model
 from megatron.p2p_communication import recv_forward, send_forward
 from tasks.finetune_utils import build_data_loader
+import megatron.training
 
 from .datasets import build_dataset
 
@@ -23,6 +23,7 @@ from .datasets import build_dataset
 from torch.nn.parallel.distributed import DistributedDataParallel as torchDDP
 from megatron.model import DistributedDataParallel as LocalDDP
 from megatron.model import Float16Module
+
 
 def get_model_provider(eval_metric):
     """Based on evaluation metric set the parallel-output flag and
@@ -190,9 +191,9 @@ def main():
     else:
         raise NotImplementedError('{} task is not implemented.'.format(
             args.task))
-
+    model_provider_func = get_model_provider(eval_metric)
     # Set up model and load checkpoint.
-    model = get_model(get_model_provider(eval_metric), wrap_with_ddp=False)
+    model = megatron.training.get_model(model_provider_func, wrap_with_ddp=False, args=args)
     if args.load is not None:
         _ = load_checkpoint(model, None, None)
 

@@ -7,9 +7,8 @@ import torch
 from megatron.core import tensor_parallel
 from .module import MegatronModule
 
+import megatron.model.language_model
 from .enums import AttnMaskType
-from .language_model import parallel_lm_logits
-from .language_model import get_language_model
 from .utils import init_method_normal
 from .utils import scaled_init_method_normal
 
@@ -20,7 +19,7 @@ def _post_language_model_processing(lm_output,
                                     parallel_output,
                                     fp16_lm_cross_entropy):
     # Output. Format [s b h]
-    output = parallel_lm_logits(
+    output =  megatron.model.language_model.parallel_lm_logits(
         lm_output,
         logit_weights,
         parallel_output)
@@ -58,7 +57,7 @@ class LlamaModel(MegatronModule):
         self.post_process = post_process
         self.fp16_lm_cross_entropy = args.fp16_lm_cross_entropy
 
-        self.language_model, self._language_model_key = get_language_model(
+        self.language_model, self._language_model_key = megatron.model.language_model.get_language_model(
             num_tokentypes=num_tokentypes,
             add_pooler=False,
             encoder_attn_mask_type=AttnMaskType.causal,
@@ -66,7 +65,8 @@ class LlamaModel(MegatronModule):
             scaled_init_method=scaled_init_method_normal(args.init_method_std,
                                                          args.num_layers),
             pre_process=self.pre_process,
-            post_process=self.post_process)
+            post_process=self.post_process,
+            args=args)
 
         self.initialize_word_embeddings(init_method_normal)
 

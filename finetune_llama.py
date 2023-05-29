@@ -28,8 +28,8 @@ from megatron.utils import get_ltor_masks_and_position_ids
 from megatron.utils import average_losses_across_data_parallel_group
 
 
-def model_provider(pre_process: bool,
-                   post_process: bool):
+def _model_provider(pre_process: bool,
+                    post_process: bool):
     args = megatron.get_args()
     """Build the model."""
     print_rank_0('building Llama model ...')
@@ -145,7 +145,7 @@ def add_validation_args(parser):
 
 if __name__ == "__main__":
     megatron.training.pretrain(_train_valid_test_datasets_provider,
-                               model_provider,
+                               _model_provider,
                                ModelType.encoder_or_decoder,
                                _forward_step,
                                args_defaults={'tokenizer_type':

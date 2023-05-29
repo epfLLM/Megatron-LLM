@@ -96,7 +96,8 @@ def _load_checkpoint(queue, args):
 
     consumed_train_samples = None
     consumed_valid_samples = None
-    def get_models(count, dtype, pre_process, post_process):
+
+    def _get_models(count, dtype, pre_process, post_process):
         nonlocal consumed_train_samples
         nonlocal consumed_valid_samples
         models = []
@@ -166,7 +167,7 @@ def _load_checkpoint(queue, args):
     # Get first pipe stage
     mpu.parallel_state.set_pipeline_model_parallel_rank(0)
     post_process = pp_size == 1
-    models = get_models(tp_size, md.params_dtype, True, post_process)
+    models = _get_models(tp_size, md.params_dtype, True, post_process)
 
     md.consumed_train_samples = consumed_train_samples
     md.consumed_valid_samples = consumed_valid_samples
@@ -192,7 +193,7 @@ def _load_checkpoint(queue, args):
         if pp_rank > 0:
             mpu.parallel_state.set_pipeline_model_parallel_rank(pp_rank)
             post_process = pp_rank == pp_size - 1
-            models = get_models(tp_size, md.params_dtype, False, post_process)
+            models = _get_models(tp_size, md.params_dtype, False, post_process)
         for layer_num in range(len(models[0].language_model.encoder.layers)):
             message = {}
 

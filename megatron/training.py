@@ -109,10 +109,9 @@ def pretrain(train_valid_test_dataset_provider,
     # Model, optimizer, and learning rate.
     timers('model-and-optimizer-setup', log_level=0).start(barrier=True)
     model, optimizer, opt_param_scheduler = setup_model_and_optimizer(
-        model_provider, model_type)
+        model_provider, model_type, args=args)
     timers('model-and-optimizer-setup').stop()
-    print_datetime('after model, optimizer, and learning rate '
-                   'scheduler are built')
+    print_datetime('after model, optimizer, and learning rate scheduler are built')
 
     # Data stuff.
     timers('train/valid/test-data-iterators-setup', log_level=0).start(
@@ -194,9 +193,12 @@ def update_train_iters(args):
 
 def get_model(model_provider_func: Callable,
               model_type=ModelType.encoder_or_decoder,
-              wrap_with_ddp: bool=True):
+              wrap_with_ddp: bool=True,
+              args=None):
     """Build the model."""
-    args = megatron.get_args()
+    assert args is not None
+
+    # HERE!
     args.model_type = model_type
 
     # Build model.
@@ -250,8 +252,8 @@ def get_model(model_provider_func: Callable,
 
     # Disallow training and inference with Transformer Engine
     # for non-GPT models
-    args.allow_transformer_engine = all([type(m) == GPTModel for m in model])
-    assert args.allow_transformer_engine or args.transformer_impl == 'local', \
+    allow_transformer_engine = all([type(m) == GPTModel for m in model])
+    assert allow_transformer_engine or args.transformer_impl == 'local', \
         'Transformer Engine is only approved for GPT models'
 
     # Set tensor model parallel attributes if not set.
@@ -285,7 +287,6 @@ def get_model(model_provider_func: Callable,
             model = [torchDDP(model_module, device_ids=[i], output_device=i,
                               process_group=mpu.get_data_parallel_group())
                      for model_module in model]
-
         elif args.DDP_impl == 'local':
             model = [LocalDDP(model_module,
                               args.accumulate_allreduce_grads_in_fp32,
@@ -352,11 +353,10 @@ def setup_model_and_optimizer(model_provider_func,
                               model_type,
                               no_wd_decay_cond=None,
                               scale_lr_cond=None,
-                              lr_mult=1.0):
-    """Setup model and optimizer."""
-    args = get_args()
-
-    model = get_model(model_provider_func, model_type)
+                              lr_mult=1.0,
+                              args=None):
+    assert args is not None
+    model = get_model(model_provider_func, model_type, args=args)
     unwrapped_model = unwrap_model(model,
                                    (torchDDP, LocalDDP, Float16Module))
 

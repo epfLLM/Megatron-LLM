@@ -13,6 +13,8 @@ from tasks.orqa.unsupervised.nq import get_one_epoch_nq_dataloader
 from tasks.orqa.unsupervised.nq import process_nq_batch
 from tasks.orqa.unsupervised.qa_utils import calculate_matches
 
+from megatron.model import ModelType
+
 
 class ORQAEvaluator(object):
     def __init__(self):
@@ -32,8 +34,12 @@ class ORQAEvaluator(object):
         if args.biencoder_shared_query_context_model:
             only_query_model = False
 
-        model = get_model(get_model_provider(only_query_model=only_query_model,
-            biencoder_shared_query_context_model=args.biencoder_shared_query_context_model))
+        model_provider_func = get_model_provider(only_query_model=only_query_model,
+            biencoder_shared_query_context_model=args.biencoder_shared_query_context_model)
+
+        model_type = ModelType.encoder_or_decoder
+        wrap_with_ddp: bool = True
+        model = get_model(model_provider_func, model_type, wrap_with_ddp, args)
 
         self.model = load_biencoder_checkpoint(model,
                 only_query_model=only_query_model)

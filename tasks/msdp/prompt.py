@@ -13,7 +13,6 @@ from megatron.core import mpu
 from megatron.model import GPTModel
 from megatron.training import get_model
 from megatron.checkpointing import load_checkpoint
-from megatron.initialize import initialize_megatron
 from megatron.text_generation import generate_and_post_process
 
 
@@ -298,7 +297,7 @@ def main():
         exit()
 
     # Set up model and load checkpoint.
-    model = get_model(model_provider, wrap_with_ddp=False)
+    model = get_model(model_provider, wrap_with_ddp=False, args=args)
     if args.load is not None:
         _ = load_checkpoint(model, None, None)
 

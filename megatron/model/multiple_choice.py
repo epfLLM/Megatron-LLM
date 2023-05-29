@@ -4,10 +4,11 @@
 
 import torch
 
+import megatron.model.language_model
 from megatron import get_args, print_rank_last
 from megatron.model.enums import AttnMaskType
 from megatron.model.bert_model import bert_extended_attention_mask, bert_position_ids
-from megatron.model.language_model import get_language_model
+
 from megatron.model.utils import get_linear_layer
 from megatron.model.utils import init_method_normal
 from megatron.model.utils import scaled_init_method_normal
@@ -15,7 +16,6 @@ from .module import MegatronModule
 
 
 class MultipleChoice(MegatronModule):
-
     def __init__(self,
                  num_tokentypes=2,
                  pre_process=True,
@@ -27,7 +27,7 @@ class MultipleChoice(MegatronModule):
         self.pre_process = pre_process
         self.post_process = post_process
 
-        self.language_model, self._language_model_key = get_language_model(
+        self.language_model, self._language_model_key = megatron.model.language_model.get_language_model(
             num_tokentypes=num_tokentypes,
             add_pooler=True,
             encoder_attn_mask_type=AttnMaskType.padding,
@@ -35,7 +35,8 @@ class MultipleChoice(MegatronModule):
             scaled_init_method=scaled_init_method_normal(args.init_method_std,
                                                          args.num_layers),
             pre_process=self.pre_process,
-            post_process=self.post_process)
+            post_process=self.post_process,
+            args=args)
 
         # Multi-choice head.
         if self.post_process:

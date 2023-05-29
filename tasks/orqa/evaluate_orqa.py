@@ -6,6 +6,7 @@ from megatron import get_args, print_rank_0
 from megatron.indexer import IndexBuilder
 from tasks.orqa.evaluate_utils import ORQAEvaluator
 
+
 def main():
     """
     Main program
@@ -20,10 +21,9 @@ def main():
 
     print_rank_0("Starting index builder!")
 
-    index_builder = IndexBuilder()
+    index_builder = IndexBuilder(args)
     index_builder.build_and_save_index()
     print_rank_0("Build and save indices: done!")
-
 
     print_rank_0("Starting evaluations!")
 

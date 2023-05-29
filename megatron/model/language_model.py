@@ -13,9 +13,11 @@ from megatron.model.utils import get_linear_layer
 from megatron.model.utils import init_method_normal, scaled_init_method_normal
 
 
-def parallel_lm_logits(input_, word_embeddings_weight, parallel_output,
+def parallel_lm_logits(input_,
+                       word_embeddings_weight,
+                       parallel_output,
                        bias=None):
-    """LM logits using word embedding weights."""
+    """ LM logits using word embedding weights. """
     args = megatron.get_args()
     # Parallel logits.
     if args.async_tensor_model_parallel_allreduce or\
@@ -37,31 +39,31 @@ def parallel_lm_logits(input_, word_embeddings_weight, parallel_output,
         async_grad_allreduce=async_grad_allreduce,
         sequence_parallel_enabled=args.sequence_parallel)
     # Gather if needed.
-
     if parallel_output:
         return logits_parallel
-
     return tensor_parallel.gather_from_tensor_model_parallel_region(logits_parallel)
 
 
 def get_language_model(num_tokentypes,
                        add_pooler,
-                       encoder_attn_mask_type, init_method=None,
-                       scaled_init_method=None, add_encoder=True,
+                       encoder_attn_mask_type,
+                       init_method=None,
+                       scaled_init_method=None,
+                       add_encoder=True,
                        add_decoder=False,
                        decoder_attn_mask_type=AttnMaskType.causal,
                        pre_process=True,
-                       post_process=True):
+                       post_process=True,
+                       args=None):
+    assert args is not None
+    model_type = args.model_type
     """Build language model and return along with the key to save."""
-    args = megatron.get_args()
-
     if init_method is None:
         init_method = init_method_normal(args.init_method_std)
 
     if scaled_init_method is None:
         scaled_init_method = scaled_init_method_normal(args.init_method_std,
                                                        args.num_layers)
-
     # Language model.
     language_model = TransformerLanguageModel(
         init_method,
@@ -73,11 +75,12 @@ def get_language_model(num_tokentypes,
         decoder_attn_mask_type=decoder_attn_mask_type,
         add_pooler=add_pooler,
         pre_process=pre_process,
-        post_process=post_process
+        post_process=post_process,
+        args=args,
+        model_type=model_type
     )
     # key used for checkpoints.
     language_model_key = 'language_model'
-
     return language_model, language_model_key
 
 
@@ -336,9 +339,11 @@ class TransformerLanguageModel(MegatronModule):
                  decoder_attn_mask_type=AttnMaskType.causal,
                  add_pooler=False,
                  pre_process=True,
-                 post_process=True):
+                 post_process=True,
+                 args=None,
+                 model_type=None):
         super(TransformerLanguageModel, self).__init__()
-        args = megatron.get_args()
+        assert args is not None
 
         self.pre_process = pre_process
         self.post_process = post_process
@@ -371,7 +376,9 @@ class TransformerLanguageModel(MegatronModule):
                 output_layer_init_method,
                 self_attn_mask_type=self.encoder_attn_mask_type,
                 pre_process=self.pre_process,
-                post_process=self.post_process
+                post_process=self.post_process,
+                args=args,
+                model_type=model_type
             )
             self._encoder_key = 'encoder'
         else:
@@ -386,7 +393,10 @@ class TransformerLanguageModel(MegatronModule):
                 layer_type=LayerType.decoder,
                 self_attn_mask_type=self.decoder_attn_mask_type,
                 pre_process=self.pre_process,
-                post_process=self.post_process)
+                post_process=self.post_process,
+                args=args,
+                model_type=model_type
+            )
             self._decoder_key = 'decoder'
         else:
             self.decoder = None

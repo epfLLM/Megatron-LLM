@@ -10,7 +10,7 @@ from .module import MegatronModule
 
 from .enums import AttnMaskType
 from .language_model import parallel_lm_logits
-from .language_model import get_language_model
+import megatron.model.language_model
 from .utils import init_method_normal
 from .utils import scaled_init_method_normal
 
@@ -58,7 +58,7 @@ class GPTModel(MegatronModule):
         self.post_process = post_process
         self.fp16_lm_cross_entropy = args.fp16_lm_cross_entropy
 
-        self.language_model, self._language_model_key = get_language_model(
+        self.language_model, self._language_model_key = megatron.model.language_model(
             num_tokentypes=num_tokentypes,
             add_pooler=False,
             encoder_attn_mask_type=AttnMaskType.causal,
@@ -93,7 +93,6 @@ class GPTModel(MegatronModule):
             return lm_output
 
     def state_dict_for_save_checkpoint(self, prefix='', keep_vars=False):
-
         state_dict_ = {}
         state_dict_[self._language_model_key] \
             = self.language_model.state_dict_for_save_checkpoint(

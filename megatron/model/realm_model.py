@@ -3,13 +3,13 @@ import torch
 
 from megatron import get_args, print_rank_0
 from megatron.checkpointing import get_checkpoint_tracker_filename, get_checkpoint_name
-from megatron.model import BertModel
+
 from .module import MegatronModule
 from megatron.core import mpu
 from megatron.model.enums import AttnMaskType
 from megatron.model.utils import get_linear_layer
 from megatron.model.utils import init_method_normal
-from megatron.model.language_model import get_language_model
+import megatron.model.language_model
 from megatron.model.utils import scaled_init_method_normal
 from megatron.model.bert_model import bert_extended_attention_mask, bert_position_ids
 
@@ -156,12 +156,12 @@ class IREncoderBertModel(MegatronModule):
         scaled_init_method = scaled_init_method_normal(args.init_method_std,
                                                        args.num_layers)
 
-        self.language_model, self._language_model_key = get_language_model(
+        self.language_model, self._language_model_key = megatron.model.language_model.get_language_model(
             num_tokentypes=num_tokentypes,
             add_pooler=True,
             encoder_attn_mask_type=AttnMaskType.padding,
             init_method=init_method,
-            scaled_init_method=scaled_init_method)
+            scaled_init_method=scaled_init_method, args=args)
 
         self.ict_head = get_linear_layer(args.hidden_size, ict_head_size, init_method)
         self._ict_head_key = 'ict_head'

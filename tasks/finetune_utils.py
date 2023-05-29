@@ -14,7 +14,7 @@ from megatron.checkpointing import load_checkpoint
 from megatron.checkpointing import save_checkpoint
 from megatron.model import ModelType
 from megatron.training import evaluate_and_print_results
-from megatron.training import setup_model_and_optimizer
+import megatron.training
 from megatron.training import train_step
 from megatron.training import training_log
 from megatron.utils import average_losses_across_data_parallel_group
@@ -270,7 +270,7 @@ def finetune(train_valid_datasets_provider,
 
     # Build model, optimizer and learning rate scheduler.
     timers('model and optimizer', log_level=0).start()
-    model, optimizer, opt_param_scheduler = setup_model_and_optimizer(model_provider, model_type)
+    model, optimizer, opt_param_scheduler = megatron.training.setup_model_and_optimizer(model_provider, model_type, args=args)
     timers('model and optimizer').stop()
 
     # If pretrained checkpoint is provided and we have not trained for

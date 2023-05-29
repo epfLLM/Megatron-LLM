@@ -854,19 +854,24 @@ def _get_num_layers(args, is_encoder_and_decoder_model, is_decoder=False):
 
 
 class ParallelTransformer(MegatronModule):
-    """Transformer class."""
-
-    def __init__(self, init_method, output_layer_init_method,
+    def __init__(self,
+                 init_method,
+                 output_layer_init_method,
                  layer_type=LayerType.encoder,
                  self_attn_mask_type=AttnMaskType.padding,
                  post_layer_norm=True,
-                 pre_process=True, post_process=True,
-                 drop_path_rate=0.0):
+                 pre_process=True,
+                 post_process=True,
+                 drop_path_rate=0.0,
+                 args=None,
+                 model_type=None):
         super(ParallelTransformer, self).__init__()
-        args = get_args()
+        # args = get_args()
+        assert args is not None
+        assert model_type is not None
 
         self.layer_type = layer_type
-        self.model_type = args.model_type
+        self.model_type = model_type
         self.bf16 = args.bf16
         self.fp32_residual_connection = args.fp32_residual_connection
         self.post_layer_norm = post_layer_norm

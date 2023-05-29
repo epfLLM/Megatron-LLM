@@ -18,6 +18,7 @@ from .utils import (unwrap_model,
 
 _CHECKPOINT_VERSION = None
 
+
 def set_checkpoint_version(value):
     global _CHECKPOINT_VERSION
     if _CHECKPOINT_VERSION is not None:
@@ -25,9 +26,11 @@ def set_checkpoint_version(value):
             "checkpoint versions do not match"
     _CHECKPOINT_VERSION = value
 
+
 def get_checkpoint_version():
     global _CHECKPOINT_VERSION
     return _CHECKPOINT_VERSION
+
 
 def check_checkpoint_args(checkpoint_args):
     """Ensure fixed arguments for a model are the same for the input
@@ -62,11 +65,43 @@ def check_checkpoint_args(checkpoint_args):
         _compare('tensor_model_parallel_size')
         _compare('pipeline_model_parallel_size')
 
+
 def ensure_directory_exists(filename):
     """Build filename's path if it does not already exists."""
     dirname = os.path.dirname(filename)
     if not os.path.exists(dirname):
         os.makedirs(dirname)
+
+
+
+def get_checkpoint_name(checkpoints_path, iteration, release=False,
+                        pipeline_parallel=None,
+                        tensor_rank=None, pipeline_rank=None):
+    """Determine the directory name for this rank's checkpoint."""
+    if release:
+        directory = 'release'
+    else:
+        directory = 'iter_{:07d}'.format(iteration)
+
+    # Use both the tensor and pipeline MP rank.
+    if pipeline_parallel is None:
+        pipeline_parallel = (mpu.get_pipeline_model_parallel_world_size() > 1)
+    if tensor_rank is None:
+        tensor_rank = mpu.get_tensor_model_parallel_rank()
+    if pipeline_rank is None:
+        pipeline_rank = mpu.get_pipeline_model_parallel_rank()
+
+    # Use both the tensor and pipeline MP rank. If using the distributed
+    # optimizer, then the optimizer's path must additionally include the
+    # data parallel rank.
+    if not pipeline_parallel:
+        common_path = os.path.join(checkpoints_path, directory,
+                            f'mp_rank_{tensor_rank:02d}')
+    else:
+        common_path = os.path.join(checkpoints_path, directory,
+                        f'mp_rank_{tensor_rank:02d}_{pipeline_rank:03d}')
+
+    return os.path.join(common_path, "model_optim_rng.pt")
 
 
 def get_checkpoint_names(checkpoints_path, iteration, use_distributed_optimizer, release=False,
@@ -104,6 +139,7 @@ def get_checkpoint_names(checkpoints_path, iteration, use_distributed_optimizer,
         model_name = optim_name = os.path.join(common_path, "model_optim_rng.pt")
     return model_name, optim_name
 
+
 def find_checkpoint_rank_0(checkpoints_path, iteration, use_distributed_optimizer, release=False):
     """Finds the checkpoint for rank 0 without knowing if we are using
     pipeline parallelism or not.
@@ -129,6 +165,7 @@ def find_checkpoint_rank_0(checkpoints_path, iteration, use_distributed_optimize
         return filenames
 
     return None, None
+
 
 def get_checkpoint_tracker_filename(checkpoints_path):
 
@@ -289,6 +326,7 @@ def save_checkpoint(iteration, model, optimizer, opt_param_scheduler):
     if torch.distributed.is_initialized():
         torch.distributed.barrier()
 
+
 def _transpose_first_dim(t, num_splits, num_splits_first, model):
     input_shape = t.size()
     # We use a self_attention module but the values extracted aren't
@@ -327,6 +365,7 @@ def _transpose_first_dim(t, num_splits, num_splits_first, model):
 
     return t
 
+
 def fix_query_key_value_ordering(model, checkpoint_version):
     """Fix up query/key/value matrix ordering if checkpoint
     version is smaller than 2.0
@@ -357,13 +396,12 @@ def fix_query_key_value_ordering(model, checkpoint_version):
         print_rank_0(" succesfully fixed query-key-values ordering for"
                     " checkpoint version {}".format(checkpoint_version))
 
+
 def _load_base_checkpoint(load_dir, use_distributed_optimizer, rank0=False):
     """ Load the base state_dict from the given directory
 
     If rank0 is true, just loads rank 0 checkpoint, ignoring arguments.
     """
-
-
     # Read the tracker file and set the iteration.
     tracker_filename = get_checkpoint_tracker_filename(load_dir)
 

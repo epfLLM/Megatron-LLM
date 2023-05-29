@@ -11,13 +11,14 @@ import torch.nn.functional as F
 
 from megatron import get_args, get_timers, get_tokenizer, print_rank_0
 from megatron.core import mpu
-from megatron.model.biencoder_model import biencoder_model_provider
+import megatron.model.biencoder_model
 from megatron.utils import average_losses_across_data_parallel_group
 from pretrain_ict import get_group_world_size_rank
 from tasks.finetune_utils import finetune
 from tasks.orqa.supervised.eval_utils import accuracy_func_provider
 from tasks.orqa.supervised.eval_utils import process_batch, task_collate_fn
 
+from megatron.model import ModelType
 
 # input_ is a 2D tensor
 
@@ -196,12 +197,13 @@ def orqa(Dataset):
         args = get_args()
         print_rank_0('building retriever model for {} ...'.format(args.task))
 
-        model = biencoder_model_provider(only_context_model=False,
-                    only_query_model=False,
-                    biencoder_shared_query_context_model=\
-                    args.biencoder_shared_query_context_model,
-                    pre_process=pre_process, post_process=post_process)
-
+        model_type_orqa = ModelType.encoder_or_decoder
+        model = megatron.model.biencoder_model.biencoder_model_provider(only_context_model=False,
+                                                                        only_query_model=False,
+                                                                        biencoder_shared_query_context_model=args.biencoder_shared_query_context_model,
+                                                                        pre_process=pre_process,
+                                                                        post_process=post_process,
+                                                                        model_type=model_type_orqa)
         return model
 
     def single_dataset_provider(datapath):
@@ -220,11 +222,14 @@ def orqa(Dataset):
         return accuracy_func_provider(single_dataset_provider)
 
     """Finetune/evaluate."""
+    model_type_orqa = ModelType.encoder_or_decoder
     finetune(train_valid_datasets_provider,
              model_provider,
+             model_type_orqa,
              forward_step=cross_entropy_forward_step,
              end_of_epoch_callback_provider=metrics_func_provider,
              task_collate_fn=task_collate_fn)
+
 
 def main():
     args = get_args()

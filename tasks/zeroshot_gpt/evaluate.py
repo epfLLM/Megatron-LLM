@@ -25,7 +25,7 @@ from megatron.model import DistributedDataParallel as LocalDDP
 from megatron.model import Float16Module
 
 
-def get_model_provider(eval_metric):
+def _get_model_provider(eval_metric):
     """Based on evaluation metric set the parallel-output flag and
     return the model provider."""
 
@@ -191,7 +191,7 @@ def main():
     else:
         raise NotImplementedError('{} task is not implemented.'.format(
             args.task))
-    model_provider_func = get_model_provider(eval_metric)
+    model_provider_func = _get_model_provider(eval_metric)
     # Set up model and load checkpoint.
     model = megatron.training.get_model(model_provider_func, wrap_with_ddp=False, args=args)
     if args.load is not None:

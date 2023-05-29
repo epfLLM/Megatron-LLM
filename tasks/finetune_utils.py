@@ -22,7 +22,7 @@ from megatron.utils import calc_params_l2_norm
 from megatron.utils import check_adlr_autoresume_termination
 
 
-def _process_batch(batch, args):
+def process_batch(batch, args):
     """Process batch and produce inputs for the model."""
     tokens = batch['text'].long().cuda().contiguous()
     types = batch['types'].long().cuda().contiguous()
@@ -56,7 +56,7 @@ def _cross_entropy_forward_step(batch, model):
         batch_ = next(batch)
     except BaseException:
         batch_ = batch
-    tokens, types, labels, attention_mask = _process_batch(batch_, args)
+    tokens, types, labels, attention_mask = process_batch(batch_, args)
     timers('batch-generator').stop()
 
     # Forward model.

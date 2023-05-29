@@ -7,8 +7,9 @@ import torch
 import megatron
 from megatron.core import mpu, tensor_parallel
 from .module import MegatronModule
+
+import megatron.model.transformer
 from megatron.model.enums import LayerType, AttnMaskType, PositionEmbeddingType
-from megatron.model.transformer import ParallelTransformer
 from megatron.model.utils import get_linear_layer
 from megatron.model.utils import init_method_normal, scaled_init_method_normal
 
@@ -54,9 +55,10 @@ def get_language_model(num_tokentypes,
                        decoder_attn_mask_type=AttnMaskType.causal,
                        pre_process=True,
                        post_process=True,
-                       args=None):
+                       args=None,
+                       model_type=None):
     assert args is not None
-    model_type = args.model_type
+    # model_type = args.model_type
     """Build language model and return along with the key to save."""
     if init_method is None:
         init_method = init_method_normal(args.init_method_std)
@@ -371,7 +373,7 @@ class TransformerLanguageModel(MegatronModule):
         # Encoder (usually set to True, False if part of an encoder-decoder
         # architecture and in encoder-only stage).
         if self.add_encoder:
-            self.encoder = ParallelTransformer(
+            self.encoder = megatron.model.transformer.ParallelTransformer(
                 self.init_method,
                 output_layer_init_method,
                 self_attn_mask_type=self.encoder_attn_mask_type,
@@ -387,7 +389,7 @@ class TransformerLanguageModel(MegatronModule):
         # Decoder (usually set to False, True if part of an encoder-decoder
         # architecture and in decoder-only stage).
         if self.add_decoder:
-            self.decoder = ParallelTransformer(
+            self.decoder = megatron.model.transformer.ParallelTransformer(
                 self.init_method,
                 output_layer_init_method,
                 layer_type=LayerType.decoder,

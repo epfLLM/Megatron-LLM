@@ -16,7 +16,7 @@ from megatron.core import mpu
 from megatron.data.biencoder_dataset_utils import get_ict_batch
 from megatron.data.dataset_utils import build_train_valid_test_datasets
 from megatron.model import ModelType
-from megatron.model.biencoder_model import biencoder_model_provider
+import megatron.model.biencoder_model
 from megatron.training import pretrain
 from megatron.utils import average_losses_across_data_parallel_group
 
@@ -24,12 +24,15 @@ from megatron.utils import average_losses_across_data_parallel_group
 def pretrain_ict_model_provider(pre_process=True, post_process=True):
     args = get_args()
 
-    model = biencoder_model_provider(
+    ict_model_type = ModelType.encoder_or_decoder
+
+    model = megatron.model.biencoder_model.biencoder_model_provider(
                 only_context_model=False,
                 only_query_model=False,
-                biencoder_shared_query_context_model=\
-                args.biencoder_shared_query_context_model,
-                pre_process=pre_process, post_process=post_process)
+                biencoder_shared_query_context_model=args.biencoder_shared_query_context_model,
+                pre_process=pre_process,
+                post_process=post_process,
+                model_type=ict_model_type)
 
     return model
 
@@ -68,6 +71,7 @@ class AllgatherFromDataParallelRegion(torch.autograd.Function):
         # get chunk from this rank
         output = output_list[rank].contiguous()
         return output
+
 
 def loss_func(output_tensor):
     args = get_args()
@@ -158,8 +162,10 @@ def train_valid_test_datasets_provider(train_val_test_num_samples):
 
 
 if __name__ == "__main__":
+    ict_model_type = ModelType.encoder_or_decoder
+
     pretrain(train_valid_test_datasets_provider,
              pretrain_ict_model_provider,
-             ModelType.encoder_or_decoder,
+             ict_model_type,
              forward_step,
              args_defaults={'tokenizer_type': 'BertWordPieceLowerCase'})

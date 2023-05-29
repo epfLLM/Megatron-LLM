@@ -268,6 +268,7 @@ def _load_checkpoint(queue, args):
             queue_put("binary head", message)
     queue.put("done")
 
+
 def load_checkpoint(queue, args):
     try:
         _load_checkpoint(queue, args)

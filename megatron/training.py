@@ -31,8 +31,7 @@ from megatron.model import Float16Module
 from megatron.model import ModelType
 from megatron.model import GPTModel
 from megatron.optimizer import get_megatron_optimizer
-from megatron.initialize import initialize_megatron
-from megatron.initialize import write_args_to_tensorboard
+import megatron.initialize
 from megatron.initialize import set_jit_fusion_options
 from megatron.optimizer_param_scheduler import OptimizerParamScheduler
 from megatron.model import DistributedDataParallel as LocalDDP
@@ -52,8 +51,8 @@ def print_datetime(string):
 
 
 def pretrain(train_valid_test_dataset_provider,
-             model_provider,
-             model_type,
+             model_provider_func,
+             model_type: ModelType,
              forward_step_func,
              process_non_loss_data_func=None,
              extra_args_provider=None,
@@ -62,14 +61,14 @@ def pretrain(train_valid_test_dataset_provider,
 
     This function will run the followings in the order provided:
         1) initialize Megatron.
-        2) setup model, optimizer and lr schedule using the model_provider.
+        2) setup model, optimizer and lr schedule using the model_provider_func.
         3) call train_val_test_data_provider to get train/val/test datasets.
         4) train the modle using the forward_step_func.
 
     Arguments:
         train_valid_test_dataset_provider: a function that takes the size of
             train/valid/test dataset and returns `train, valid, test` datasets.
-        model_provider: a function that returns a vanilla version of the
+        model_provider_func: a function that returns a vanilla version of the
             model. By vanilla we mean a simple model on cpu with no fp16 or ddp.
         model_type: an enum that specifies the type of model being trained.
         forward_step_func: a function that takes a `data iterator` and `model`,
@@ -87,8 +86,8 @@ def pretrain(train_valid_test_dataset_provider,
             to set already parse arguments.
     """
     # Initalize and get arguments, timers, and Tensorboard writer.
-    initialize_megatron(extra_args_provider=extra_args_provider,
-                        args_defaults=args_defaults)
+    megatron.initialize.initialize_megatron(extra_args_provider=extra_args_provider,
+                                            args_defaults=args_defaults)
     # Set pytorch JIT layer fusion options and warmup JIT functions.
     set_jit_fusion_options()
 
@@ -108,8 +107,8 @@ def pretrain(train_valid_test_dataset_provider,
 
     # Model, optimizer, and learning rate.
     timers('model-and-optimizer-setup', log_level=0).start(barrier=True)
-    model, optimizer, opt_param_scheduler = setup_model_and_optimizer(
-        model_provider, model_type, args=args)
+    model, optimizer, opt_param_scheduler = _setup_model_and_optimizer(
+        model_provider_func, model_type, args=args)
     timers('model-and-optimizer-setup').stop()
     print_datetime('after model, optimizer, and learning rate scheduler are built')
 
@@ -140,16 +139,22 @@ def pretrain(train_valid_test_dataset_provider,
     iteration = 0
     if args.do_train and args.train_iters > 0:
         iteration = train(forward_step_func,
-                          model, optimizer, opt_param_scheduler,
-                          train_data_iterator, valid_data_iterator,
+                          model,
+                          optimizer,
+                          opt_param_scheduler,
+                          train_data_iterator,
+                          valid_data_iterator,
                           process_non_loss_data_func)
     print_datetime('after training is done')
 
     if args.do_valid:
         prefix = 'the end of training for val data'
-        evaluate_and_print_results(prefix, forward_step_func,
-                                   valid_data_iterator, model,
-                                   iteration, process_non_loss_data_func,
+        evaluate_and_print_results(prefix,
+                                   forward_step_func,
+                                   valid_data_iterator,
+                                   model,
+                                   iteration,
+                                   process_non_loss_data_func,
                                    False)
 
     if args.save and iteration != 0:
@@ -199,7 +204,7 @@ def get_model(model_provider_func: Callable,
     assert args is not None
 
     # HERE!
-    args.model_type = model_type
+    # args.model_type = model_type
 
     # Build model.
     if mpu.get_pipeline_model_parallel_world_size() > 1 and \
@@ -349,12 +354,12 @@ def _get_optimizer_param_scheduler(optimizer, args):
     return opt_param_scheduler
 
 
-def setup_model_and_optimizer(model_provider_func,
-                              model_type,
-                              no_wd_decay_cond=None,
-                              scale_lr_cond=None,
-                              lr_mult=1.0,
-                              args=None):
+def _setup_model_and_optimizer(model_provider_func,
+                               model_type,
+                               no_wd_decay_cond=None,
+                               scale_lr_cond=None,
+                               lr_mult=1.0,
+                               args=None):
     assert args is not None
     model = get_model(model_provider_func, model_type, args=args)
     unwrapped_model = unwrap_model(model,
@@ -636,15 +641,19 @@ def save_checkpoint_and_time(iteration, model, optimizer, opt_param_scheduler):
     timers.log(['save-checkpoint'])
 
 
-def train(forward_step_func, model, optimizer, opt_param_scheduler,
-          train_data_iterator, valid_data_iterator,
+def train(forward_step_func,
+          model,
+          optimizer,
+          opt_param_scheduler,
+          train_data_iterator,
+          valid_data_iterator,
           process_non_loss_data_func):
     """Train the model function."""
     args = get_args()
     timers = get_timers()
 
     # Write args to tensorboard
-    write_args_to_tensorboard()
+    megatron.initialize.write_args_to_tensorboard(args)
 
     # Turn on training mode which enables dropout.
     for model_module in model:

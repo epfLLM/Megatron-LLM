@@ -76,7 +76,8 @@ class T5Model(MegatronModule):
                  pre_process=True,
                  post_process=True,
                  add_encoder=True,
-                 add_decoder=True):
+                 add_decoder=True,
+                 model_type=None):
         super(T5Model, self).__init__()
         args = get_args()
 
@@ -99,7 +100,9 @@ class T5Model(MegatronModule):
             init_method=init_method,
             scaled_init_method=scaled_init_method,
             pre_process=self.pre_process,
-            post_process=self.post_process, args=args)
+            post_process=self.post_process,
+            args=args,
+            model_type=model_type)
 
         self.initialize_word_embeddings(init_method_normal)
 

@@ -659,8 +659,10 @@ def load_checkpoint(model, optimizer, opt_param_scheduler, load_arg='load', stri
     return iteration
 
 
-def load_biencoder_checkpoint(model, only_query_model=False,
-        only_context_model=False, custom_load_path=None):
+def load_biencoder_checkpoint(model,
+                              only_query_model=False,
+                              only_context_model=False,
+                              custom_load_path=None):
     """
     selectively load retrieval models for indexing/retrieving
     from saved checkpoints
@@ -669,7 +671,6 @@ def load_biencoder_checkpoint(model, only_query_model=False,
     args = get_args()
 
     model = unwrap_model(model)
-
     load_path = custom_load_path if custom_load_path is not None else args.load
 
     tracker_filename = get_checkpoint_tracker_filename(load_path)

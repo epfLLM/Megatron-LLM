@@ -15,12 +15,12 @@ from .module import MegatronModule
 
 
 class Classification(MegatronModule):
-
     def __init__(self,
                  num_classes,
                  num_tokentypes=2,
                  pre_process=True,
-                 post_process=True):
+                 post_process=True,
+                 model_type=None):
         super(Classification, self).__init__(share_word_embeddings=False)
         args = get_args()
 
@@ -37,7 +37,10 @@ class Classification(MegatronModule):
             scaled_init_method=scaled_init_method_normal(args.init_method_std,
                                                          args.num_layers),
             pre_process=self.pre_process,
-            post_process=self.post_process, args=args)
+            post_process=self.post_process,
+            args=args,
+            model_type=model_type
+        )
 
         # Multi-choice head.
         if self.post_process:

@@ -19,14 +19,16 @@ class MultipleChoice(MegatronModule):
     def __init__(self,
                  num_tokentypes=2,
                  pre_process=True,
-                 post_process=True):
+                 post_process=True,
+                 model_type=None):
         super(MultipleChoice, self).__init__(share_word_embeddings=False)
+
         args = get_args()
+        assert model_type is not None
 
         init_method = init_method_normal(args.init_method_std)
         self.pre_process = pre_process
         self.post_process = post_process
-
         self.language_model, self._language_model_key = megatron.model.language_model.get_language_model(
             num_tokentypes=num_tokentypes,
             add_pooler=True,
@@ -36,7 +38,8 @@ class MultipleChoice(MegatronModule):
                                                          args.num_layers),
             pre_process=self.pre_process,
             post_process=self.post_process,
-            args=args)
+            args=args,
+            model_type=model_type)
 
         # Multi-choice head.
         if self.post_process:

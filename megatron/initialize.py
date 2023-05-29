@@ -10,9 +10,10 @@ import numpy as np
 import torch
 from datetime import timedelta
 
+import megatron
 from megatron import fused_kernels
 from megatron import get_adlr_autoresume
-from megatron import get_args
+# from megatron import get_args
 from megatron import get_tensorboard_writer
 from megatron.core import mpu, tensor_parallel
 from megatron.arguments import (parse_args, validate_args)
@@ -22,8 +23,10 @@ from megatron.model.transformer import bias_dropout_add_fused_train
 from megatron.model.fused_bias_gelu import bias_gelu
 
 
-def initialize_megatron(extra_args_provider=None, args_defaults={},
-                        ignore_unknown_args=False, allow_no_cuda=False):
+def initialize_megatron(extra_args_provider=None,
+                        args_defaults={},
+                        ignore_unknown_args=False,
+                        allow_no_cuda=False):
     """Set global variables, initialize distributed, and
     set autoresume and random seeds.
     `allow_no_cuda` should not be set unless using megatron for cpu only 
@@ -51,7 +54,7 @@ def initialize_megatron(extra_args_provider=None, args_defaults={},
 
     # torch.distributed initialization
     def finish_mpu_init():
-        args = get_args()
+        args = megatron.get_args()
         # Pytorch distributed.
         _initialize_distributed()
         
@@ -60,7 +63,7 @@ def initialize_megatron(extra_args_provider=None, args_defaults={},
             print('> setting random seeds to {} ...'.format(args.seed))
         _set_random_seed(args.seed, args.data_parallel_random_init)
 
-    args = get_args()
+    args = megatron.get_args()
     if args.lazy_mpu_init:
         # TODO is this still a necessary option?
         args.use_cpu_initialization=True
@@ -86,8 +89,7 @@ def initialize_megatron(extra_args_provider=None, args_defaults={},
 
 
 def _compile_dependencies():
-
-    args = get_args()
+    args = megatron.get_args()
 
     # =========================
     # Compile dataset C++ code.
@@ -143,11 +145,9 @@ def _compile_dependencies():
                   time.time() - start_time), flush=True)
 
 
-
 def _initialize_distributed():
     """Initialize torch.distributed and core model parallel."""
-    args = get_args()
-
+    args = megatron.get_args()
     device_count = torch.cuda.device_count()
     if torch.distributed.is_initialized():
         if args.rank == 0:
@@ -218,9 +218,8 @@ def _set_random_seed(seed_, data_parallel_random_init=False):
         raise ValueError('Seed ({}) should be a positive integer.'.format(seed))
 
 
-def write_args_to_tensorboard():
+def write_args_to_tensorboard(args):
     """Write arguments to tensorboard."""
-    args = get_args()
     writer = get_tensorboard_writer()
     if writer:
         for arg in vars(args):
@@ -254,7 +253,7 @@ def set_jit_fusion_options():
 
 def _warmup_jit_function():
     """ Compilie JIT functions before the main training steps """
-    args = get_args()
+    args = megatron.get_args()
     if args.bf16:
         dtype = torch.bfloat16
     elif args.fp16:

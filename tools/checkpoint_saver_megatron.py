@@ -118,8 +118,6 @@ def save_checkpoint(queue, args):
     margs = parse_args()
     validate_args(margs)
     set_global_variables(margs)
-
-    # margs = megatron args
     margs = get_args()
 
     if hasattr(md, 'consumed_train_samples'):

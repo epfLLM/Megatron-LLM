@@ -5,12 +5,13 @@ import torch.distributed as dist
 
 from megatron import get_args, print_rank_0
 from megatron.core import mpu
-from megatron.checkpointing import load_biencoder_checkpoint
+import megatron.checkpointing
 from megatron.data.orqa_wiki_dataset import get_open_retrieval_wiki_dataset
 from megatron.data.orqa_wiki_dataset import get_open_retrieval_batch
 from megatron.data.biencoder_dataset_utils import get_one_epoch_dataloader
 from megatron.data.realm_index import detach, OpenRetreivalDataStore
-from megatron.model.biencoder_model import get_model_provider
+import megatron.model.biencoder_model
+
 import megatron.training
 
 
@@ -23,8 +24,7 @@ class IndexBuilder(object):
         self.model = None
         self.dataloader = None
         self.evidence_embedder_obj = None
-        self.biencoder_shared_query_context_model = \
-            args.biencoder_shared_query_context_model
+        self.biencoder_shared_query_context_model = args.biencoder_shared_query_context_model
 
         # need to know whether we're using a REALM checkpoint (args.load)
         # or ICT checkpoint
@@ -45,20 +45,16 @@ class IndexBuilder(object):
         only_context_model = True
         if self.biencoder_shared_query_context_model:
             only_context_model = False
-        model_provider_func = get_model_provider(only_context_model=\
-            only_context_model, biencoder_shared_query_context_model=\
-            self.biencoder_shared_query_context_model)
+        model_provider_func = megatron.model.biencoder_model.get_model_provider(only_context_model=only_context_model,
+                                                                                biencoder_shared_query_context_model=self.biencoder_shared_query_context_model)
         model = megatron.training.get_model(model_provider_func, args=args)
 
-        self.model = load_biencoder_checkpoint(model,
-                only_context_model=only_context_model)
-
+        self.model = megatron.checkpointing.load_biencoder_checkpoint(model, only_context_model=only_context_model)
         assert len(self.model) == 1
         self.model[0].eval()
 
         self.dataset = get_open_retrieval_wiki_dataset()
-        self.dataloader = iter(get_one_epoch_dataloader(self.dataset, \
-            self.batch_size))
+        self.dataloader = iter(get_one_epoch_dataloader(self.dataset, self.batch_size))
 
         self.evidence_embedder_obj = OpenRetreivalDataStore( \
             load_from_path=False)

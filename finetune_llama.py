@@ -36,12 +36,14 @@ def _model_provider(pre_process: bool,
     # pre_process = False
     parallel_output = True
     num_tokentypes = 0
+    model_type_llama = ModelType.encoder_or_decoder
     model = LlamaModel(
         num_tokentypes,
         parallel_output,
         pre_process,
         post_process,
-        args
+        args,
+        model_type_llama
     )
     return model
 
@@ -144,12 +146,12 @@ def add_validation_args(parser):
 
 
 if __name__ == "__main__":
+    model_type_llama = ModelType.encoder_or_decoder,
     megatron.training.pretrain(_train_valid_test_datasets_provider,
                                _model_provider,
-                               ModelType.encoder_or_decoder,
+                               model_type_llama,
                                _forward_step,
                                args_defaults={'tokenizer_type':
-                                                  'GPT2BPETokenizer'},
+                                              'GPT2BPETokenizer'},
                                extra_args_provider=add_validation_args)
-
     print(f"done {dt.datetime.now(dt.timezone.utc)}")

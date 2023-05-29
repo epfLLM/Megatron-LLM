@@ -16,18 +16,21 @@ from megatron.model.utils import scaled_init_method_normal
 from .module import MegatronModule
 
 
-def get_model_provider(only_query_model=False, only_context_model=False,
-        biencoder_shared_query_context_model=False):
+def get_model_provider(only_query_model=False,
+                       only_context_model=False,
+                       biencoder_shared_query_context_model=False,
+                       model_type=None):
 
-    def model_provider(pre_process=True, post_process=True):
+    def model_provider(pre_process=True,
+                       post_process=True):
         """Build the model."""
-
         print_rank_0('building Bienoder model ...')
         model = biencoder_model_provider(only_query_model=only_query_model,
-                only_context_model = only_context_model,
-                biencoder_shared_query_context_model = \
-                biencoder_shared_query_context_model,
-                pre_process=pre_process, post_process=post_process)
+                                         only_context_model=only_context_model,
+                                         biencoder_shared_query_context_model=biencoder_shared_query_context_model,
+                                         pre_process=pre_process,
+                                         post_process=post_process,
+                                         model_type=model_type)
 
         return model
 
@@ -38,7 +41,8 @@ def biencoder_model_provider(only_query_model=False,
                              only_context_model=False,
                              biencoder_shared_query_context_model=False,
                              pre_process=True,
-                             post_process=True):
+                             post_process=True,
+                             model_type=None):
     """Build the model."""
 
     assert mpu.get_tensor_model_parallel_world_size() == 1 and \
@@ -57,7 +61,9 @@ def biencoder_model_provider(only_query_model=False,
         biencoder_shared_query_context_model=\
         biencoder_shared_query_context_model,
         pre_process=pre_process,
-        post_process=post_process)
+        post_process=post_process,
+        model_type=model_type
+    )
 
     return model
 
@@ -72,7 +78,8 @@ class BiEncoderModel(MegatronModule):
                  only_context_model=False,
                  biencoder_shared_query_context_model=False,
                  pre_process=True,
-                 post_process=True):
+                 post_process=True,
+                 model_type=None):
         super(BiEncoderModel, self).__init__()
         args = get_args()
 
@@ -80,7 +87,9 @@ class BiEncoderModel(MegatronModule):
             num_tokentypes=num_tokentypes,
             parallel_output=parallel_output,
             pre_process=pre_process,
-            post_process=post_process)
+            post_process=post_process,
+            model_type=model_type
+        )
 
         self.biencoder_shared_query_context_model = \
             biencoder_shared_query_context_model
@@ -247,12 +256,17 @@ class PretrainedBertModel(MegatronModule):
     """BERT-based encoder for queries or contexts used for
     learned information retrieval."""
 
-    def __init__(self, num_tokentypes=2,
-            parallel_output=True, pre_process=True, post_process=True):
+    def __init__(self,
+                 num_tokentypes=2,
+                 parallel_output=True,
+                 pre_process=True,
+                 post_process=True,
+                 model_type=None):
         super(PretrainedBertModel, self).__init__()
 
         args = get_args()
         tokenizer = get_tokenizer()
+
         self.pad_id = tokenizer.pad
         self.biencoder_projection_dim = args.biencoder_projection_dim
         self.parallel_output = parallel_output
@@ -270,7 +284,8 @@ class PretrainedBertModel(MegatronModule):
             scaled_init_method=scaled_init_method,
             pre_process=self.pre_process,
             post_process=self.post_process,
-        args=args)
+        args=args,
+        model_type=model_type)
 
         if args.biencoder_projection_dim > 0:
             self.projection_enc = get_linear_layer(args.hidden_size,
@@ -280,7 +295,6 @@ class PretrainedBertModel(MegatronModule):
 
     def forward(self, input_ids, attention_mask, tokentype_ids=None):
         extended_attention_mask = attention_mask.unsqueeze(1)
-        #extended_attention_mask = bert_extended_attention_mask(attention_mask)
         position_ids = bert_position_ids(input_ids)
 
         lm_output = self.language_model(input_ids,

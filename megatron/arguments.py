@@ -11,7 +11,8 @@ import megatron
 from megatron.model.enums import PositionEmbeddingType
 
 
-def parse_args(extra_args_provider=None, ignore_unknown_args=False):
+def parse_args(extra_args_provider=None,
+               ignore_unknown_args=False):
     """Parse all arguments."""
     parser = argparse.ArgumentParser(description='Megatron-LM Arguments',
                                      allow_abbrev=False)

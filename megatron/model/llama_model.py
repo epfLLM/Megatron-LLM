@@ -49,7 +49,8 @@ class LlamaModel(MegatronModule):
                  parallel_output: bool,
                  pre_process: bool,
                  post_process: bool,
-                 args):
+                 args,
+                 model_type):
         super(LlamaModel, self).__init__()
 
         self.parallel_output = parallel_output
@@ -66,7 +67,7 @@ class LlamaModel(MegatronModule):
                                                          args.num_layers),
             pre_process=self.pre_process,
             post_process=self.post_process,
-            args=args)
+            args=args, model_type=model_type)
 
         self.initialize_word_embeddings(init_method_normal)
 

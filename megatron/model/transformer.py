@@ -918,7 +918,7 @@ class ParallelTransformer(MegatronModule):
         # Number of layers.
         self.num_layers = _get_num_layers(
             args,
-            args.model_type == ModelType.encoder_and_decoder,
+            model_type == ModelType.encoder_and_decoder,
             layer_type == LayerType.decoder)
 
         self.drop_path_rates = [rate.item() for rate in torch.linspace(0, self.drop_path_rate, args.num_layers)]
@@ -983,7 +983,7 @@ class ParallelTransformer(MegatronModule):
                 (mpu.get_pipeline_model_parallel_rank() * self.num_layers)
         else:
             # Each stage gets a contiguous set of layers.
-            if args.model_type == ModelType.encoder_and_decoder and \
+            if model_type == ModelType.encoder_and_decoder and \
                     mpu.get_pipeline_model_parallel_world_size() > 1:
                 pipeline_rank = mpu.get_pipeline_model_parallel_rank()
                 if layer_type == LayerType.encoder:

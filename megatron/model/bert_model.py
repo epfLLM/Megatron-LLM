@@ -126,7 +126,8 @@ class BertModel(MegatronModule):
                  add_binary_head=True,
                  parallel_output=True,
                  pre_process=True,
-                 post_process=True):
+                 post_process=True,
+                 model_type=None):
         super(BertModel, self).__init__()
         args = get_args()
 
@@ -148,7 +149,8 @@ class BertModel(MegatronModule):
             scaled_init_method=scaled_init_method,
             pre_process=self.pre_process,
             post_process=self.post_process,
-        args=args)
+            args=args,
+            model_type=model_type)
 
         self.initialize_word_embeddings(init_method_normal)
         if self.post_process:

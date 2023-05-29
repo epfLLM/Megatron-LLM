@@ -29,6 +29,7 @@ def test_initialize__and_destroy_model_parallel():
     Utils.destroy_model_parallel()
     assert(ps._MODEL_PARALLEL_GROUP is None)
 
+
 def test_pipeline_parallel_initializations():
     Utils.initialize_model_parallel(tensor_model_parallel_size=2, pipeline_model_parallel_size=4)
     assert(ps.get_pipeline_model_parallel_first_rank() == rank % 2 )

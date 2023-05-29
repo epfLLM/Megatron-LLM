@@ -2,6 +2,7 @@ import os
 import torch
 import sys
 
+import megatron.model.language_model
 from megatron import get_args, print_rank_0, get_tokenizer
 from megatron.core import mpu
 from megatron.checkpointing import fix_query_key_value_ordering
@@ -9,11 +10,11 @@ from megatron.checkpointing import get_checkpoint_tracker_filename
 from megatron.checkpointing import get_checkpoint_name
 from megatron.model.bert_model import bert_position_ids
 from megatron.model.enums import AttnMaskType
-from megatron.model.language_model import get_language_model
 from megatron.model.utils import get_linear_layer
 from megatron.model.utils import init_method_normal
 from megatron.model.utils import scaled_init_method_normal
 from .module import MegatronModule
+
 
 def get_model_provider(only_query_model=False, only_context_model=False,
         biencoder_shared_query_context_model=False):
@@ -261,14 +262,15 @@ class PretrainedBertModel(MegatronModule):
         scaled_init_method = scaled_init_method_normal(
             args.init_method_std, args.num_layers)
 
-        self.language_model, self._language_model_key = get_language_model(
+        self.language_model, self._language_model_key = megatron.model.language_model.get_language_model(
             num_tokentypes=num_tokentypes,
             add_pooler=False,
             encoder_attn_mask_type=AttnMaskType.padding,
             init_method=init_method,
             scaled_init_method=scaled_init_method,
             pre_process=self.pre_process,
-            post_process=self.post_process)
+            post_process=self.post_process,
+        args=args)
 
         if args.biencoder_projection_dim > 0:
             self.projection_enc = get_linear_layer(args.hidden_size,

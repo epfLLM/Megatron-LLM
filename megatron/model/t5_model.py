@@ -4,13 +4,13 @@
 
 import torch
 
+import megatron.model.language_model
 from megatron import get_args
 from megatron.core import tensor_parallel
 from megatron.model.enums import AttnMaskType
-from megatron.model.language_model import parallel_lm_logits, get_language_model
-from megatron.model.transformer import LayerNorm
+from megatron.model.language_model import parallel_lm_logits
+
 from megatron.model.utils import (
-    get_linear_layer,
     init_method_normal,
     scaled_init_method_normal
 )
@@ -90,7 +90,7 @@ class T5Model(MegatronModule):
         self.add_encoder = add_encoder
         self.add_decoder = add_decoder
 
-        self.language_model, self._language_model_key = get_language_model(
+        self.language_model, self._language_model_key = megatron.model.language_model.get_language_model(
             num_tokentypes=num_tokentypes,
             add_pooler=False,
             add_encoder=add_encoder,
@@ -99,7 +99,7 @@ class T5Model(MegatronModule):
             init_method=init_method,
             scaled_init_method=scaled_init_method,
             pre_process=self.pre_process,
-            post_process=self.post_process)
+            post_process=self.post_process, args=args)
 
         self.initialize_word_embeddings(init_method_normal)
 

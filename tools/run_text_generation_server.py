@@ -7,24 +7,27 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__),
                                              os.path.pardir)))
 import torch
 
+import megatron.training
 from megatron import get_args
 from megatron import print_rank_0
 from megatron.core import mpu
 from megatron.checkpointing import load_checkpoint
 from megatron.initialize import initialize_megatron
 from megatron.model import GPTModel
-from megatron.training import get_model
 from megatron.text_generation_server import MegatronServer
 from megatron.text_generation import generate_and_post_process
 from megatron.text_generation import beam_search_and_post_process
+from megatron.model import ModelType
 
 
 def model_provider(pre_process=True, post_process=True):
     """Build the model."""
 
     print_rank_0('building GPT model ...')
-    model = GPTModel(num_tokentypes=0, parallel_output=False, pre_process=pre_process, post_process=post_process)
-
+    model = GPTModel(num_tokentypes=0,
+                     parallel_output=False,
+                     pre_process=pre_process,
+                     post_process=post_process)
     return model
 
 
@@ -47,13 +50,14 @@ if __name__ == "__main__":
                         args_defaults={'tokenizer_type': 'GPT2BPETokenizer',
                                        'no_load_rng': True,
                                        'no_load_optim': True})
-
     args = get_args()
     if args.num_layers_per_virtual_pipeline_stage is not None:
         print("Interleaved pipeline schedule is not yet supported for text generation.")
         exit()
     # Set up model and load checkpoint
-    model = get_model(model_provider, wrap_with_ddp=False)
+
+    model_type = ModelType.encoder_or_decoder
+    model = megatron.training.get_model(model_provider, model_type, wrap_with_ddp=False, args=args)
 
     if args.load is not None:
         _ = load_checkpoint(model, None, None)

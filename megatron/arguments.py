@@ -16,7 +16,6 @@ def parse_args(extra_args_provider=None,
     """Parse all arguments."""
     parser = argparse.ArgumentParser(description='Megatron-LM Arguments',
                                      allow_abbrev=False)
-
     # Standard arguments.
     parser = _add_network_size_args(parser)
     parser = _add_regularization_args(parser)
@@ -805,12 +804,6 @@ def _add_distributed_args(parser):
                        'a custom built image that support ring-exchange p2p.')
     group.add_argument('--local_rank', type=int, default=None,
                        help='local rank passed from distributed launcher.')
-    group.add_argument('--lazy_mpu_init', type=bool, required=False,
-                       help='If set to True, initialize_megatron() '
-                       'skips DDP initialization and returns function to '
-                       'complete it instead.Also turns on '
-                       '--use_cpu_initialization flag. This is for '
-                       'external DDP manager.' )
     group.add_argument('--use_cpu_initialization', action='store_true',
                        default=None, help='If set, affine parallel weights '
                        'initialization uses CPU')

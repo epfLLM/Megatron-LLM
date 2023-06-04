@@ -8,7 +8,7 @@ import sys
 sys.path.append(os.path.abspath(os.path.join(
     os.path.join(os.path.dirname(__file__), os.path.pardir), os.path.pardir)))
 from megatron import get_args
-from megatron.initialize import initialize_megatron
+import megatron.initialize
 
 
 def get_tasks_args(parser):
@@ -44,7 +44,7 @@ def get_tasks_args(parser):
 
 
 if __name__ == '__main__':
-    initialize_megatron(extra_args_provider=get_tasks_args)
+    megatron.initialize.initialize_megatron(extra_args_provider=get_tasks_args)
     args = get_args()
 
     if args.num_layers_per_virtual_pipeline_stage is not None:

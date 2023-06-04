@@ -12,7 +12,8 @@ from megatron import get_args
 from megatron import print_rank_0
 from megatron.core import mpu
 from megatron.checkpointing import load_checkpoint
-from megatron.initialize import initialize_megatron
+import megatron.initialize
+
 from megatron.model import GPTModel
 from megatron.text_generation_server import MegatronServer
 from megatron.text_generation import generate_and_post_process
@@ -46,7 +47,7 @@ def add_text_generate_args(parser):
 
 
 if __name__ == "__main__":
-    initialize_megatron(extra_args_provider=add_text_generate_args,
+    megatron.initialize.initialize_megatron(extra_args_provider=add_text_generate_args,
                         args_defaults={'tokenizer_type': 'GPT2BPETokenizer',
                                        'no_load_rng': True,
                                        'no_load_optim': True})

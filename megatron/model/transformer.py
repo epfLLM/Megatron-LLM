@@ -76,6 +76,7 @@ def _args_to_kwargs():
     }
     return common_kwargs
 
+
 class ParallelMLP(MegatronModule):
     """MLP.
 
@@ -592,9 +593,8 @@ class ParallelTransformerLayer(MegatronModule):
     def __init__(self, init_method, output_layer_init_method,
                  layer_number, layer_type=LayerType.encoder,
                  self_attn_mask_type=AttnMaskType.padding,
-                 drop_path_rate=0.):
-        args = get_args()
-
+                 drop_path_rate=0.,
+                 args=None):
         super(ParallelTransformerLayer, self).__init__()
         self.layer_number = layer_number
         self.layer_type = layer_type
@@ -615,8 +615,7 @@ class ParallelTransformerLayer(MegatronModule):
         else:
             self.input_layernorm = RMSNorm(
                 args.hidden_size,
-                eps=args.layernorm_epsilon,
-            )
+                eps=args.layernorm_epsilon)
 
         # Self attention.
         self.self_attention = ParallelAttention(
@@ -639,8 +638,7 @@ class ParallelTransformerLayer(MegatronModule):
         else:
             self.post_attention_layernorm = RMSNorm(
                 args.hidden_size,
-                eps=args.layernorm_epsilon,
-            )
+                eps=args.layernorm_epsilon)
 
         if self.layer_type == LayerType.decoder:
             self.inter_attention = ParallelAttention(
@@ -658,8 +656,7 @@ class ParallelTransformerLayer(MegatronModule):
             else:
                 self.post_inter_attention_layernorm = RMSNorm(
                     args.hidden_size,
-                    eps=args.layernorm_epsilon,
-                )
+                    eps=args.layernorm_epsilon)
         # MLP
         self.mlp = ParallelMLP(init_method, output_layer_init_method)
 
@@ -765,7 +762,6 @@ class ParallelTransformerLayer(MegatronModule):
             output = core.utils.make_viewless_tensor(inp = output,
                                                      requires_grad = output.requires_grad,
                                                      keep_graph = True)
-
         else:
             out = torch.nn.functional.dropout(mlp_output + mlp_bias,
                                               p=self.hidden_dropout,
@@ -866,7 +862,7 @@ class ParallelTransformer(MegatronModule):
                  args=None,
                  model_type=None):
         super(ParallelTransformer, self).__init__()
-        # args = get_args()
+
         assert args is not None
         assert model_type is not None
 
@@ -932,7 +928,8 @@ class ParallelTransformer(MegatronModule):
                     layer_number,
                     layer_type=layer_type,
                     self_attn_mask_type=self_attn_mask_type,
-                    drop_path_rate=self.drop_path_rates[layer_number - 1])
+                    drop_path_rate=self.drop_path_rates[layer_number - 1],
+                    args=args)
             else:
                 return transformer_engine.pytorch.TransformerLayer(
                     args.hidden_size,
@@ -1020,8 +1017,7 @@ class ParallelTransformer(MegatronModule):
             else:
                 self.final_layernorm = RMSNorm(
                     args.hidden_size,
-                    eps=args.layernorm_epsilon,
-                )
+                    eps=args.layernorm_epsilon)
 
     def _get_layer(self, layer_number):
         return self.layers[layer_number]

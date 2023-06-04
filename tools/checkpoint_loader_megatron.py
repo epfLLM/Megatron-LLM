@@ -28,7 +28,7 @@ def _load_checkpoint(queue, args):
 
     try:
         from megatron.arguments import parse_args, validate_args
-        from megatron.global_vars import set_args, set_global_variables
+        from megatron.global_vars import set_global_variables
         from megatron.checkpointing import load_args_from_checkpoint, load_checkpoint
         from megatron.model import ModelType, module
         from megatron.core import mpu

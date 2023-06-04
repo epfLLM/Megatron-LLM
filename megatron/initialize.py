@@ -3,7 +3,6 @@
 """Megatron initialization."""
 
 import random
-import os
 import time
 
 import numpy as np
@@ -13,10 +12,11 @@ from datetime import timedelta
 import megatron
 from megatron import fused_kernels
 from megatron import get_adlr_autoresume
-# from megatron import get_args
 from megatron import get_tensorboard_writer
 from megatron.core import mpu, tensor_parallel
-from megatron.arguments import (parse_args, validate_args)
+
+import megatron.arguments
+
 from megatron.checkpointing import load_args_from_checkpoint
 from megatron.global_vars import set_global_variables
 from megatron.model.transformer import bias_dropout_add_fused_train
@@ -25,28 +25,25 @@ from megatron.model.fused_bias_gelu import bias_gelu
 
 def initialize_megatron(extra_args_provider=None,
                         args_defaults={},
-                        ignore_unknown_args=False,
-                        allow_no_cuda=False):
+                        ignore_unknown_args=False):
     """Set global variables, initialize distributed, and
     set autoresume and random seeds.
     `allow_no_cuda` should not be set unless using megatron for cpu only 
     data processing. In general this arg should not be set unless you know 
     what you are doing.
-    Returns a function to finalize distributed env initialization 
-    (optionally, only when args.lazy_mpu_init == True)
     """
-    if not allow_no_cuda:
-        # Make sure cuda is available.
-        assert torch.cuda.is_available(), 'Megatron requires CUDA.'
+
+    # Make sure cuda is available.
+    assert torch.cuda.is_available(), 'Megatron requires CUDA.'
 
     # Parse arguments
-    args = parse_args(extra_args_provider, ignore_unknown_args)
+    args = megatron.arguments.parse_args(extra_args_provider, ignore_unknown_args)
 
     if args.use_checkpoint_args or args_defaults.get('use_checkpoint_args', False):
         assert args.load is not None, '--use-checkpoints-args requires --load argument'
         load_args_from_checkpoint(args)
 
-    validate_args(args, args_defaults)
+    megatron.arguments.validate_args(args, args_defaults)
         
     # set global args, build tokenizer, and set adlr_autoresume,
     # tensorboard-writer, and timers.
@@ -55,7 +52,6 @@ def initialize_megatron(extra_args_provider=None,
     # torch.distributed initialization
     def finish_mpu_init():
         args = megatron.get_args()
-        # Pytorch distributed.
         _initialize_distributed()
         
         # Random seeds for reproducibility.
@@ -63,29 +59,13 @@ def initialize_megatron(extra_args_provider=None,
             print('> setting random seeds to {} ...'.format(args.seed))
         _set_random_seed(args.seed, args.data_parallel_random_init)
 
-    args = megatron.get_args()
-    if args.lazy_mpu_init:
-        # TODO is this still a necessary option?
-        args.use_cpu_initialization=True
-        # delayed initialization of DDP-related stuff
-        # We only set basic DDP globals
-        mpu.set_tensor_model_parallel_world_size(args.tensor_model_parallel_size)
-        # and return function for external DDP manager
-        # to call when it has DDP initialized
-        mpu.set_tensor_model_parallel_rank(args.rank)
-        return finish_mpu_init
-    else:
-        # Megatron's MPU is the master. Complete initialization right away.
-        finish_mpu_init()
+    # Megatron's MPU is the master. Complete initialization right away.
+    finish_mpu_init()
+    _init_autoresume()
+    _compile_dependencies()
 
-        # Autoresume.
-        _init_autoresume()
-
-        # Compile dependencies.
-        _compile_dependencies()
-
-        # No continuation function
-        return None
+    # No continuation function
+    return None
 
 
 def _compile_dependencies():
@@ -215,7 +195,7 @@ def _set_random_seed(seed_, data_parallel_random_init=False):
         if torch.cuda.device_count() > 0:
             tensor_parallel.model_parallel_cuda_manual_seed(seed)
     else:
-        raise ValueError('Seed ({}) should be a positive integer.'.format(seed))
+        raise ValueError('Seed ({}) should be a positive integer.'.format(seed_))
 
 
 def write_args_to_tensorboard(args):
@@ -252,7 +232,7 @@ def set_jit_fusion_options():
 
 
 def _warmup_jit_function():
-    """ Compilie JIT functions before the main training steps """
+    """ Compile JIT functions before the main training steps """
     args = megatron.get_args()
     if args.bf16:
         dtype = torch.bfloat16

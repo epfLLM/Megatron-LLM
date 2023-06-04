@@ -151,7 +151,8 @@ if __name__ == "__main__":
                                _model_provider,
                                model_type_llama,
                                _forward_step,
-                               args_defaults={'tokenizer_type':
-                                              'GPT2BPETokenizer'},
+                               args_defaults={'tokenizer_type': 'GPT2BPETokenizer',
+                                              # "use_rms_norm": True
+                                              },
                                extra_args_provider=add_validation_args)
     print(f"done {dt.datetime.now(dt.timezone.utc)}")

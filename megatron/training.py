@@ -550,26 +550,22 @@ def training_log(loss_dict, total_loss_dict, learning_rate, iteration,
         timers.write(timers_to_log, writer, iteration,
                      normalizer=total_iterations)
     if writer and (iteration % args.tensorboard_log_interval == 0):
-        if args.log_learning_rate_to_tensorboard:
-            writer.add_scalar('learning_rate', learning_rate, iteration)
-            writer.add_scalar('learning_rate vs samples', learning_rate,
-                              args.consumed_train_samples)
-        if args.log_batch_size_to_tensorboard:
-            writer.add_scalar('batch_size', batch_size, iteration)
-            writer.add_scalar('batch_size vs samples', batch_size,
-                              args.consumed_train_samples)
+        writer.add_scalar('learning_rate', learning_rate, iteration)
+        writer.add_scalar('learning_rate vs samples', learning_rate,
+                            args.consumed_train_samples)
+        writer.add_scalar('batch_size', batch_size, iteration)
+        writer.add_scalar('batch_size vs samples', batch_size,
+                            args.consumed_train_samples)
         for key in loss_dict:
             writer.add_scalar(key, loss_dict[key], iteration)
             writer.add_scalar(key + ' vs samples', loss_dict[key],
                               args.consumed_train_samples)
-        if args.log_loss_scale_to_tensorboard:
-            writer.add_scalar('loss_scale', loss_scale, iteration)
-            writer.add_scalar('loss_scale vs samples', loss_scale,
-                              args.consumed_train_samples)
-        if args.log_world_size_to_tensorboard:
-            writer.add_scalar('world_size', args.world_size, iteration)
-            writer.add_scalar('world_size vs samples', args.world_size,
-                              args.consumed_train_samples)
+        writer.add_scalar('loss_scale', loss_scale, iteration)
+        writer.add_scalar('loss_scale vs samples', loss_scale,
+                            args.consumed_train_samples)
+        writer.add_scalar('world_size', args.world_size, iteration)
+        writer.add_scalar('world_size vs samples', args.world_size,
+                            args.consumed_train_samples)
         if grad_norm is not None:
             writer.add_scalar('grad_norm', grad_norm, iteration)
             writer.add_scalar('grad_norm vs samples', grad_norm,
@@ -582,23 +578,23 @@ def training_log(loss_dict, total_loss_dict, learning_rate, iteration,
             writer.add_scalar('params_norm', params_norm, iteration)
             writer.add_scalar('params_norm vs samples', params_norm,
                               args.consumed_train_samples)
-        if args.log_memory_to_tensorboard:
-            mem_stats = torch.cuda.memory_stats()
-            writer.add_scalar(
-                "mem-reserved-bytes",
-                mem_stats["reserved_bytes.all.current"],
-                iteration,
-            )
-            writer.add_scalar(
-                "mem-allocated-bytes",
-                mem_stats["allocated_bytes.all.current"],
-                iteration,
-            )
-            writer.add_scalar(
-                "mem-allocated-count",
-                mem_stats["allocation.all.current"],
-                iteration,
-            )
+            
+        mem_stats = torch.cuda.memory_stats()
+        writer.add_scalar(
+            "mem-reserved-bytes",
+            mem_stats["reserved_bytes.all.current"],
+            iteration,
+        )
+        writer.add_scalar(
+            "mem-allocated-bytes",
+            mem_stats["allocated_bytes.all.current"],
+            iteration,
+        )
+        writer.add_scalar(
+            "mem-allocated-count",
+            mem_stats["allocation.all.current"],
+            iteration,
+        )
 
     if iteration % args.log_interval == 0:
         elapsed_time = timers('interval-time').elapsed(barrier=True)

@@ -27,7 +27,7 @@ def _load_checkpoint(queue, args):
         sys.path.insert(0, args.megatron_path)
 
     try:
-        from megatron.arguments import parse_args, validate_args
+        import megatron.arguments
         from megatron.global_vars import set_global_variables
         from megatron.checkpointing import load_args_from_checkpoint, load_checkpoint
         from megatron.model import ModelType, module
@@ -53,14 +53,14 @@ def _load_checkpoint(queue, args):
                 '--load', args.load_dir
                 ]
 
-    margs = parse_args()
+    margs = megatron.arguments.parse_args()
     margs = load_args_from_checkpoint(margs)
 
     # Arguments do sanity checks on the world size, but we don't care,
     # so trick it into thinking we are plenty of processes
     margs.world_size = margs.tensor_model_parallel_size * margs.pipeline_model_parallel_size
 
-    margs = validate_args(margs)
+    margs = megatron.arguments.validate_args(margs)
 
     def check_for_arg(arg_name):
         if getattr(margs, arg_name, None) is None:

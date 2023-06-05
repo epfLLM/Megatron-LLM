@@ -64,9 +64,6 @@ def _glue_classification(num_classes,
 
 def main():
     megatron.initialize.initialize_megatron(extra_args_provider=None)
-    # Set pytorch JIT layer fusion options and warmup JIT functions.
-    # set_jit_fusion_options()
-
     args = get_args()
 
     if args.task == 'MNLI':

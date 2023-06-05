@@ -6,13 +6,14 @@ from functools import partial
 import torch
 
 import megatron.data.gpt_dataset
+import megatron.training
 from megatron import get_args
 from megatron import print_rank_0
 from megatron import get_timers
 from megatron import get_tokenizer
 from megatron.core import tensor_parallel
 from megatron.model import GPTModel, ModelType
-from megatron.training import pretrain
+
 from megatron.utils import get_ltor_masks_and_position_ids
 from megatron.utils import average_losses_across_data_parallel_group
 
@@ -111,9 +112,12 @@ def train_valid_test_datasets_provider(train_val_test_num_samples):
 
 
 if __name__ == "__main__":
-
-    pretrain(train_valid_test_datasets_provider, model_provider,
-             ModelType.encoder_or_decoder,
-             forward_step,
-             args_defaults={'tokenizer_type': 'GPT2BPETokenizer'}
-    )
+    megatron.initialize.initialize_megatron(extra_args_provider=None,
+                                            args_defaults={'tokenizer_type': 'GPT2BPETokenizer'})
+    args = megatron.get_args()
+    megatron.training.pretrain(args,
+                               train_valid_test_datasets_provider,
+                               model_provider,
+                               ModelType.encoder_or_decoder,
+                               forward_step
+                        )

@@ -32,7 +32,7 @@ from megatron.model import ModelType
 from megatron.model import GPTModel
 from megatron.optimizer import get_megatron_optimizer
 import megatron.initialize
-from megatron.initialize import set_jit_fusion_options
+
 from megatron.optimizer_param_scheduler import OptimizerParamScheduler
 from megatron.model import DistributedDataParallel as LocalDDP
 from megatron.utils import check_adlr_autoresume_termination
@@ -50,13 +50,12 @@ def print_datetime(string):
     print_rank_0('[' + string + '] datetime: {} '.format(time_str))
 
 
-def pretrain(train_valid_test_dataset_provider,
+def pretrain(args,
+             train_valid_test_dataset_provider,
              model_provider_func,
              model_type: ModelType,
              forward_step_func,
-             process_non_loss_data_func=None,
-             extra_args_provider=None,
-             args_defaults={}):
+             process_non_loss_data_func=None):
     """Main training program.
 
     This function will run the followings in the order provided:
@@ -85,11 +84,9 @@ def pretrain(train_valid_test_dataset_provider,
         args_defaults: a dictionary from argument-name to argument-value. It
             to set already parse arguments.
     """
-    # Initalize and get arguments, timers, and Tensorboard writer.
-    megatron.initialize.initialize_megatron(extra_args_provider=extra_args_provider,
-                                            args_defaults=args_defaults)
+    # # Initalize and get arguments, timers, and Tensorboard writer.
     # Set pytorch JIT layer fusion options and warmup JIT functions.
-    set_jit_fusion_options()
+    megatron.initialize.set_jit_fusion_options()
 
     # Adjust the startup time so it reflects the largest value.
     # This will be closer to what scheduler will see (outside of
@@ -101,8 +98,6 @@ def pretrain(train_valid_test_dataset_provider,
     _TRAIN_START_TIME = start_time_tensor.item()
     print_rank_0('time to initialize megatron (seconds): {:.3f}'.format(time.time() - _TRAIN_START_TIME))
     print_datetime('after megatron is initialized')
-
-    args = megatron.get_args()
     timers = get_timers()
 
     # Model, optimizer, and learning rate.
@@ -169,7 +164,7 @@ def pretrain(train_valid_test_dataset_provider,
                                    True)
 
 
-def update_train_iters(args):
+def _update_train_iters(args):
     # For iteration-based training, we don't need to do anything
     if args.train_iters:
         return
@@ -202,10 +197,6 @@ def get_model(model_provider_func: Callable,
               args=None):
     """Build the model."""
     assert args is not None
-
-    # HERE!
-    # args.model_type = model_type
-
     # Build model.
     if mpu.get_pipeline_model_parallel_world_size() > 1 and \
        args.virtual_pipeline_model_parallel_size is not None:
@@ -325,7 +316,7 @@ def _get_optimizer_param_scheduler(optimizer, args):
         # We need to set training iters for later use. Technically
         # we need to adjust the training samples too (due to last
         # batch being incomplete) but we leave it as is for now.
-        update_train_iters(args)
+        _update_train_iters(args)
         if args.lr_decay_samples is None:
             args.lr_decay_samples = args.train_samples
         lr_decay_steps = args.lr_decay_samples
@@ -805,8 +796,8 @@ def evaluate(forward_step_func,
 
     for key in total_loss_dict:
         total_loss_dict[key] /= args.eval_iters * get_num_microbatches()
-
     return total_loss_dict, collected_non_loss_data
+
 
 def evaluate_and_print_results(prefix, forward_step_func,
                                data_iterator, model,

@@ -598,10 +598,7 @@ class ParallelTransformerLayer(MegatronModule):
         super(ParallelTransformerLayer, self).__init__()
         self.layer_number = layer_number
         self.layer_type = layer_type
-
-        self.apply_residual_connection_post_layernorm \
-            = args.apply_residual_connection_post_layernorm
-
+        self.apply_residual_connection_post_layernorm = args.apply_residual_connection_post_layernorm
         self.bf16 = args.bf16
         self.fp32_residual_connection = args.fp32_residual_connection
 
@@ -667,21 +664,21 @@ class ParallelTransformerLayer(MegatronModule):
         self.bias_dropout_add_exec_handler = \
                 nullcontext if use_nvfuser else torch.enable_grad
 
-    def forward(self, hidden_states, attention_mask,
-                encoder_output=None, enc_dec_attn_mask=None,
+    def forward(self,
+                hidden_states: torch.Tensor,
+                attention_mask: torch.Tensor,
+                encoder_output=None,
+                enc_dec_attn_mask=None,
                 inference_params=None):
         # hidden_states: [s, b, h]
+        # print(hidden_states)
+        # print(attention_mask)
 
         # Layer norm at the beginning of the transformer layer.
         layernorm_output = self.input_layernorm(hidden_states)
-        # Self attention.
-        attention_output, attention_bias = \
-            self.self_attention(
-                layernorm_output,
-                attention_mask,
-                inference_params=inference_params)
-
-        # Residual connection.
+        attention_output, attention_bias = self.self_attention(layernorm_output,
+                                                               attention_mask,
+                                                               inference_params=inference_params)
         if self.apply_residual_connection_post_layernorm:
             residual = layernorm_output
         else:
@@ -716,11 +713,9 @@ class ParallelTransformerLayer(MegatronModule):
         layernorm_output = self.post_attention_layernorm(layernorm_input)
 
         if self.layer_type == LayerType.decoder:
-            attention_output, attention_bias = \
-                self.inter_attention(layernorm_output,
-                                     enc_dec_attn_mask,
-                                     encoder_output=encoder_output)
-            # residual connection
+            attention_output, attention_bias = self.inter_attention(layernorm_output,
+                                                                    enc_dec_attn_mask,
+                                                                    encoder_output=encoder_output)
             if self.apply_residual_connection_post_layernorm:
                 residual = layernorm_output
             else:
@@ -736,7 +731,6 @@ class ParallelTransformerLayer(MegatronModule):
             # Layer norm post the decoder attention
             layernorm_output = self.post_inter_attention_layernorm(layernorm_input)
 
-        # MLP.
         mlp_output, mlp_bias = self.mlp(layernorm_output)
 
         # Second residual connection.
@@ -767,7 +761,6 @@ class ParallelTransformerLayer(MegatronModule):
                                               p=self.hidden_dropout,
                                               training=self.training)
             output = residual + self.drop_path(out)
-
         return output
 
 

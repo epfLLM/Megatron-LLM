@@ -1,4 +1,3 @@
-
 import os
 import sys
 
@@ -26,7 +25,7 @@ def save_checkpoint(queue, args):
         sys.path.insert(0, args.megatron_path)
 
     try:
-        from megatron.arguments import (parse_args, validate_args)
+        import megatron.arguments
         from megatron.checkpointing import save_checkpoint
         from megatron.global_vars import set_global_variables, get_args
         from megatron.model import ModelType
@@ -115,8 +114,8 @@ def save_checkpoint(queue, args):
     elif md.params_dtype == torch.bfloat16:
         sys.argv.append('--bf16')
 
-    margs = parse_args()
-    validate_args(margs)
+    margs = megatron.arguments.parse_args()
+    megatron.arguments.validate_args(margs)
     set_global_variables(margs)
     margs = get_args()
 

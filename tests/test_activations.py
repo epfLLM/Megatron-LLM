@@ -42,11 +42,3 @@ class TestActivations(unittest.TestCase):
     def test_swiglu(self):
         expected = self.x1 * F.silu(self.x2)
         torch_assert_equal(swiglu(self.x), expected)
-
-    # from megatron.testing_utils import require_torch_bf16
-    # @require_torch_bf16
-    # def test_bf16_jit(self):
-    #     x_bf16 = self.x.to(torch.bfloat16)
-    #     for activation_fn in GLU_ACTIVATIONS.values():
-    #         output = activation_fn(x_bf16)
-    #         self.assertEqual(list(output.shape), self.output_shape)

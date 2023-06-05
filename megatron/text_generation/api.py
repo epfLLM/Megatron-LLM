@@ -15,6 +15,7 @@ from .tokenization import (
     tokenize_prompts,
     detokenize_generations)
 
+
 def generate_and_post_process(model,
                               prompts=None,
                               tokens_to_generate=0,

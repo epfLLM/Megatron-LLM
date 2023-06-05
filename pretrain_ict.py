@@ -9,6 +9,7 @@ import torch
 import torch.distributed as dist
 import torch.nn.functional as F
 
+import megatron.training
 from megatron import get_args
 from megatron import print_rank_0
 from megatron import get_timers
@@ -17,7 +18,6 @@ from megatron.data.biencoder_dataset_utils import get_ict_batch
 from megatron.data.dataset_utils import build_train_valid_test_datasets
 from megatron.model import ModelType
 import megatron.model.biencoder_model
-from megatron.training import pretrain
 from megatron.utils import average_losses_across_data_parallel_group
 
 
@@ -163,9 +163,14 @@ def train_valid_test_datasets_provider(train_val_test_num_samples):
 
 if __name__ == "__main__":
     ict_model_type = ModelType.encoder_or_decoder
+    args_defaults = {'tokenizer_type': 'BertWordPieceLowerCase'}
 
-    pretrain(train_valid_test_datasets_provider,
-             pretrain_ict_model_provider,
-             ict_model_type,
-             forward_step,
-             args_defaults={'tokenizer_type': 'BertWordPieceLowerCase'})
+    megatron.initialize.initialize_megatron(extra_args_provider=None,
+                                            args_defaults=args_defaults)
+    args = megatron.get_args()
+
+    megatron.training.pretrain(args,
+                               train_valid_test_datasets_provider,
+                               pretrain_ict_model_provider,
+                               ict_model_type,
+                               forward_step)

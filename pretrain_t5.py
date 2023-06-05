@@ -159,8 +159,13 @@ def train_valid_test_datasets_provider(train_val_test_num_samples):
 
 if __name__ == "__main__":
     model_type_t5 = ModelType.encoder_and_decoder
-    pretrain(train_valid_test_datasets_provider,
+    args_defaults = {'tokenizer_type': 'BertWordPieceLowerCase'}
+    megatron.initialize.initialize_megatron(extra_args_provider=None,
+                                            args_defaults=args_defaults)
+    args = megatron.get_args()
+
+    pretrain(args,
+             train_valid_test_datasets_provider,
              model_provider,
              model_type_t5,
-             forward_step,
-             args_defaults={'tokenizer_type': 'BertWordPieceLowerCase'})
+             forward_step)

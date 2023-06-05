@@ -358,7 +358,7 @@ class TransformerLanguageModel(MegatronModule):
         self.decoder_attn_mask_type = decoder_attn_mask_type
         self.add_pooler = add_pooler
         self.encoder_hidden_state = None
-        #
+
         # s = args.seq_length
         # ell = args.num_layers
         # v = args.padded_vocab_size

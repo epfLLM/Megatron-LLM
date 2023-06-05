@@ -16,6 +16,7 @@ from .forward_step import ForwardStep
 from .sampling import sample
 from .beam_utils import BeamHypotheses
 
+
 def score_and_return_on_first_stage(model, tokens, lengths):
     """Function for just scoring.
     Arguments:

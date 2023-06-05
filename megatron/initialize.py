@@ -24,8 +24,7 @@ from megatron.model.fused_bias_gelu import bias_gelu
 
 
 def initialize_megatron(extra_args_provider=None,
-                        args_defaults={},
-                        ignore_unknown_args=False):
+                        args_defaults={}):
     """Set global variables, initialize distributed, and
     set autoresume and random seeds.
     `allow_no_cuda` should not be set unless using megatron for cpu only 
@@ -37,7 +36,7 @@ def initialize_megatron(extra_args_provider=None,
     assert torch.cuda.is_available(), 'Megatron requires CUDA.'
 
     # Parse arguments
-    args = megatron.arguments.parse_args(extra_args_provider, ignore_unknown_args)
+    args = megatron.arguments.parse_args(extra_args_provider)
 
     if args.use_checkpoint_args or args_defaults.get('use_checkpoint_args', False):
         assert args.load is not None, '--use-checkpoints-args requires --load argument'

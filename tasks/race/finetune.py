@@ -6,7 +6,7 @@ from megatron import get_args
 from megatron import print_rank_0
 from megatron import get_tokenizer
 from megatron.model.multiple_choice import MultipleChoice
-from tasks.eval_utils import accuracy_func_provider
+import tasks.eval_utils
 import tasks.finetune_utils
 from tasks.race.data import RaceDataset
 from megatron.model import ModelType
@@ -47,7 +47,7 @@ def metrics_func_provider():
         name = datapath.split('RACE')[-1].strip('/').replace('/', '-')
         return RaceDataset(name, [datapath], tokenizer, args.seq_length)
 
-    return accuracy_func_provider(single_dataset_provider)
+    return tasks.eval_utils.accuracy_func_provider(single_dataset_provider)
 
 
 def main():

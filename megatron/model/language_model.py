@@ -1,6 +1,7 @@
 # Copyright (c) 2022, NVIDIA CORPORATION. All rights reserved.
 
 """Transformer based language model."""
+from typing import Callable
 
 import torch
 
@@ -9,8 +10,9 @@ from megatron.core import mpu, tensor_parallel
 from .module import MegatronModule
 
 import megatron.model.transformer
+import megatron.model.utils
+
 from megatron.model.enums import LayerType, AttnMaskType, PositionEmbeddingType
-from megatron.model.utils import get_linear_layer
 from megatron.model.utils import init_method_normal, scaled_init_method_normal
 
 
@@ -101,9 +103,11 @@ class Pooler(MegatronModule):
     def __init__(self, hidden_size, init_method):
         super(Pooler, self).__init__()
         args = megatron.get_args()
-        self.dense = get_linear_layer(hidden_size, hidden_size, init_method)
+        self.dense = megatron.model.utils.get_linear_layer(hidden_size,
+                                                           hidden_size,
+                                                           init_method,
+                                                           args.perform_initialization)
         self.sequence_parallel = args.sequence_parallel
-
 
     def forward(self, hidden_states, sequence_index=0):
         # hidden_states: [s, b, h]
@@ -332,7 +336,7 @@ class TransformerLanguageModel(MegatronModule):
     """
 
     def __init__(self,
-                 init_method,
+                 init_method: Callable,
                  output_layer_init_method,
                  encoder_attn_mask_type,
                  num_tokentypes=0,

@@ -9,7 +9,7 @@ from megatron import get_args, print_rank_last
 from megatron.model.enums import AttnMaskType
 from megatron.model.bert_model import bert_extended_attention_mask, bert_position_ids
 
-from megatron.model.utils import get_linear_layer
+import megatron.model.utils
 from megatron.model.utils import init_method_normal
 from megatron.model.utils import scaled_init_method_normal
 from .module import MegatronModule
@@ -44,8 +44,10 @@ class MultipleChoice(MegatronModule):
         # Multi-choice head.
         if self.post_process:
             self.multichoice_dropout = torch.nn.Dropout(args.hidden_dropout)
-            self.multichoice_head = get_linear_layer(args.hidden_size, 1,
-                                                     init_method)
+            self.multichoice_head = megatron.model.utils.get_linear_layer(args.hidden_size,
+                                                                          1,
+                                                                          init_method,
+                                                                          args.perform_initialization)
             self._multichoice_head_key = 'multichoice_head'
 
     def set_input_tensor(self, input_tensor):

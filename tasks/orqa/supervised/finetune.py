@@ -14,7 +14,7 @@ from megatron.core import mpu
 import megatron.model.biencoder_model
 from megatron.utils import average_losses_across_data_parallel_group
 from pretrain_ict import get_group_world_size_rank
-from tasks.finetune_utils import finetune
+import tasks.finetune_utils
 from tasks.orqa.supervised.eval_utils import accuracy_func_provider
 from tasks.orqa.supervised.eval_utils import process_batch, task_collate_fn
 
@@ -24,7 +24,6 @@ from megatron.model import ModelType
 
 
 def check_and_append_tensor_for_gather(group, rank, world_size, input_):
-
     # gather the size of the first dimension of the tensor from all ranks
     current_length = input_.size()[0]
     first_dim = torch.tensor([[current_length]], 
@@ -223,12 +222,12 @@ def orqa(Dataset):
 
     """Finetune/evaluate."""
     model_type_orqa = ModelType.encoder_or_decoder
-    finetune(train_valid_datasets_provider,
-             model_provider,
-             model_type_orqa,
-             forward_step=cross_entropy_forward_step,
-             end_of_epoch_callback_provider=metrics_func_provider,
-             task_collate_fn=task_collate_fn)
+    tasks.finetune_utils.finetune(train_valid_datasets_provider,
+                                  model_provider,
+                                  model_type_orqa,
+                                  forward_step=cross_entropy_forward_step,
+                                  end_of_epoch_callback_provider=metrics_func_provider,
+                                  task_collate_fn=task_collate_fn)
 
 
 def main():

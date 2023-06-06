@@ -10,8 +10,9 @@ from megatron.model.enums import AttnMaskType
 from megatron.model.language_model import parallel_lm_logits
 import megatron.model.language_model
 from megatron.model import LayerNorm
+import megatron.model.utils
+
 from megatron.model.utils import erf_gelu
-from megatron.model.utils import get_linear_layer
 from megatron.model.utils import init_method_normal
 from megatron.model.utils import scaled_init_method_normal
 from .module import MegatronModule
@@ -65,7 +66,10 @@ class BertLMHead(MegatronModule):
         tensor_parallel.set_tensor_model_parallel_attributes(self.bias, True, 0, 1)
         self.parallel_output = parallel_output
 
-        self.dense = get_linear_layer(hidden_size, hidden_size, init_method)
+        self.dense = megatron.model.utils.get_linear_layer(hidden_size,
+                                                           hidden_size,
+                                                           init_method,
+                                                           args.perform_initialization)
         setattr(self.dense.weight, 'sequence_parallel', args.sequence_parallel)
         setattr(self.dense.bias, 'sequence_parallel', args.sequence_parallel)
 
@@ -160,7 +164,10 @@ class BertModel(MegatronModule):
             self._lm_head_key = 'lm_head'
             self.binary_head = None
             if self.add_binary_head:
-                self.binary_head = get_linear_layer(args.hidden_size, 2, init_method)
+                self.binary_head = megatron.model.utils.get_linear_layer(args.hidden_size,
+                                                                         2,
+                                                                         init_method,
+                                                                         args.perform_initialization)
                 self._binary_head_key = 'binary_head'
 
     def set_input_tensor(self, input_tensor):

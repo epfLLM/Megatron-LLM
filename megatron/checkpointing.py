@@ -619,7 +619,6 @@ def load_checkpoint(model, optimizer, opt_param_scheduler, load_arg='load', stri
             if 'rng_state' in model_state_dict:
                 # access rng_state for data parallel rank
                 if args.data_parallel_random_init:
-
                     rng_state = model_state_dict['rng_state'][mpu.get_data_parallel_rank()]
                 else:
                     rng_state = model_state_dict['rng_state'][0]

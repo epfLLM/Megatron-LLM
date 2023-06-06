@@ -5,10 +5,9 @@
 from megatron import get_args
 from megatron import print_rank_0
 from megatron import get_tokenizer
-# from megatron.model.classification import Classification
 import megatron.model.classification
 from tasks.eval_utils import accuracy_func_provider
-from tasks.finetune_utils import finetune
+import tasks.finetune_utils
 import megatron.initialize
 from megatron.model.enums import ModelType
 
@@ -56,10 +55,10 @@ def _glue_classification(num_classes,
 
     """Finetune/evaluate."""
     model_type_glue = ModelType.encoder_or_decoder
-    finetune(train_valid_datasets_provider,
-             model_provider,
-             model_type_glue,
-             end_of_epoch_callback_provider=metrics_func_provider)
+    tasks.finetune_utils.finetune(train_valid_datasets_provider,
+                                  model_provider,
+                                  model_type_glue,
+                                  end_of_epoch_callback_provider=metrics_func_provider)
 
 
 def main():

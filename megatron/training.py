@@ -150,7 +150,8 @@ def pretrain(args,
                                    model,
                                    iteration,
                                    process_non_loss_data_func,
-                                   False)
+                                   verbose=False,
+                                   args=args)
 
     if args.save and iteration != 0:
         save_checkpoint(iteration, model, optimizer, opt_param_scheduler)
@@ -161,7 +162,7 @@ def pretrain(args,
         evaluate_and_print_results(prefix, forward_step_func,
                                    test_data_iterator, model,
                                    0, process_non_loss_data_func,
-                                   True)
+                                   verbose=True, args=args)
 
 
 def _update_train_iters(args):
@@ -697,7 +698,7 @@ def train(forward_step_func,
             evaluate_and_print_results(prefix, forward_step_func,
                                        valid_data_iterator, model,
                                        iteration, process_non_loss_data_func,
-                                       False)
+                                       verbose=False, args=args)
 
         # Checkpointing
         saved_checkpoint = False
@@ -799,12 +800,13 @@ def evaluate(forward_step_func,
     return total_loss_dict, collected_non_loss_data
 
 
-def evaluate_and_print_results(prefix, forward_step_func,
+def evaluate_and_print_results(prefix,
+                               forward_step_func,
                                data_iterator, model,
                                iteration, process_non_loss_data_func,
-                               verbose=False):
+                               verbose=False,
+                               args=None):
     """Helper function to evaluate and dump results on screen."""
-    args = get_args()
     writer = get_tensorboard_writer()
 
     total_loss_dict, collected_non_loss_data = evaluate(

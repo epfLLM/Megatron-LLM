@@ -4,13 +4,13 @@
       https://github.com/NVIDIA/apex
    with some changes. """
 
+import importlib
 import numbers
+
 import torch
 import torch.nn as nn
 from torch.nn.parameter import Parameter
 from torch.nn import init
-import importlib
-
 from megatron.core.utils import make_viewless_tensor
 
 try:
@@ -52,7 +52,6 @@ class FusedLayerNormAffineFunction(torch.autograd.Function):
         weight_, bias_, ctx.eps)
 
     return grad_input, grad_weight, grad_bias, None, None
-
 
 
 class MixedFusedLayerNorm(torch.nn.Module):

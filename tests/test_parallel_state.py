@@ -1,11 +1,11 @@
-import torch
+
 import megatron.core.parallel_state as ps
 import pytest
 from tests.test_utilities import Utils
-import os 
 
 rank = Utils.rank
 world_size = Utils.world_size
+
 
 def test_initialize__and_destroy_model_parallel():
     with pytest.raises(AssertionError):
@@ -37,6 +37,7 @@ def test_pipeline_parallel_initializations():
     assert(ps.get_pipeline_model_parallel_next_rank() == ((rank + 2) % world_size))
     assert(ps.get_pipeline_model_parallel_prev_rank() == ((rank - 2) % world_size))
     Utils.destroy_model_parallel()
+
 
 def test_data_parallel_initializations():
     Utils.initialize_model_parallel(pipeline_model_parallel_size=world_size)

@@ -12,8 +12,7 @@ from megatron import get_args
 from megatron import print_rank_last, is_last_rank
 from megatron.core import mpu
 from megatron.schedules import get_forward_backward_func
-from tasks.finetune_utils import build_data_loader
-from tasks.finetune_utils import process_batch
+import tasks.finetune_utils
 
 
 def accuracy_func_provider(single_dataset_provider):
@@ -25,7 +24,7 @@ def accuracy_func_provider(single_dataset_provider):
     dataloaders = []
     for datapath in datapaths:
         dataset = single_dataset_provider(datapath)
-        dataloader = build_data_loader(
+        dataloader = tasks.finetune_utils.build_data_loader(
             dataset, args.orig_micro_batch_size, num_workers=args.num_workers,
             drop_last=(mpu.get_data_parallel_world_size() > 1))
         dataloaders.append((dataset.dataset_name, dataloader))
@@ -113,7 +112,7 @@ def calculate_correct_answers(name, model, dataloader,
             batch_ = next(batch)
         except BaseException:
             batch_ = batch
-        tokens, types, labels, attention_mask = process_batch(batch_)
+        tokens, types, labels, attention_mask = tasks.finetune_utils.process_batch(batch_, args.fp16)
 
         # Forward model.
         args = get_args()

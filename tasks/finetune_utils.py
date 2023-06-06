@@ -13,7 +13,7 @@ from megatron.core import mpu
 from megatron.checkpointing import load_checkpoint
 from megatron.checkpointing import save_checkpoint
 from megatron.model import ModelType
-from megatron.training import evaluate_and_print_results
+
 import megatron.training
 from megatron.training import train_step
 from megatron.training import training_log
@@ -22,13 +22,13 @@ from megatron.utils import calc_params_l2_norm
 from megatron.utils import check_adlr_autoresume_termination
 
 
-def process_batch(batch, args):
+def process_batch(batch, is_fp16: bool):
     """Process batch and produce inputs for the model."""
     tokens = batch['text'].long().cuda().contiguous()
     types = batch['types'].long().cuda().contiguous()
     labels = batch['label'].long().cuda().contiguous()
     attention_mask = batch['padding_mask'].float().cuda().contiguous()
-    if args.fp16:
+    if is_fp16:
         attention_mask = attention_mask.half()
 
     return tokens, types, labels, attention_mask
@@ -56,7 +56,7 @@ def _cross_entropy_forward_step(batch, model):
         batch_ = next(batch)
     except BaseException:
         batch_ = batch
-    tokens, types, labels, attention_mask = process_batch(batch_, args)
+    tokens, types, labels, attention_mask = process_batch(batch_, args.fp16)
     timers('batch-generator').stop()
 
     # Forward model.
@@ -217,9 +217,9 @@ def _train(model,
             # Evaluation
             if args.eval_interval and iteration % args.eval_interval == 0:
                 prefix = 'iteration {}'.format(iteration)
-                evaluate_and_print_results(prefix, forward_step,
+                megatron.training.evaluate_and_print_results(prefix, forward_step,
                                            valid_dataloader, model,
-                                           iteration, None, False)
+                                           iteration, None, False, args=args)
 
             # Exiting based on iterations
             if args.exit_interval and iteration % args.exit_interval == 0:

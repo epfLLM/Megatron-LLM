@@ -11,8 +11,7 @@ import megatron
 from megatron.model.enums import PositionEmbeddingType
 
 
-def parse_args(extra_args_provider=None):
-    """Parse all arguments."""
+def build_base_parser():
     parser = argparse.ArgumentParser(description='Megatron-LM Arguments',
                                      allow_abbrev=False)
     # Standard arguments.
@@ -32,7 +31,12 @@ def parse_args(extra_args_provider=None):
     parser = _add_logging_args(parser)
     parser = _add_inference_args(parser)
     parser = _add_transformer_engine_args(parser)
+    return parser
 
+
+def parse_args(extra_args_provider=None):
+    """Parse all arguments."""
+    parser = build_base_parser()
     # Custom arguments.
     if extra_args_provider is not None:
         parser = extra_args_provider(parser)

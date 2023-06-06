@@ -50,8 +50,8 @@ def initialize_megatron(extra_args_provider=None,
 
     # torch.distributed initialization
     def finish_mpu_init():
-        args = megatron.get_args()
-        _initialize_distributed()
+        # args = megatron.get_args()
+        _initialize_distributed(args)
         
         # Random seeds for reproducibility.
         if args.rank == 0:
@@ -61,15 +61,13 @@ def initialize_megatron(extra_args_provider=None,
     # Megatron's MPU is the master. Complete initialization right away.
     finish_mpu_init()
     _init_autoresume()
-    _compile_dependencies()
+    _compile_dependencies(args)
 
     # No continuation function
     return None
 
 
-def _compile_dependencies():
-    args = megatron.get_args()
-
+def _compile_dependencies(args):
     # =========================
     # Compile dataset C++ code.
     # =========================
@@ -93,9 +91,9 @@ def _compile_dependencies():
         args.micro_batch_size
     # Constraints on sequence length and attn_batch_size to enable warp based
     # optimization and upper triangular optimization (for causal mask)
-    custom_kernel_constraint = seq_len > 16 and seq_len <=4096 and \
+    custom_kernel_constraint = seq_len > 16 and seq_len <= 4096 and \
         seq_len % 4 == 0 and attn_batch_size % 4 == 0
-    # Print a warning.
+
     if not ((args.fp16 or args.bf16) and
             custom_kernel_constraint and
             args.masked_softmax_fusion):
@@ -124,9 +122,9 @@ def _compile_dependencies():
                   time.time() - start_time), flush=True)
 
 
-def _initialize_distributed():
+def _initialize_distributed(args):
     """Initialize torch.distributed and core model parallel."""
-    args = megatron.get_args()
+
     device_count = torch.cuda.device_count()
     if torch.distributed.is_initialized():
         if args.rank == 0:
@@ -161,9 +159,9 @@ def _initialize_distributed():
             print('model parallel is already initialized')
         else:
             mpu.initialize_model_parallel(args.tensor_model_parallel_size,
-                                           args.pipeline_model_parallel_size,
-                                           args.virtual_pipeline_model_parallel_size,
-                                           args.pipeline_model_parallel_split_rank)
+                                          args.pipeline_model_parallel_size,
+                                          args.virtual_pipeline_model_parallel_size,
+                                          args.pipeline_model_parallel_split_rank)
             if args.rank == 0:
                 print(f'> initialized tensor model parallel with size '
                       f'{mpu.get_tensor_model_parallel_world_size()}')

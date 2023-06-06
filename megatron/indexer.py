@@ -3,7 +3,6 @@ import time
 import torch
 import torch.distributed as dist
 
-from megatron import get_args, print_rank_0
 from megatron.core import mpu
 import megatron.checkpointing
 from megatron.data.orqa_wiki_dataset import get_open_retrieval_wiki_dataset

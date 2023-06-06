@@ -10,7 +10,7 @@ from megatron.checkpointing import get_checkpoint_tracker_filename
 from megatron.checkpointing import get_checkpoint_name
 from megatron.model.bert_model import bert_position_ids
 from megatron.model.enums import AttnMaskType
-from megatron.model.utils import get_linear_layer
+import megatron.model.utils
 from megatron.model.utils import init_method_normal
 from megatron.model.utils import scaled_init_method_normal
 from .module import MegatronModule
@@ -288,9 +288,10 @@ class PretrainedBertModel(MegatronModule):
         model_type=model_type)
 
         if args.biencoder_projection_dim > 0:
-            self.projection_enc = get_linear_layer(args.hidden_size,
-                                                   args.biencoder_projection_dim,
-                                                   init_method)
+            self.projection_enc = megatron.model.utils.get_linear_layer(args.hidden_size,
+                                                                        args.biencoder_projection_dim,
+                                                                        init_method,
+                                                                        args.perform_initialization)
             self._projection_enc_key = 'projection_enc'
 
     def forward(self, input_ids, attention_mask, tokentype_ids=None):

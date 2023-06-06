@@ -14,7 +14,7 @@ from megatron.checkpointing import load_checkpoint
 from megatron.model import GPTModel
 from megatron.utils import get_ltor_masks_and_position_ids, unwrap_model
 from megatron.p2p_communication import recv_forward, send_forward
-from tasks.finetune_utils import build_data_loader
+import tasks.finetune_utils
 import megatron.training
 
 from .datasets import build_dataset
@@ -139,7 +139,7 @@ def evaluate(data_loader, model, eval_metric):
     return total_output
 
 
-def evaluate_and_print_results(task, data_loader, model, eval_metric):
+def _evaluate_and_print_results(task, data_loader, model, eval_metric):
     """Evaluate and print results on screen."""
 
     # Evaluate and get results.
@@ -202,10 +202,10 @@ def main():
 
     # Data stuff.
     dataset = build_dataset(args.task)
-    dataloader = build_data_loader(dataset, args.micro_batch_size,
-                                   args.num_workers, drop_last=False)
+    dataloader = tasks.finetune_utils.build_data_loader(dataset, args.micro_batch_size,
+                                                        args.num_workers, drop_last=False)
 
     # Run evaluation.
-    evaluate_and_print_results(args.task, dataloader, model, eval_metric)
+    _evaluate_and_print_results(args.task, dataloader, model, eval_metric)
 
     print_rank_0('done :-)')

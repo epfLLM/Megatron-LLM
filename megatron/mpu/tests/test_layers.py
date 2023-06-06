@@ -397,9 +397,11 @@ def test_parallel_self_attention(tensor_model_parallel_size):
         print(' >> passed the test :-)')
 
 
-def parallel_transformer(tensor_model_parallel_size, num_att_heads_per_partition,
-                         hidden_size_per_att_head, batch_size, sequence_length):
-
+def parallel_transformer(tensor_model_parallel_size,
+                         num_att_heads_per_partition,
+                         hidden_size_per_att_head,
+                         batch_size,
+                         sequence_length):
     mpu.initialize_model_parallel(tensor_model_parallel_size)
     tensor_model_parallel_size = mpu.get_tensor_model_parallel_world_size()
 

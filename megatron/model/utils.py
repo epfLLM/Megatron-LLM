@@ -3,16 +3,15 @@
 """Utilities for models."""
 
 import math
+from typing import Callable
 
 import torch
 
-from megatron import get_args
 
 def init_method_normal(sigma):
     """Init method based on N(0, sigma)."""
     def init_(tensor):
         return torch.nn.init.normal_(tensor, mean=0.0, std=sigma)
-
     return init_
 
 
@@ -22,7 +21,6 @@ def scaled_init_method_normal(sigma, num_layers):
 
     def init_(tensor):
         return torch.nn.init.normal_(tensor, mean=0.0, std=std)
-
     return init_
 
 
@@ -31,16 +29,20 @@ def attention_mask_func(attention_scores, attention_mask):
     return attention_scores
 
 
-def get_linear_layer(rows, columns, init_method):
+def get_linear_layer(rows: int,
+                     columns: int,
+                     init_method: Callable,
+                     perform_initialization: bool):
     """Simple linear layer with weight initialization."""
     layer = torch.nn.Linear(rows, columns)
-    if get_args().perform_initialization:
+    if perform_initialization:
         init_method(layer.weight)
     with torch.no_grad():
         layer.bias.zero_()
     return layer
 
-#This is actually Python equivalent of torch.nn.functional.gelu(), also with type hints for ONNX exporter
+
 @torch.jit.script
 def erf_gelu(x):
+    # This is actually Python equivalent of torch.nn.functional.gelu(), also with type hints for ONNX exporter
     return x * 0.5 * (torch.erf(x / 1.41421).to(dtype=x.dtype)+torch.ones_like(x).to(dtype=x.dtype))

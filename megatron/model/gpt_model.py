@@ -68,7 +68,7 @@ class GPTModel(MegatronModule):
             pre_process=self.pre_process,
             post_process=self.post_process)
 
-        self.initialize_word_embeddings(init_method_normal)
+        self.initialize_word_embeddings(init_method_normal, args)
 
     def set_input_tensor(self, input_tensor):
         """See megatron.model.transformer.set_input_tensor()"""

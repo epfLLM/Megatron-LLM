@@ -156,7 +156,7 @@ class BertModel(MegatronModule):
             args=args,
             model_type=model_type)
 
-        self.initialize_word_embeddings(init_method_normal)
+        self.initialize_word_embeddings(init_method_normal, args)
         if self.post_process:
             self.lm_head = BertLMHead(
                 self.word_embeddings_weight().size(0),

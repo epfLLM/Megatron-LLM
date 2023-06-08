@@ -168,6 +168,7 @@ if __name__ == "__main__":
     #                  "max_position_embeddings": 13,
     #                  "seq_length": 10}
     args_defaults = {}
+    #  --position_embedding_type rotary
 
     args.rank = int(os.getenv('RANK', '0'))
     args.world_size = int(os.getenv("WORLD_SIZE", '1'))

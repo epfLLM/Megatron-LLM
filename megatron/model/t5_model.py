@@ -104,7 +104,7 @@ class T5Model(MegatronModule):
             args=args,
             model_type=model_type)
 
-        self.initialize_word_embeddings(init_method_normal)
+        self.initialize_word_embeddings(init_method_normal, args)
 
         if self.post_process and self.add_decoder:
             self.lm_head = T5LMHead(

@@ -69,7 +69,7 @@ class LlamaModel(MegatronModule):
             post_process=self.post_process,
             args=args,
             model_type=model_type)
-        self.initialize_word_embeddings(init_method_normal)
+        self.initialize_word_embeddings(init_method_normal, args)
 
     def set_input_tensor(self, input_tensor):
         """See megatron.model.transformer.set_input_tensor()"""

@@ -45,9 +45,7 @@ class MegatronModule(torch.nn.Module):
                                 'stage, but share_word_embeddings is false')
             return self.word_embeddings.weight
 
-
-    def initialize_word_embeddings(self, init_method_normal):
-        args = get_args()
+    def initialize_word_embeddings(self, init_method_normal, args):
         if not self.share_word_embeddings:
             raise Exception('initialize_word_embeddings() was called but '
                             'share_word_embeddings is false')

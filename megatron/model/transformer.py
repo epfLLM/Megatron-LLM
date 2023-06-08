@@ -68,7 +68,6 @@ class DropPath(MegatronModule):
 
 
 def _args_to_kwargs(args):
-
     common_kwargs = {
         "params_dtype": args.params_dtype,
         "use_cpu_initialization": args.use_cpu_initialization,
@@ -619,7 +618,10 @@ class ParallelTransformerLayer(MegatronModule):
         self.fp32_residual_connection = args.fp32_residual_connection
 
         # Layernorm on the input data.
-        if not args.use_rms_norm:
+        if args.use_rms_norm:
+            self.input_layernorm = RMSNorm(args.hidden_size, eps=args.layernorm_epsilon)
+            self.output_layernorm = RMSNorm(args.hidden_size, eps=args.layernorm_epsilon)
+        else:
             self.input_layernorm = LayerNorm(args.hidden_size,
                                              eps=args.layernorm_epsilon,
                                              no_persist_layer_norm=args.no_persist_layer_norm,
@@ -628,10 +630,7 @@ class ParallelTransformerLayer(MegatronModule):
                                              eps=args.layernorm_epsilon,
                                              no_persist_layer_norm=args.no_persist_layer_norm,
                                              sequence_parallel=args.sequence_parallel)
-        else:
-            self.input_layernorm = RMSNorm(args.hidden_size, eps=args.layernorm_epsilon)
-            self.output_layernorm = RMSNorm(args.hidden_size, eps=args.layernorm_epsilon)
-
+        self.use_post_ln = args.use_post_ln
         if args.use_post_ln:
             self.input_layernorm = torch.nn.Identity()
         else:
@@ -1020,7 +1019,7 @@ class ParallelTransformer(MegatronModule):
             # this, we assign a 'no-op' layer on these ranks, which will
             # disconnect the input tensor from the output tensor.
             self.num_layers = 1
-            self.layers = torch.nn.ModuleList([ NoopTransformerLayer(1) ])
+            self.layers = torch.nn.ModuleList([NoopTransformerLayer(1)])
         else:
             self.layers = torch.nn.ModuleList(
                 [build_layer(i + 1 + offset) for i in range(self.num_layers)])
@@ -1122,7 +1121,8 @@ class ParallelTransformer(MegatronModule):
     def forward(self,
                 hidden_states: torch.Tensor,
                 attention_mask: torch.Tensor,
-                encoder_output=None, enc_dec_attn_mask=None,
+                encoder_output=None,
+                enc_dec_attn_mask=None,
                 inference_params=None):
         # hidden_states: [s, b, h]
 
@@ -1207,7 +1207,7 @@ class ParallelTransformer(MegatronModule):
 
         # Final layer norm.
         # not done for the "post_ln" convention https://sh-tsang.medium.com/review-pre-ln-transformer-on-layer-normalization-in-the-transformer-architecture-b6c91a89e9ab
-        if self.post_process and (not args.use_post_ln):
+        if self.post_process and (not self.use_post_ln):
             hidden_states = self.final_layernorm(hidden_states)
 
         return hidden_states

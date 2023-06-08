@@ -607,7 +607,7 @@ def training_log(loss_dict, total_loss_dict, learning_rate, iteration,
             iteration, args.train_iters)
         log_string += ' consumed samples: {:12d} |'.format(
             args.consumed_train_samples)
-        log_string += ' elapsed time per iteration (ms): {:.1f} |'.format(
+        log_string += ' time per iteration (ms): {:.1f} |'.format(
             elapsed_time_per_iteration * 1000.0)
         log_string += ' learning rate: {:.3E} |'.format(learning_rate)
         log_string += ' global batch size: {:5d} |'.format(batch_size)
@@ -619,16 +619,17 @@ def training_log(loss_dict, total_loss_dict, learning_rate, iteration,
                 if avg > 0.0:
                     log_string += ' {}: {:.6E} |'.format(key, avg)
                 total_loss_dict[key] = torch.cuda.FloatTensor([0.0])
-        log_string += ' loss scale: {:.1f} |'.format(loss_scale)
+        if loss_scale != 1.0:
+            log_string += ' loss scale: {:.1f} |'.format(loss_scale)
         if grad_norm is not None:
             log_string += ' grad norm: {:.3f} |'.format(grad_norm)
         if num_zeros_in_grad is not None:
             log_string += ' num zeros: {:.1f} |'.format(num_zeros_in_grad)
         if params_norm is not None:
             log_string += ' params norm: {:.3f} |'.format(params_norm)
-        log_string += ' number of skipped iterations: {:3d} |'.format(
+        log_string += ' skipped iterations: {:3d} |'.format(
             total_loss_dict[skipped_iters_key])
-        log_string += ' number of nan iterations: {:3d} |'.format(
+        log_string += ' nan iterations: {:3d} |'.format(
             total_loss_dict[nan_iters_key])
         total_loss_dict[advanced_iters_key] = 0
         total_loss_dict[skipped_iters_key] = 0

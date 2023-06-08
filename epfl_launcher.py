@@ -1,6 +1,9 @@
 import argparse
+import datetime
 import os
-
+from subprocess import DEVNULL, STDOUT, check_call
+import multiprocessing as mp
+import subprocess
 
 NODES = ["gpu011.rcp.epfl.ch", "gpu012.rcp.epfl.ch"]
 
@@ -8,10 +11,12 @@ def parse_args():
     # get the expected world size from the command line
     parser = argparse.ArgumentParser()
     parser.add_argument("--ws", type=int, default=2)
+    # add kill arg
+    parser.add_argument("--kill", action="store_true")
     args = parser.parse_args()
     return args
 
-def create_config(rank:int, world_size:int):
+def create_config(rank:int, world_size:int, timestamp:str):
     return f"""
 #! /bin/bash
 
@@ -19,6 +24,7 @@ def create_config(rank:int, world_size:int):
 (
 cd /mpt
 set -e 
+set -x
 
 export CUDA_DEVICE_MAX_CONNECTIONS=1
 GPUS_PER_NODE=8
@@ -30,11 +36,13 @@ NODE_RANK={rank}
 WORLD_SIZE=$(($GPUS_PER_NODE*$NNODES))
 
 DATA_PATH=/scratch/wikitext-megatron/wikitext-train_text_document
-EXP_DIR=/scratch/$(whoami)/exp
+EXP_DIR=/scratch/$(whoami)/exp/{timestamp}
 CHECKPOINT_PATH=${{EXP_DIR}}/checkpoint
 TENSORBOARD_PATH=${{EXP_DIR}}/tensorboard
 
 DISTRIBUTED_ARGS="--nproc_per_node $GPUS_PER_NODE --nnodes $NNODES --node_rank $NODE_RANK --master_addr $MASTER_ADDR --master_port $MASTER_PORT"
+mkdir -p ${{EXP_DIR}} 
+touch ${{EXP_DIR}}/output.log
 
 torchrun $DISTRIBUTED_ARGS \
        pretrain_gpt.py \
@@ -70,26 +78,52 @@ torchrun $DISTRIBUTED_ARGS \
        --use_bias \
        --use_flash_attn \
        --tensorboard_dir ${{TENSORBOARD_PATH}} \
-       --bf16
+       --bf16  |& tee -a ${{EXP_DIR}}/output.log
 )
 """
 
 DOCKER_COMMAND = """docker run --gpus all --rm --shm-size=32gb -v /scratch:/scratch --network host -v /home/axel/model-parallel-trainer/:/mpt epfllm /mpt/examples/pretrain_gpt_distributed_epflrcp.sh"""
 
+def launch(rank, world_size):
+    with open(f"config_{rank}.sh", "w") as f:
+        f.write(create_config(rank, world_size, timestamp=datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")))
+    # rsync the root folder with the nodes
+    ret = os.system(f"rsync -r . {NODES[rank]}:~/model-parallel-trainer")
+    if ret != 0:
+        print("Rsync failed")
+        return 1
+    
+    # copy the config to the node
+    ret = os.system(f"scp config_{rank}.sh {NODES[rank]}:~/model-parallel-trainer/examples/pretrain_gpt_distributed_epflrcp.sh")
+    if ret != 0:
+        print("Scp failed")
+        return 1
+    
+    my_stdout = None if rank == 0 else DEVNULL
+
+    print('running docker on rank ', rank)
+    # run the script on docker on the node
+    ret = check_call(["/usr/bin/ssh", f"{NODES[rank]}", f"{DOCKER_COMMAND}"], 
+                     stdin=DEVNULL,
+                     stdout=my_stdout, 
+                     stderr=STDOUT)
+    return ret
+    
 if __name__ == "__main__":
     args = parse_args()
-    for rank in range(args.ws):
-        with open(f"config_{rank}.sh", "w") as f:
-            f.write(create_config(rank, args.ws))
-        # rsync the root folder with the nodes
-        ret = os.system(f"rsync -r . {NODES[rank]}:~/model-parallel-trainer")
-        if ret != 0:
-            print("Rsync failed")
-            exit(1)
-        
-        # copy the config to the node
-        ret = os.system(f"scp config_{rank}.sh {NODES[rank]}:~/model-parallel-trainer/examples/pretrain_gpt_distributed_epflrcp.sh")
+    # launch on parallel on each node
+    if args.kill:
+        for rank in range(args.ws):
+            print(f"killing node {rank}")
+            subprocess.run(["/usr/bin/ssh", f"{NODES[rank]}", f"docker kill $(docker ps -q) && rm -rf ~/model-parallel-trainer/megatron/fused_kernels/build"])
+        exit(0)
 
-        # run the script on docker on the node
-        print(f"Running on {NODES[rank]}: {DOCKER_COMMAND}")
-        ret = os.system(f"ssh {NODES[rank]} {DOCKER_COMMAND}")
+        
+    processes = []
+    for rank in range(args.ws):
+        print(f"launching node {rank}")
+        p = mp.Process(target=launch, args=(rank, args.ws))
+        p.start()
+
+    for p in processes:
+        p.join()

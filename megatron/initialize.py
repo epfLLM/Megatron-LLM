@@ -93,7 +93,7 @@ def _compile_dependencies():
     # Compile dataset C++ code.
     # =========================
     # TODO: move this to ninja
-    if torch.distributed.get_rank() == 0:
+    if torch.distributed.get_rank() % 8 == 0:
         start_time = time.time()
         print('> compiling dataset index builder ...')
         from megatron.data.dataset_utils import compile_helper
@@ -123,8 +123,8 @@ def _compile_dependencies():
                   ' fused softmax kernel are not met. We default'
                   ' back to unfused kernel invocations.', flush=True)
     
-    # Always build on rank zero first.
-    if torch.distributed.get_rank() == 0:
+    # Always build on local rank zero first.
+    if torch.distributed.get_rank() % 8 == 0:
         start_time = time.time()
         print('> compiling and loading fused kernels ...', flush=True)
         fused_kernels.load(args)

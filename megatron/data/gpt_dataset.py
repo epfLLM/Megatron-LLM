@@ -281,7 +281,7 @@ def _build_index_mappings(name, data_prefix, documents, sizes,
     shuffle_idx_filename = _filename + '_shuffle_idx.npy'
 
     # Build the indexed mapping if not exist.
-    if torch.distributed.get_rank() == 0:
+    if torch.distributed.get_rank() % 8 == 0:
         if (not os.path.isfile(doc_idx_filename)) or \
            (not os.path.isfile(sample_idx_filename)) or \
            (not os.path.isfile(shuffle_idx_filename)):
@@ -365,12 +365,15 @@ def _build_index_mappings(name, data_prefix, documents, sizes,
     # This should be a barrier but nccl barrier assumes
     # device_index=rank which is not the case for model
     # parallel case
+
+    print(f'rank before barrier {torch.distributed.get_rank()}')
     counts = torch.cuda.LongTensor([1])
     torch.distributed.all_reduce(counts, group=mpu.get_data_parallel_group())
     torch.distributed.all_reduce(counts, group=mpu.get_pipeline_model_parallel_group())
     assert counts[0].item() == (
         torch.distributed.get_world_size() //
-        torch.distributed.get_world_size(group=mpu.get_tensor_model_parallel_group()))
+        torch.distributed.get_world_size(group=mpu.get_tensor_model_parallel_group())), \
+        f"{counts}= but expected {torch.distributed.get_world_size() // torch.distributed.get_world_size(group=mpu.get_tensor_model_parallel_group())}"
 
     # Load mappings.
     start_time = time.time()

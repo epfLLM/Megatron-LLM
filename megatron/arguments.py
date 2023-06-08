@@ -218,8 +218,9 @@ def validate_args(args, defaults={}):
         args.num_layers = args.encoder_num_layers
 
     # Check required arguments.
-    required_args = ['num_layers', 'hidden_size', 'num_attention_heads',
-                     'max_position_embeddings']
+    # required_args = ['num_layers', 'hidden_size', 'num_attention_heads',
+    #                  'max_position_embeddings']
+    required_args = ['num_layers', 'hidden_size', 'num_attention_heads']
     for req_arg in required_args:
         _check_arg_is_not_none(args, req_arg)
 
@@ -424,7 +425,7 @@ def _add_network_size_args(parser):
                        help='If set, use original BERT residual connection '
                        'ordering.')
     group.add_argument('--use_bias', action='store_true',
-                       help='If set then use bias.') # Added during hackathon                 
+                       help='If set then use bias.')  # Added during hackathon
     # Extracted from: https://github.com/facebookresearch/llama/blob/main/llama/model.py
     group.add_argument('--use_rms_norm',
                        action='store_true',

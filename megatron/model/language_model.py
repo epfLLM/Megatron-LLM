@@ -48,7 +48,7 @@ def parallel_lm_logits(input_,
 
 
 def get_language_model(num_tokentypes,
-                       add_pooler,
+                       add_pooler: bool,
                        encoder_attn_mask_type,
                        init_method=None,
                        scaled_init_method=None,
@@ -89,8 +89,7 @@ def get_language_model(num_tokentypes,
 
 
 class Pooler(MegatronModule):
-    """Pooler layer.
-
+    """
     Pool hidden states of a specific token (for example start of the
     sequence) and add a linear transformation followed by a tanh.
 
@@ -100,9 +99,8 @@ class Pooler(MegatronModule):
             bias is set to zero.
     """
 
-    def __init__(self, hidden_size, init_method):
+    def __init__(self, hidden_size, init_method, args):
         super(Pooler, self).__init__()
-        args = megatron.get_args()
         self.dense = megatron.model.utils.get_linear_layer(hidden_size,
                                                            hidden_size,
                                                            init_method,
@@ -363,11 +361,21 @@ class TransformerLanguageModel(MegatronModule):
         self.add_pooler = add_pooler
         self.encoder_hidden_state = None
 
-        # s = args.seq_length
-        # ell = args.num_layers
-        # v = args.padded_vocab_size
-        # h = args.hidden_size
-        # self.flop_estimate = 96 * s * ell * h ** 2 * (1 + s / (6 * h) + v / (16 * ell * h))
+        s = args.max_position_embeddings
+        ell = args.num_layers
+        v = args.padded_vocab_size
+        h = args.hidden_size
+        mlp_mult_term = 64 if args.glu_activation else 16
+
+        qkv_estimate = 6 * s * (h ** 2)
+        attention_mat_estimate = 2 * (s ** 2) * h
+        attention_vals_estimate = 2 * (s ** 2) * h
+        linear_proj_estimate = 2 * s * (h ** 2)
+        mlp_estimate = mlp_mult_term * s * h ** 2
+        embedding_estimate = 6 * s * h * v
+
+        per_layer_estimate = (qkv_estimate + attention_mat_estimate + attention_vals_estimate + linear_proj_estimate + mlp_estimate)
+        self.flop_estimate = ell * per_layer_estimate + embedding_estimate
 
         # Embeddings.
         if self.pre_process:
@@ -414,9 +422,8 @@ class TransformerLanguageModel(MegatronModule):
             self.decoder = None
 
         if self.post_process:
-            # Pooler.
             if self.add_pooler:
-                self.pooler = Pooler(self.hidden_size, self.init_method)
+                self.pooler = Pooler(self.hidden_size, self.init_method, args)
                 self._pooler_key = 'pooler'
 
     def set_input_tensor(self, input_tensor):
@@ -579,7 +586,6 @@ class TransformerLanguageModel(MegatronModule):
 
             self.encoder.load_state_dict(state_dict_, strict=strict)
 
-        # Pooler.
         if self.post_process:
             if self.add_pooler:
                 assert 'pooler' in state_dict, \

@@ -113,12 +113,13 @@ def print_params_min_max_norm(optimizer, iteration):
     print(string, flush=True)
 
 
-def check_adlr_autoresume_termination(iteration, model,
-                                      optimizer, opt_param_scheduler):
+def check_adlr_autoresume_termination(iteration,
+                                      model,
+                                      optimizer,
+                                      opt_param_scheduler,
+                                      args):
     """Check for autoresume signal and exit if it is received."""
     from megatron.checkpointing import save_checkpoint
-
-    args = get_args()
     autoresume = get_adlr_autoresume()
     # Add barrier to ensure consistnecy.
     torch.distributed.barrier()

@@ -61,7 +61,6 @@ def _set_cuda_rng_state(new_state, device=-1):
     _lazy_call(cb)
 
 
-
 class CudaRNGStatesTracker:
     """Tracker for the cuda RNG states.
 

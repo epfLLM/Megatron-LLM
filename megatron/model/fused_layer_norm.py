@@ -35,6 +35,13 @@ class FusedLayerNormAffineFunction(torch.autograd.Function):
     bias_ = bias.contiguous()
     output, mean, invvar = fused_mix_prec_layer_norm_cuda.forward_affine(
         input_, ctx.normalized_shape, weight_, bias_, ctx.eps)
+    if False:
+        print(input_.shape)
+        print(ctx.normalized_shape)
+        print(weight_.shape)
+        print(bias_.shape)
+        print(ctx.eps)
+
     ctx.save_for_backward(input_, weight_, bias_, mean, invvar)
 
     return output
@@ -89,15 +96,12 @@ class MixedFusedLayerNorm(torch.nn.Module):
         setattr(self.weight, 'sequence_parallel', self.sequence_parallel)
         setattr(self.bias, 'sequence_parallel', self.sequence_parallel)
 
-
   def reset_parameters(self):
 
     init.ones_(self.weight)
     init.zeros_(self.bias)
 
-
   def forward(self, input):
-
     if self.no_persist_layer_norm:
         return FusedLayerNormAffineFunction.apply(
           input, self.weight, self.bias, self.normalized_shape, self.eps)
@@ -109,12 +113,13 @@ class MixedFusedLayerNorm(torch.nn.Module):
         # a populated '_base' field). This will result in schedule.py's
         # deallocate_output_tensor() throwing an error, so a viewless tensor is
         # created to prevent this.
-        output = make_viewless_tensor(inp = output,
-                                      requires_grad = input.requires_grad,
-                                      keep_graph = True)
+        output = make_viewless_tensor(inp=output,
+                                      requires_grad=input.requires_grad,
+                                      keep_graph=True)
 
         return output    
-  
+
+
 class RMSNorm(torch.nn.Module):
     def __init__(self, dim: int, eps: float = 1e-6):
         super().__init__()

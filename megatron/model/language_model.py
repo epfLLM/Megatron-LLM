@@ -447,12 +447,19 @@ class TransformerLanguageModel(MegatronModule):
         else:
             raise Exception('Stage must have at least either encoder or decoder')
 
-    def forward(self, enc_input_ids, enc_position_ids, enc_attn_mask,
-                dec_input_ids=None, dec_position_ids=None, dec_attn_mask=None,
-                enc_dec_attn_mask=None, tokentype_ids=None,
+    def forward(self, 
+                enc_input_ids, 
+                enc_position_ids, 
+                enc_attn_mask,
+                dec_input_ids=None, 
+                dec_position_ids=None, 
+                dec_attn_mask=None,
+                enc_dec_attn_mask=None, 
+                tokentype_ids=None,
                 inference_params=None,
                 pooling_sequence_index=0,
-                enc_hidden_states=None, output_enc_hidden=False):
+                enc_hidden_states=None, 
+                output_enc_hidden=False):
 
         # Encoder embedding.
         if self.pre_process:

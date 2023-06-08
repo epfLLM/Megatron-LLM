@@ -10,7 +10,7 @@ import torch
 from datetime import timedelta
 
 import megatron
-from megatron import fused_kernels
+import megatron.fused_kernels
 from megatron import get_adlr_autoresume
 from megatron import get_tensorboard_writer
 from megatron.core import mpu, tensor_parallel
@@ -49,8 +49,7 @@ def initialize_megatron(extra_args_provider=None,
     set_global_variables(args)
 
     # torch.distributed initialization
-    def finish_mpu_init():
-        # args = megatron.get_args()
+    def _finish_mpu_init():
         _initialize_distributed(args)
         
         # Random seeds for reproducibility.
@@ -59,9 +58,9 @@ def initialize_megatron(extra_args_provider=None,
         _set_random_seed(args.seed, args.data_parallel_random_init)
 
     # Megatron's MPU is the master. Complete initialization right away.
-    finish_mpu_init()
+    _finish_mpu_init()
     _init_autoresume()
-    _compile_dependencies(args)
+    # _compile_dependencies(args)
 
     # No continuation function
     return None
@@ -106,11 +105,11 @@ def _compile_dependencies(args):
     if torch.distributed.get_rank() == 0:
         start_time = time.time()
         print('> compiling and loading fused kernels ...', flush=True)
-        fused_kernels.load(args)
+        megatron.fused_kernels.load(args)
         torch.distributed.barrier()
     else:
         torch.distributed.barrier()
-        fused_kernels.load(args)
+        megatron.fused_kernels.load(args)
     # Simple barrier to make sure all ranks have passed the
     # compilation phase successfully before moving on to the
     # rest of the program. We think this might ensure that
@@ -124,7 +123,6 @@ def _compile_dependencies(args):
 
 def _initialize_distributed(args):
     """Initialize torch.distributed and core model parallel."""
-
     device_count = torch.cuda.device_count()
     if torch.distributed.is_initialized():
         if args.rank == 0:
@@ -147,7 +145,7 @@ def _initialize_distributed(args):
     # Call the init process
     torch.distributed.init_process_group(
         backend=args.distributed_backend,
-        world_size=args.world_size, 
+        world_size=args.world_size,
         rank=args.rank,
         timeout=timedelta(minutes=10)
     )
@@ -204,7 +202,7 @@ def write_args_to_tensorboard(args):
                             global_step=args.iteration)
 
 
-def set_jit_fusion_options():
+def set_jit_fusion_options(args):
     """Set PyTorch JIT layer fusion options."""
     # flags required to enable jit fusion kernels
     TORCH_MAJOR = int(torch.__version__.split('.')[0])
@@ -225,12 +223,11 @@ def set_jit_fusion_options():
         torch._C._jit_override_can_fuse_on_cpu(True)
         torch._C._jit_override_can_fuse_on_gpu(True)
 
-    _warmup_jit_function()
+    _warmup_jit_function(args)
 
 
-def _warmup_jit_function():
+def _warmup_jit_function(args):
     """ Compile JIT functions before the main training steps """
-    args = megatron.get_args()
     if args.bf16:
         dtype = torch.bfloat16
     elif args.fp16:

@@ -429,6 +429,9 @@ def _add_network_size_args(parser):
     group.add_argument('--use_rms_norm',
                        action='store_true',
                        help='If set, use RMSNorm instead of LayerNorm.')
+    group.add_argument('--use_post_ln',
+                       action='store_true',
+                       help='If set, use Post-LN transformer (in the notation of https://sh-tsang.medium.com/review-pre-ln-transformer-on-layer-normalization-in-the-transformer-architecture-b6c91a89e9ab).')
     group.add_argument('--onnx_safe', type=bool, required=False,
                        help='Use workarounds for known problems with '
                        'Torch ONNX exporter')

@@ -480,11 +480,13 @@ def get_data_parallel_rank():
     """Return my rank for the data parallel group."""
     return torch.distributed.get_rank(group=get_data_parallel_group())
 
+
 def _set_global_memory_buffer():
     """Initialize global buffer"""
     global _GLOBAL_MEMORY_BUFFER
     assert _GLOBAL_MEMORY_BUFFER is None, 'global memory buffer is already initialized'
     _GLOBAL_MEMORY_BUFFER = GlobalMemoryBuffer()
+
 
 def get_global_memory_buffer():
     """Return the global GlobalMemoryBuffer object"""

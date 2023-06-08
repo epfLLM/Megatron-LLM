@@ -15,11 +15,10 @@ from megatron.checkpointing import save_checkpoint
 from megatron.model import ModelType
 
 import megatron.training
-from megatron.training import train_step
+import megatron.utils
 from megatron.training import training_log
 from megatron.utils import average_losses_across_data_parallel_group
 from megatron.utils import calc_params_l2_norm
-from megatron.utils import check_adlr_autoresume_termination
 
 
 def process_batch(batch, is_fp16: bool):
@@ -185,7 +184,7 @@ def _train(model,
             start_iteration = 0
 
             # Train for one step.
-            out = train_step(forward_step, batch, model, optimizer, opt_param_scheduler)
+            out = megatron.training.train_step(forward_step, batch, model, optimizer, opt_param_scheduler, args)
 
             losses_dict, skipped_iter, grad_norm, num_zeros_in_grad = out
             iteration += 1
@@ -194,7 +193,8 @@ def _train(model,
             params_norm = None
             if args.log_params_norm:
                 params_norm = calc_params_l2_norm(model)
-            report_memory_flag = training_log(losses_dict, losses_dict_sum,
+            report_memory_flag = training_log(losses_dict,
+                                              losses_dict_sum,
                                               optimizer.param_groups[0]['lr'],
                                               iteration,
                                               optimizer.get_loss_scale().item(),
@@ -204,8 +204,8 @@ def _train(model,
             # Autoresume
             if args.adlr_autoresume and \
                (iteration % args.adlr_autoresume_interval == 0):
-                check_adlr_autoresume_termination(iteration, model,
-                                                  optimizer, opt_param_scheduler)
+                megatron.utils.check_adlr_autoresume_termination(iteration, model,
+                                                  optimizer, opt_param_scheduler, args)
 
             # Checkpointing
             saved_checkpoint = False

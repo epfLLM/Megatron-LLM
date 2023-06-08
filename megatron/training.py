@@ -35,7 +35,7 @@ import megatron.initialize
 
 from megatron.optimizer_param_scheduler import OptimizerParamScheduler
 from megatron.model import DistributedDataParallel as LocalDDP
-from megatron.utils import check_adlr_autoresume_termination
+import megatron.utils
 from megatron.utils import unwrap_model
 from megatron.data.data_samplers import build_pretraining_data_loader
 from megatron.utils import calc_params_l2_norm
@@ -86,7 +86,7 @@ def pretrain(args,
     """
     # # Initalize and get arguments, timers, and Tensorboard writer.
     # Set pytorch JIT layer fusion options and warmup JIT functions.
-    megatron.initialize.set_jit_fusion_options()
+    megatron.initialize.set_jit_fusion_options(args)
 
     # Adjust the startup time so it reflects the largest value.
     # This will be closer to what scheduler will see (outside of
@@ -133,13 +133,14 @@ def pretrain(args,
 
     iteration = 0
     if args.do_train and args.train_iters > 0:
-        iteration = train(forward_step_func,
-                          model,
-                          optimizer,
-                          opt_param_scheduler,
-                          train_data_iterator,
-                          valid_data_iterator,
-                          process_non_loss_data_func)
+        iteration = _train(args,
+                           forward_step_func,
+                           model,
+                           optimizer,
+                           opt_param_scheduler,
+                           train_data_iterator,
+                           valid_data_iterator,
+                           process_non_loss_data_func)
     print_datetime('after training is done')
 
     if args.do_valid:
@@ -386,9 +387,8 @@ def _setup_model_and_optimizer(model_provider_func,
 
 
 def train_step(forward_step_func, data_iterator,
-               model, optimizer, opt_param_scheduler):
+               model, optimizer, opt_param_scheduler, args):
     """Single training step."""
-    args = get_args()
     timers = get_timers()
 
     # Set grad to zero.
@@ -633,7 +633,7 @@ def save_checkpoint_and_time(iteration, model, optimizer, opt_param_scheduler):
     timers.log(['save-checkpoint'])
 
 
-def train(forward_step_func,
+def _train(args, forward_step_func,
           model,
           optimizer,
           opt_param_scheduler,
@@ -641,7 +641,6 @@ def train(forward_step_func,
           valid_data_iterator,
           process_non_loss_data_func):
     """Train the model function."""
-    args = get_args()
     timers = get_timers()
 
     # Write args to tensorboard
@@ -668,7 +667,7 @@ def train(forward_step_func,
                        train_data_iterator,
                        model,
                        optimizer,
-                       opt_param_scheduler)
+                       opt_param_scheduler, args)
         iteration += 1
         args.consumed_train_samples += mpu.get_data_parallel_world_size() * \
                                        args.micro_batch_size * \
@@ -688,8 +687,8 @@ def train(forward_step_func,
         # Autoresume
         if args.adlr_autoresume and \
            (iteration % args.adlr_autoresume_interval == 0):
-            check_adlr_autoresume_termination(iteration, model, optimizer,
-                                              opt_param_scheduler)
+            megatron.utils.check_adlr_autoresume_termination(iteration, model, optimizer,
+                                              opt_param_scheduler, args)
 
         # Evaluation
         if args.eval_interval and iteration % args.eval_interval == 0 and \

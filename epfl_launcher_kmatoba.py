@@ -5,6 +5,7 @@ from subprocess import DEVNULL, STDOUT, check_call
 import multiprocessing as mp
 import subprocess
 
+# https://discuss.pytorch.org/t/nccl-error-right-after-init-process-group-in-barrier/170551
 NODES = ["kmatoba@gpu011.rcp.epfl.ch", "kmatoba@gpu012.rcp.epfl.ch"]
 
 
@@ -18,7 +19,7 @@ def parse_args():
     return args
 
 
-def create_config(rank:int, world_size:int, timestamp:str):
+def create_config(rank: int, world_size: int, timestamp: str):
     return f"""
 #! /bin/bash
 
@@ -46,15 +47,19 @@ DISTRIBUTED_ARGS="--nproc_per_node $GPUS_PER_NODE --nnodes $NNODES --node_rank $
 mkdir -p ${{EXP_DIR}} 
 touch ${{EXP_DIR}}/output.log
 
-torchrun $DISTRIBUTED_ARGS \
+# whereis torchrun
+pip install einops
+
+# PYTHONPATH=./megatron torchrun -c"import sys, torch; print(torch.__version__); print('Python %s on %s' % (sys.version, sys.platform)); print(sys.path); from megatron import get_args" 
+NCCL_DEBUG=INFO torchrun $DISTRIBUTED_ARGS \
        pretrain_gpt.py \
        --tensor_model_parallel_size 1 \
        --pipeline_model_parallel_size 1 \
        --num_layers 24 \
        --hidden_size 1024 \
-       --num_attention_heads 16 \
+       --num_attention_heads 2 \
        --micro_batch_size 4 \
-       --global_batch_size 128 \
+       --global_batch_size 64 \
        --seq_length 1024 \
        --max_position_embeddings 1024 \
        --train_iters 500000 \
@@ -85,14 +90,20 @@ torchrun $DISTRIBUTED_ARGS \
 """
 
 who = "kmatoba"
-DOCKER_COMMAND = f"""docker run --gpus all --rm --shm-size=32gb -v /scratch:/scratch --network host -v /home/{who}/model-parallel-trainer/:/mpt epfllm /mpt/examples/pretrain_gpt_distributed_epflrcp.sh"""
+# docker_image_name = "nvcr.io/nvidia/pytorch:23.04-py3"
+docker_image_name = "epfllm"
+
+DOCKER_COMMAND = f"""docker run --gpus all --rm --shm-size=32gb -v /scratch:/scratch --network host -v /home/{who}/model-parallel-trainer/:/mpt {docker_image_name} /mpt/examples/pretrain_gpt_distributed_epflrcp.sh"""
+# /mpt nvcr.io/nvidia/pytorch:23.04-py3
 
 
 def launch(rank, world_size):
     with open(f"config_{rank}.sh", "w") as f:
         f.write(create_config(rank, world_size, timestamp=datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")))
     # rsync the root folder with the nodes
-    ret = os.system(f"rsync -vv -r --exclude consolidated.00.pth --exclude localenv/. {NODES[rank]}:~/model-parallel-trainer")
+    # ret = os.system(f"rsync -vv -a --exclude consolidated.00.pth --exclude localenv/ -r {NODES[rank]}:~/model-parallel-trainer")
+    ret = os.system(
+        f"rsync -vv -r --exclude localenv/ . {NODES[rank]}:~/model-parallel-trainer")
     if ret != 0:
         print("Rsync failed")
         return 1

@@ -6,20 +6,40 @@ import multiprocessing as mp
 import subprocess
 
 # https://discuss.pytorch.org/t/nccl-error-right-after-init-process-group-in-barrier/170551
-NODES = ["kmatoba@gpu011.rcp.epfl.ch", "kmatoba@gpu012.rcp.epfl.ch"]
+# NODES = ["kmatoba@gpu010.rcp.epfl.ch", "kmatoba@gpu011.rcp.epfl.ch", "kmatoba@gpu012.rcp.epfl.ch"]
+# NODES = ["kmatoba@gpu010.rcp.epfl.ch"]
+NODES = ["kmatoba@gpu012.rcp.epfl.ch"]
+# NODES = ["kmatoba@gpu010.rcp.epfl.ch", "kmatoba@gpu012.rcp.epfl.ch"]
 
 
 def parse_args():
     # get the expected world size from the command line
     parser = argparse.ArgumentParser()
-    parser.add_argument("--ws", type=int, default=2)
+    parser.add_argument("--ws", type=int, default=len(NODES))
     # add kill arg
     parser.add_argument("--kill", action="store_true")
     args = parser.parse_args()
     return args
 
 
+# def copy_image():
+#     # docker save -o epfllm.img epfllm
+#     command = "rsync -vv kmatoba@gpu012.rcp.epfl.ch:~/epfllm.img ."
+#     # os.command()
+#     # "rsync -vv -r --exclude localenv/ . {NODES[rank]}:~/model-parallel-trainer"
+#     # docker load < /scratch/kmatoba/epflllm.img
+
+
 def create_config(rank: int, world_size: int, timestamp: str):
+    gpus_per_node = 8
+    hidden_size = 1024
+    # hidden_size = 2048
+    # hidden_size = 4096
+    micro_batch_size = 4
+    log_interval = 1
+    # master_addr = "gpu011.rcp.epfl.ch"
+    # master_addr = NODES[-1].split("@")[1]
+    master_addr = NODES[0].split("@")[1]
     return f"""
 #! /bin/bash
 
@@ -30,9 +50,9 @@ set -e
 set -x
 
 export CUDA_DEVICE_MAX_CONNECTIONS=1
-GPUS_PER_NODE=8
+GPUS_PER_NODE={gpus_per_node}
 # Change for multinode config
-MASTER_ADDR=gpu011.rcp.epfl.ch
+MASTER_ADDR={master_addr}
 MASTER_PORT=6000
 NNODES={world_size}
 NODE_RANK={rank}
@@ -49,17 +69,24 @@ touch ${{EXP_DIR}}/output.log
 
 # whereis torchrun
 pip install einops
+# nvidia-smi | tail -n 2 | head -n 1 "| # <- No running processes found                                                 |"
 
+# pwd
+# ls -l megatron
+# PYTHONPATH=.
 # PYTHONPATH=./megatron torchrun -c"import sys, torch; print(torch.__version__); print('Python %s on %s' % (sys.version, sys.platform)); print(sys.path); from megatron import get_args" 
-NCCL_DEBUG=INFO torchrun $DISTRIBUTED_ARGS \
+# python -m torch.distributed.launch --use-env -c"import sys; print(sys.path); from megatron import get_args"
+# Allowing ninja to set a default number of workers... (overridable by setting the environment variable MAX_JOBS=N)
+# NCCL_DEBUG=INFO 
+MAX_JOBS=6 torchrun $DISTRIBUTED_ARGS \
        pretrain_gpt.py \
        --tensor_model_parallel_size 1 \
        --pipeline_model_parallel_size 1 \
        --num_layers 24 \
-       --hidden_size 1024 \
-       --num_attention_heads 2 \
-       --micro_batch_size 4 \
-       --global_batch_size 64 \
+       --hidden_size {hidden_size} \
+       --num_attention_heads 16 \
+       --micro_batch_size {micro_batch_size} \
+       --global_batch_size 128 \
        --seq_length 1024 \
        --max_position_embeddings 1024 \
        --train_iters 500000 \
@@ -78,7 +105,7 @@ NCCL_DEBUG=INFO torchrun $DISTRIBUTED_ARGS \
        --weight_decay 1e-2 \
        --clip_grad 1.0 \
        --lr_warmup_fraction .01 \
-       --log_interval 100 \
+       --log_interval {log_interval} \
        --save_interval 10000 \
        --eval_interval 1000 \
        --eval_iters 10 \
@@ -103,7 +130,7 @@ def launch(rank, world_size):
     # rsync the root folder with the nodes
     # ret = os.system(f"rsync -vv -a --exclude consolidated.00.pth --exclude localenv/ -r {NODES[rank]}:~/model-parallel-trainer")
     ret = os.system(
-        f"rsync -vv -r --exclude localenv/ . {NODES[rank]}:~/model-parallel-trainer")
+        f"rsync -vv -r --exclude localenv/ --exclude .git --exclude .idea . {NODES[rank]}:~/model-parallel-trainer")
     if ret != 0:
         print("Rsync failed")
         return 1
@@ -131,7 +158,7 @@ if __name__ == "__main__":
     # launch on parallel on each node
     if args.kill:
         for rank in range(args.ws):
-            print(f"killing node {rank}")
+            print(f"killing node {rank} [{NODES[rank]}]")
             subprocess.run(["/usr/bin/ssh", f"{NODES[rank]}", f"docker kill $(docker ps -q) && rm -rf ~/model-parallel-trainer/megatron/fused_kernels/build"])
         exit(0)
 

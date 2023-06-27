@@ -6,9 +6,10 @@ from megatron import get_args
 from megatron import print_rank_0
 from megatron import get_tokenizer
 from megatron.model.multiple_choice import MultipleChoice
-from tasks.eval_utils import accuracy_func_provider
-from tasks.finetune_utils import finetune
+import tasks.eval_utils
+import tasks.finetune_utils
 from tasks.race.data import RaceDataset
+from megatron.model import ModelType
 
 
 def train_valid_datasets_provider():
@@ -24,14 +25,16 @@ def train_valid_datasets_provider():
     return train_dataset, valid_dataset
 
 
-def model_provider(pre_process=True, post_process=True):
+def model_provider(pre_process=True,
+                   post_process=True):
     """Build the model."""
 
+    model_type = ModelType.encoder_or_decoder
     print_rank_0('building multichoice model for RACE ...')
     model = MultipleChoice(num_tokentypes=2,
                            pre_process=pre_process,
-                           post_process=post_process)
-
+                           post_process=post_process,
+                           model_type=model_type)
     return model
 
 
@@ -44,10 +47,12 @@ def metrics_func_provider():
         name = datapath.split('RACE')[-1].strip('/').replace('/', '-')
         return RaceDataset(name, [datapath], tokenizer, args.seq_length)
 
-    return accuracy_func_provider(single_dataset_provider)
+    return tasks.eval_utils.accuracy_func_provider(single_dataset_provider)
 
 
 def main():
-
-    finetune(train_valid_datasets_provider, model_provider,
-             end_of_epoch_callback_provider=metrics_func_provider)
+    model_type = ModelType.encoder_or_decoder
+    tasks.finetune_utils.finetune(train_valid_datasets_provider,
+                                  model_provider,
+                                  model_type,
+                                  end_of_epoch_callback_provider=metrics_func_provider)

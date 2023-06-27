@@ -6,8 +6,6 @@ import torch
 from torch import nn
 from torch.nn import functional as F
 
-#from megatron import logging
-# from megatron.model.utils import log_debug_usage
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +39,7 @@ class ReGLU(_GLUBaseModule):
 class SwiGLU(_GLUBaseModule):
     def __init__(self):
         super().__init__(F.silu)
+
 
 liglu = torch.jit.script(LiGLU())
 geglu = torch.jit.script(GEGLU())

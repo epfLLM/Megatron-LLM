@@ -8,13 +8,15 @@ from megatron import get_args
 from megatron.core import tensor_parallel
 from megatron.model.enums import AttnMaskType
 from megatron.model.language_model import parallel_lm_logits
-from megatron.model.language_model import get_language_model
+import megatron.model.language_model
 from megatron.model import LayerNorm
+import megatron.model.utils
+
 from megatron.model.utils import erf_gelu
-from megatron.model.utils import get_linear_layer
 from megatron.model.utils import init_method_normal
 from megatron.model.utils import scaled_init_method_normal
 from .module import MegatronModule
+
 
 def bert_extended_attention_mask(attention_mask):
     # We create a 3D attention mask from a 2D tensor mask.
@@ -64,7 +66,10 @@ class BertLMHead(MegatronModule):
         tensor_parallel.set_tensor_model_parallel_attributes(self.bias, True, 0, 1)
         self.parallel_output = parallel_output
 
-        self.dense = get_linear_layer(hidden_size, hidden_size, init_method)
+        self.dense = megatron.model.utils.get_linear_layer(hidden_size,
+                                                           hidden_size,
+                                                           init_method,
+                                                           args.perform_initialization)
         setattr(self.dense.weight, 'sequence_parallel', args.sequence_parallel)
         setattr(self.dense.bias, 'sequence_parallel', args.sequence_parallel)
 
@@ -104,7 +109,7 @@ def post_language_model_processing(lm_output, pooled_output,
         return lm_logits.transpose(0,1).contiguous(), binary_logits
     else:
         # [b s] => [s b]
-        lm_labels = lm_labels.transpose(0,1).contiguous()
+        lm_labels = lm_labels.transpose(0, 1).contiguous()
         # lm_logits : [s, b, h] and lm_labels: [s, b]
         if fp16_lm_cross_entropy:
             assert lm_logits.dtype == torch.half
@@ -121,11 +126,12 @@ class BertModel(MegatronModule):
     """Bert Language model."""
 
     def __init__(self,
-                 num_tokentypes=2,
+                 num_tokentypes: int=2,
                  add_binary_head=True,
                  parallel_output=True,
                  pre_process=True,
-                 post_process=True):
+                 post_process=True,
+                 model_type=None):
         super(BertModel, self).__init__()
         args = get_args()
 
@@ -139,16 +145,18 @@ class BertModel(MegatronModule):
         scaled_init_method = scaled_init_method_normal(args.init_method_std,
                                                        args.num_layers)
 
-        self.language_model, self._language_model_key = get_language_model(
+        self.language_model, self._language_model_key = megatron.model.language_model.get_language_model(
             num_tokentypes=num_tokentypes,
             add_pooler=self.add_binary_head,
             encoder_attn_mask_type=AttnMaskType.padding,
             init_method=init_method,
             scaled_init_method=scaled_init_method,
             pre_process=self.pre_process,
-            post_process=self.post_process)
+            post_process=self.post_process,
+            args=args,
+            model_type=model_type)
 
-        self.initialize_word_embeddings(init_method_normal)
+        self.initialize_word_embeddings(init_method_normal, args)
         if self.post_process:
             self.lm_head = BertLMHead(
                 self.word_embeddings_weight().size(0),
@@ -156,8 +164,10 @@ class BertModel(MegatronModule):
             self._lm_head_key = 'lm_head'
             self.binary_head = None
             if self.add_binary_head:
-                self.binary_head = get_linear_layer(args.hidden_size, 2,
-                                                    init_method)
+                self.binary_head = megatron.model.utils.get_linear_layer(args.hidden_size,
+                                                                         2,
+                                                                         init_method,
+                                                                         args.perform_initialization)
                 self._binary_head_key = 'binary_head'
 
     def set_input_tensor(self, input_tensor):
@@ -184,14 +194,15 @@ class BertModel(MegatronModule):
             pooled_output = None
 
         if self.post_process:
-            return post_language_model_processing(lm_output, pooled_output,
-                                                  self.lm_head, self.binary_head,
+            return post_language_model_processing(lm_output,
+                                                  pooled_output,
+                                                  self.lm_head,
+                                                  self.binary_head,
                                                   lm_labels,
                                                   self.word_embeddings_weight(),
                                                   self.fp16_lm_cross_entropy)
         else:
             return lm_output
-
 
     def state_dict_for_save_checkpoint(self, prefix='', keep_vars=False):
         """For easy load when model is combined with other heads,

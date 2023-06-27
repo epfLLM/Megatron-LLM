@@ -3,3 +3,8 @@ __pycache__
 build
 .coverage_*
 *.egg-info
+
+apex/*
+.idea/*
+checkpoints/*
+

@@ -7,13 +7,15 @@ from functools import partial
 import torch
 import torch.nn.functional as F
 
+import megatron.initialize
+import megatron
 from megatron import get_args
 from megatron import print_rank_0
 from megatron import get_timers
 from megatron.core import tensor_parallel
 from megatron.data.dataset_utils import build_train_valid_test_datasets
 from megatron.model import BertModel, ModelType
-from megatron.training import pretrain
+
 from megatron.utils import average_losses_across_data_parallel_group
 
 
@@ -24,12 +26,15 @@ def model_provider(pre_process=True, post_process=True):
 
     args = get_args()
     num_tokentypes = 2 if args.bert_binary_head else 0
+
+    model_type_bert = ModelType.encoder_or_decoder
     model = BertModel(
         num_tokentypes=num_tokentypes,
         add_binary_head=args.bert_binary_head,
         parallel_output=True,
         pre_process=pre_process,
-        post_process=post_process)
+        post_process=post_process,
+        model_type=model_type_bert)
 
     return model
 
@@ -129,7 +134,13 @@ def train_valid_test_datasets_provider(train_val_test_num_samples):
 
 
 if __name__ == "__main__":
-
-    pretrain(train_valid_test_datasets_provider, model_provider,
-             ModelType.encoder_or_decoder,
-             forward_step, args_defaults={'tokenizer_type': 'BertWordPieceLowerCase'})
+    model_type_bert = ModelType.encoder_or_decoder
+    args_defaults = {'tokenizer_type': 'BertWordPieceLowerCase'}
+    megatron.initialize.initialize_megatron(extra_args_provider=None,
+                                            args_defaults=args_defaults)
+    args = megatron.get_args()
+    megatron.training.pretrain(args,
+                               train_valid_test_datasets_provider,
+                               model_provider,
+                               model_type_bert,
+                               forward_step)

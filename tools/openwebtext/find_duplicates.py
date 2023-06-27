@@ -174,8 +174,8 @@ def find_pair_urls_sequential(args, lshcache, url_doc):
         format(counter, time.time() - start_time,
         deduped), flush=True)
 
-if __name__ == '__main__':
 
+if __name__ == '__main__':
     print('parsing the arguments ...')
 
     parser = argparse.ArgumentParser()

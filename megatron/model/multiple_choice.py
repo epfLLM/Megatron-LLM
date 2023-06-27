@@ -4,30 +4,32 @@
 
 import torch
 
+import megatron.model.language_model
 from megatron import get_args, print_rank_last
 from megatron.model.enums import AttnMaskType
 from megatron.model.bert_model import bert_extended_attention_mask, bert_position_ids
-from megatron.model.language_model import get_language_model
-from megatron.model.utils import get_linear_layer
+
+import megatron.model.utils
 from megatron.model.utils import init_method_normal
 from megatron.model.utils import scaled_init_method_normal
 from .module import MegatronModule
 
 
 class MultipleChoice(MegatronModule):
-
     def __init__(self,
                  num_tokentypes=2,
                  pre_process=True,
-                 post_process=True):
+                 post_process=True,
+                 model_type=None):
         super(MultipleChoice, self).__init__(share_word_embeddings=False)
+
         args = get_args()
+        assert model_type is not None
 
         init_method = init_method_normal(args.init_method_std)
         self.pre_process = pre_process
         self.post_process = post_process
-
-        self.language_model, self._language_model_key = get_language_model(
+        self.language_model, self._language_model_key = megatron.model.language_model.get_language_model(
             num_tokentypes=num_tokentypes,
             add_pooler=True,
             encoder_attn_mask_type=AttnMaskType.padding,
@@ -35,13 +37,17 @@ class MultipleChoice(MegatronModule):
             scaled_init_method=scaled_init_method_normal(args.init_method_std,
                                                          args.num_layers),
             pre_process=self.pre_process,
-            post_process=self.post_process)
+            post_process=self.post_process,
+            args=args,
+            model_type=model_type)
 
         # Multi-choice head.
         if self.post_process:
             self.multichoice_dropout = torch.nn.Dropout(args.hidden_dropout)
-            self.multichoice_head = get_linear_layer(args.hidden_size, 1,
-                                                     init_method)
+            self.multichoice_head = megatron.model.utils.get_linear_layer(args.hidden_size,
+                                                                          1,
+                                                                          init_method,
+                                                                          args.perform_initialization)
             self._multichoice_head_key = 'multichoice_head'
 
     def set_input_tensor(self, input_tensor):

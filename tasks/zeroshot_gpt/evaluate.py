@@ -12,10 +12,10 @@ from megatron import get_tokenizer
 from megatron.core import parallel_state, tensor_parallel
 from megatron.checkpointing import load_checkpoint
 from megatron.model import GPTModel
-from megatron.training import get_model
 from megatron.utils import get_ltor_masks_and_position_ids, unwrap_model
 from megatron.p2p_communication import recv_forward, send_forward
-from tasks.finetune_utils import build_data_loader
+import tasks.finetune_utils
+import megatron.training
 
 from .datasets import build_dataset
 
@@ -24,7 +24,8 @@ from torch.nn.parallel.distributed import DistributedDataParallel as torchDDP
 from megatron.model import DistributedDataParallel as LocalDDP
 from megatron.model import Float16Module
 
-def get_model_provider(eval_metric):
+
+def _get_model_provider(eval_metric):
     """Based on evaluation metric set the parallel-output flag and
     return the model provider."""
 
@@ -138,7 +139,7 @@ def evaluate(data_loader, model, eval_metric):
     return total_output
 
 
-def evaluate_and_print_results(task, data_loader, model, eval_metric):
+def _evaluate_and_print_results(task, data_loader, model, eval_metric):
     """Evaluate and print results on screen."""
 
     # Evaluate and get results.
@@ -190,9 +191,9 @@ def main():
     else:
         raise NotImplementedError('{} task is not implemented.'.format(
             args.task))
-
+    model_provider_func = _get_model_provider(eval_metric)
     # Set up model and load checkpoint.
-    model = get_model(get_model_provider(eval_metric), wrap_with_ddp=False)
+    model = megatron.training.get_model(model_provider_func, wrap_with_ddp=False, args=args)
     if args.load is not None:
         _ = load_checkpoint(model, None, None)
 
@@ -201,10 +202,10 @@ def main():
 
     # Data stuff.
     dataset = build_dataset(args.task)
-    dataloader = build_data_loader(dataset, args.micro_batch_size,
-                                   args.num_workers, drop_last=False)
+    dataloader = tasks.finetune_utils.build_data_loader(dataset, args.micro_batch_size,
+                                                        args.num_workers, drop_last=False)
 
     # Run evaluation.
-    evaluate_and_print_results(args.task, dataloader, model, eval_metric)
+    _evaluate_and_print_results(args.task, dataloader, model, eval_metric)
 
     print_rank_0('done :-)')

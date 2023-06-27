@@ -43,11 +43,6 @@ def mpu_cross_entropy(batch_size, seq_length, vocab_size,
 
 
 def test_cross_entropy(tensor_model_parallel_size):
-
-    if torch.distributed.get_rank() == 0:
-        print('> testing cross entropy with model parallel size {} ...'.
-              format(tensor_model_parallel_size))
-
     mpu.initialize_model_parallel(tensor_model_parallel_size)
     tensor_model_parallel_size = mpu.get_tensor_model_parallel_world_size()
 

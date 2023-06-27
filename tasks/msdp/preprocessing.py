@@ -35,7 +35,6 @@ def get_args():
                               wow_seen, wow_unseen, and woi")
     parser.add_argument("--seed", type=int, default=1234,
                         help="random seed")
-
     args = parser.parse_args()
     return args
 

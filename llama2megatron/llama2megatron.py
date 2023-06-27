@@ -37,6 +37,7 @@ megatron2llama = {
     'mlp.dense_4h_to_h': ['feed_forward.w2'],
 }
 
+
 def get_wqkv(llama_config, layer_prefix, n_heads=32):
     wq, wk, wv = llama_config[layer_prefix+'attention.wq.weight'], llama_config[layer_prefix+'attention.wk.weight'], llama_config[layer_prefix+'attention.wv.weight']
     n_hidden_per_head = wq.shape[-1] // n_heads

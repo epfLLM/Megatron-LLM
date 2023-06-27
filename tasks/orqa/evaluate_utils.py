@@ -3,15 +3,16 @@
 import torch
 
 from megatron import get_args, print_rank_0
-from megatron.checkpointing import load_biencoder_checkpoint
 from megatron.data.orqa_wiki_dataset import get_open_retrieval_wiki_dataset
 from megatron.data.realm_index import OpenRetreivalDataStore, FaissMIPSIndex
-from megatron.model.biencoder_model import get_model_provider
+import megatron.model.biencoder_model
 from megatron.training import get_model
 from tasks.orqa.unsupervised.nq import get_nq_dataset
 from tasks.orqa.unsupervised.nq import get_one_epoch_nq_dataloader
 from tasks.orqa.unsupervised.nq import process_nq_batch
 from tasks.orqa.unsupervised.qa_utils import calculate_matches
+
+from megatron.model import ModelType
 
 
 class ORQAEvaluator(object):
@@ -32,11 +33,15 @@ class ORQAEvaluator(object):
         if args.biencoder_shared_query_context_model:
             only_query_model = False
 
-        model = get_model(get_model_provider(only_query_model=only_query_model,
-            biencoder_shared_query_context_model=args.biencoder_shared_query_context_model))
+        model_type = ModelType.encoder_or_decoder
+        model_provider_func = megatron.model.biencoder_model.get_model_provider(only_query_model=only_query_model,
+                                                                                biencoder_shared_query_context_model=args.biencoder_shared_query_context_model,
+                                                                                model_type=model_type)
 
-        self.model = load_biencoder_checkpoint(model,
-                only_query_model=only_query_model)
+        wrap_with_ddp: bool = True
+        model = get_model(model_provider_func, model_type, wrap_with_ddp, args)
+
+        self.model = megatron.checkpointing.load_biencoder_checkpoint(model, only_query_model=only_query_model)
 
         assert len(self.model) == 1
         self.model[0].eval()

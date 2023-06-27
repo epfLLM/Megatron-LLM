@@ -4,7 +4,6 @@
 
 import os
 import sys
-import torch
 
 from megatron import dist_signal_handler
 from megatron.tokenizer import build_tokenizer
@@ -74,14 +73,16 @@ def _set_signal_handler():
     _GLOBAL_SIGNAL_HANDLER = dist_signal_handler.DistributedSignalHandler().__enter__()
 
 
+def _set_args(args):
+    global _GLOBAL_ARGS
+    _GLOBAL_ARGS = args
+
 
 def set_global_variables(args):
     """Set args, tokenizer, tensorboard_writer, adlr_autoresume, and timers."""
-
     assert args is not None
-
     _ensure_var_is_not_initialized(_GLOBAL_ARGS, 'args')
-    set_args(args)
+    _set_args(args)
 
     _build_num_microbatches_calculator(args)
     if args.vocab_file:
@@ -92,21 +93,13 @@ def set_global_variables(args):
 
     if args.exit_signal_handler:
         _set_signal_handler()
-    
-
-def set_args(args):
-    global _GLOBAL_ARGS
-    _GLOBAL_ARGS = args
 
 
 def _build_num_microbatches_calculator(args):
-
     global _GLOBAL_NUM_MICROBATCHES_CALCULATOR
     _ensure_var_is_not_initialized(_GLOBAL_NUM_MICROBATCHES_CALCULATOR,
                                    'num microbatches calculator')
-
-    _GLOBAL_NUM_MICROBATCHES_CALCULATOR = build_num_microbatches_calculator(
-        args)
+    _GLOBAL_NUM_MICROBATCHES_CALCULATOR = build_num_microbatches_calculator(args)
 
 
 def _build_tokenizer(args):

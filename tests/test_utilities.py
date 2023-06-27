@@ -2,8 +2,8 @@ import os
 import torch
 import megatron.core.parallel_state as ps
 
-class Utils:
 
+class Utils:
     world_size = torch.cuda.device_count()
     rank = int(os.environ['LOCAL_RANK'])
 

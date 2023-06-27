@@ -9,6 +9,7 @@ from megatron import get_args
 from megatron.data.dataset_utils import get_indexed_dataset_
 from megatron.data.realm_dataset_utils import get_block_samples_mapping
 
+
 def make_attention_mask(source_block, target_block):
     """
     Returns a 2-dimensional (2-D) attention mask
@@ -19,6 +20,7 @@ def make_attention_mask(source_block, target_block):
     mask = mask.astype(np.int64)
     # (source_length, target_length)
     return mask
+
 
 def get_ict_dataset(use_titles=True, query_in_block_prob=1):
     """Get a dataset which uses block samples mappings to get ICT/block indexing data (via get_block())

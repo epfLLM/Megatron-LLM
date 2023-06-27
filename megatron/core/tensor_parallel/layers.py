@@ -3,7 +3,6 @@
 # Parts of the code here are adapted from PyTorch
 # repo: https://github.com/pytorch/pytorch
 
-import math
 import os
 from typing import Optional
 import warnings
@@ -22,7 +21,6 @@ from megatron.core.parallel_state import (
 from .mappings import (
     copy_to_tensor_model_parallel_region,
     gather_from_tensor_model_parallel_region,
-    gather_from_sequence_parallel_region,
     reduce_from_tensor_model_parallel_region,
     scatter_to_tensor_model_parallel_region,
     reduce_scatter_to_sequence_parallel_region,
@@ -31,7 +29,6 @@ from .mappings import (
 from .random import get_cuda_rng_tracker
 from .utils import (
     divide,
-    split_tensor_along_last_dim,
     VocabUtility,
 )
 
@@ -44,6 +41,7 @@ except ImportError:
 _MODEL_PARALLEL_ATTRIBUTE_DEFAULTS = {'tensor_model_parallel': False,
                                       'partition_dim': -1,
                                       'partition_stride': 1}
+
 
 def param_is_not_tensor_parallel_duplicate(param):
     return (hasattr(param, 'tensor_model_parallel') and
@@ -81,7 +79,6 @@ def copy_tensor_model_parallel_attributes(destination_tensor, source_tensor):
 def _initialize_affine_weight_gpu(weight, init_method,
                                   partition_dim, stride=1):
     """Initialize affine weight for model parallel on GPU."""
-
     set_tensor_model_parallel_attributes(tensor=weight,
                                          is_parallel=True,
                                          dim=partition_dim,
@@ -198,9 +195,12 @@ class VocabParallelEmbedding(torch.nn.Module):
         else:
             masked_input = input_
             # Get the embeddings.
-        output_parallel = F.embedding(masked_input, self.weight,
-                                      self.padding_idx, self.max_norm,
-                                      self.norm_type, self.scale_grad_by_freq,
+        output_parallel = F.embedding(masked_input,
+                                      self.weight,
+                                      self.padding_idx,
+                                      self.max_norm,
+                                      self.norm_type,
+                                      self.scale_grad_by_freq,
                                       self.sparse)
         # Mask the output embedding.
         if self.tensor_model_parallel_size > 1:
@@ -273,7 +273,7 @@ class LinearWithGradAccumulationAndAsyncCommunication(torch.autograd.Function):
         grad_output = grad_output.view(grad_output.shape[0] * grad_output.shape[1],
                                        grad_output.shape[2])
         total_input = total_input.view(total_input.shape[0] * total_input.shape[1],
-				       total_input.shape[2])
+				                       total_input.shape[2])
 
         if ctx.async_grad_allreduce:
             # Asynchronous all-reduce
@@ -295,7 +295,6 @@ class LinearWithGradAccumulationAndAsyncCommunication(torch.autograd.Function):
             # Here we rely on CUDA_DEVICE_MAX_CONNECTIONS=1 to ensure that the
             # reduce scatter is scheduled before the weight gradient computation
 
-
         if ctx.gradient_accumulation_fusion:
             if weight.main_grad.dtype == torch.float32:
                 fused_weight_gradient_mlp_cuda.wgrad_gemm_accum_fp32(total_input, grad_output, weight.main_grad)
@@ -316,6 +315,7 @@ class LinearWithGradAccumulationAndAsyncCommunication(torch.autograd.Function):
             handle.wait()
 
         return grad_input, grad_weight, grad_bias, None, None, None
+
 
 def linear_with_grad_accumulation_and_async_allreduce(
     input: torch.Tensor,
@@ -406,6 +406,7 @@ def linear_with_grad_accumulation_and_async_allreduce(
         return LinearWithGradAccumulationAndAsyncCommunication.apply(*args)
 linear_with_grad_accumulation_and_async_allreduce.warned = False
 
+
 class ColumnParallelLinear(torch.nn.Module):
     """Linear layer with column parallelism.
 
@@ -439,7 +440,8 @@ class ColumnParallelLinear(torch.nn.Module):
 
     def __init__(self, input_size, output_size, *,
                  bias=True, gather_output=True,
-                 init_method=init.xavier_normal_, stride=1,
+                 init_method=init.xavier_normal_,
+                 stride=1,
                  keep_master_weight_for_test=False,
                  skip_bias_add=False,
                  async_tensor_model_parallel_allreduce=True,
@@ -448,15 +450,13 @@ class ColumnParallelLinear(torch.nn.Module):
                  perform_initialization=True,
                  gradient_accumulation_fusion=False,
                  sequence_parallel_enabled: bool = False,
-                 ):
+                 world_size: int=None):
         super(ColumnParallelLinear, self).__init__()
-
         # Keep input parameters
         self.input_size = input_size
         self.output_size = output_size
         self.gather_output = gather_output
         # Divide the weight matrix along the last dimension.
-        world_size = get_tensor_model_parallel_world_size()
         self.output_size_per_partition = divide(output_size, world_size)
         self.skip_bias_add = skip_bias_add
 
@@ -528,10 +528,8 @@ class ColumnParallelLinear(torch.nn.Module):
                 "cannot be enabled at the same time."
             )
 
-
     def forward(self, input_):
-        """Forward of ColumnParallelLinear
-
+        """
         Args:
             input_: 3D tensor whose order of dimension is [sequence, batch, hidden]
 
@@ -612,15 +610,14 @@ class RowParallelLinear(torch.nn.Module):
                  perform_initialization=True,
                  gradient_accumulation_fusion=False,
                  sequence_parallel_enabled: bool = False,
+                 world_size: int=None
                  ):
         super(RowParallelLinear, self).__init__()
-
         # Keep input parameters
         self.input_size = input_size
         self.output_size = output_size
         self.input_is_parallel = input_is_parallel
         # Divide the weight matrix along the last dimension.
-        world_size = get_tensor_model_parallel_world_size()
         self.input_size_per_partition = divide(input_size, world_size)
         self.skip_bias_add = skip_bias_add
         self.gradient_accumulation_fusion = gradient_accumulation_fusion
@@ -665,11 +662,8 @@ class RowParallelLinear(torch.nn.Module):
         else:
             self.register_parameter('bias', None)
 
-
-
     def forward(self, input_):
-        """Forward of RowParallelLinear
-
+        """
         Args:
             input_: 3D tensor whose order of dimension is [sequence, batch, hidden]
 

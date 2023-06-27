@@ -376,9 +376,7 @@ def clean_ngrams_below_threshold(args, ngrams_below_threshold, dedup_file, \
                     myjson[dedup_key] = text_buf_ngram_free[i]
                     myjson["split_id"] = use_prefix + split_id_string
                     outjson = json.dumps(myjson, ensure_ascii=False)
-                    #outjson = json.dumps({"text":text_buf_ngram_free[i],
-                    #    id_prefix+"_split_id":split_id_string},
-                    #    ensure_ascii=False)
+
                     out_f.write(outjson.encode('utf-8'))
                     out_f.write('\n'.encode('utf-8'))
 
@@ -401,8 +399,8 @@ def clean_ngrams_below_threshold(args, ngrams_below_threshold, dedup_file, \
     out_f.close()
     fin.close()
 
-if __name__ == '__main__':
 
+if __name__ == '__main__':
     # we use 13-grams, any text less than 200 characters got removed
     # any text splitted more than 10 got removed as well
 
@@ -440,7 +438,6 @@ if __name__ == '__main__':
                        help='Remove any documents more than this many splits')
     parser.add_argument('--remove_char_each_side', type=int, default=200,
                        help='Maximum size of ngram to use.')
-
     args = parser.parse_args()
 
     assert len(args.dedup_dataset) == 2

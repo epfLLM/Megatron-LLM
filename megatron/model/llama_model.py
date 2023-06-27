@@ -4,23 +4,22 @@
 
 import torch
 
-from megatron import get_args
 from megatron.core import tensor_parallel
 from .module import MegatronModule
 
-from .enums import AttnMaskType
-from .language_model import parallel_lm_logits
 import megatron.model.language_model
+from .enums import AttnMaskType
 from .utils import init_method_normal
 from .utils import scaled_init_method_normal
 
 
-def post_language_model_processing(lm_output, labels, logit_weights,
-                                   parallel_output,
-                                   fp16_lm_cross_entropy):
-
+def _post_language_model_processing(lm_output,
+                                    labels,
+                                    logit_weights,
+                                    parallel_output,
+                                    fp16_lm_cross_entropy):
     # Output. Format [s b h]
-    output = parallel_lm_logits(
+    output =  megatron.model.language_model.parallel_lm_logits(
         lm_output,
         logit_weights,
         parallel_output)
@@ -30,7 +29,7 @@ def post_language_model_processing(lm_output, labels, logit_weights,
         return output.transpose(0,1).contiguous()
     else:
         # [b s] => [s b]
-        labels = labels.transpose(0,1).contiguous()
+        labels = labels.transpose(0, 1).contiguous()
         if fp16_lm_cross_entropy:
             assert output.dtype == torch.half
             loss = tensor_parallel.vocab_parallel_cross_entropy(output, labels)
@@ -42,23 +41,24 @@ def post_language_model_processing(lm_output, labels, logit_weights,
         return loss
 
 
-class GPTModel(MegatronModule):
-    """GPT-2 Language model."""
+class LlamaModel(MegatronModule):
+    """Llama Language model."""
 
     def __init__(self,
-                 num_tokentypes=0,
-                 parallel_output=True,
-                 pre_process=True,
-                 post_process=True):
-        super(GPTModel, self).__init__()
-        args = get_args()
+                 num_tokentypes: int,
+                 parallel_output: bool,
+                 pre_process: bool,
+                 post_process: bool,
+                 args,
+                 model_type):
+        super(LlamaModel, self).__init__()
 
         self.parallel_output = parallel_output
         self.pre_process = pre_process
         self.post_process = post_process
         self.fp16_lm_cross_entropy = args.fp16_lm_cross_entropy
 
-        self.language_model, self._language_model_key = megatron.model.language_model(
+        self.language_model, self._language_model_key = megatron.model.language_model.get_language_model(
             num_tokentypes=num_tokentypes,
             add_pooler=False,
             encoder_attn_mask_type=AttnMaskType.causal,
@@ -66,8 +66,9 @@ class GPTModel(MegatronModule):
             scaled_init_method=scaled_init_method_normal(args.init_method_std,
                                                          args.num_layers),
             pre_process=self.pre_process,
-            post_process=self.post_process)
-
+            post_process=self.post_process,
+            args=args,
+            model_type=model_type)
         self.initialize_word_embeddings(init_method_normal, args)
 
     def set_input_tensor(self, input_tensor):
@@ -84,7 +85,7 @@ class GPTModel(MegatronModule):
             inference_params=inference_params)
 
         if self.post_process:
-            return post_language_model_processing(
+            return _post_language_model_processing(
                 lm_output, labels,
                 self.word_embeddings_weight(),
                 self.parallel_output,

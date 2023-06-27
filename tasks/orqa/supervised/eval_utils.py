@@ -7,12 +7,12 @@ import numpy as np
 import time
 import torch
 import torch.nn.functional as F
-from torch.utils.data import DataLoader
 
 from megatron import get_args, print_rank_0
 from megatron.core import mpu
 from megatron.utils import average_losses_across_data_parallel_group
-from tasks.finetune_utils import build_data_loader
+import tasks.finetune_utils
+
 
 def task_collate_fn(batch_data):
     # generate batch
@@ -45,7 +45,6 @@ def task_collate_fn(batch_data):
             torch.LongTensor(np.concatenate(tensorized['neg_context_types']))
 
     return tensorized
-
 
 
 def process_batch(batch):
@@ -92,11 +91,11 @@ def accuracy_func_provider(single_dataset_provider, rank0sampler=False):
     print_rank_0(datapath)
     print_rank_0(rank0sampler)
 
-    dataloader = build_data_loader(dataset,
-                                   args.eval_micro_batch_size,
-                                   num_workers=args.num_workers,
-                                   drop_last=drop_last,
-                                   task_collate_fn=task_collate_fn)
+    dataloader = tasks.finetune_utils.build_data_loader(dataset,
+                                                        args.eval_micro_batch_size,
+                                                        num_workers=args.num_workers,
+                                                        drop_last=drop_last,
+                                                        task_collate_fn=task_collate_fn)
     dataloaders = (dataset.dataset_name, dataloader)
 
     def metrics_func(model, epoch, output_predictions=False):

@@ -6,11 +6,8 @@
 import math
 import torch
 
-from megatron import get_args
-from megatron import get_timers
 from megatron import print_rank_0
 from megatron.core import mpu, tensor_parallel
-from megatron.model.module import param_is_not_shared
 
 from .optimizer import MixedPrecisionOptimizer, _zero_grad_group_helper
 
@@ -24,8 +21,10 @@ class Range:
         self.start = start
         self.end = end
         self.size = end - start
+
     def normalize(self, start = 0):
         return Range(start, start + self.size)
+
     def __str__(self):
         return "%d,%d [%d]" % (self.start, self.end, self.size)
 
@@ -109,13 +108,12 @@ class DistributedOptimizer(MixedPrecisionOptimizer):
                 sub_param_start = max(0, gbuf_world_range.start-param_world_start)
                 sub_param_range = param_local_range.normalize(sub_param_start)
                 param_range_map[param] = {
-                    "gbuf_world" : param_world_range,
-                    "gbuf_local" : param_local_range,
+                    "gbuf_world": param_world_range,
+                    "gbuf_local": param_local_range,
                     "param" : sub_param_range,
                 }
 
         return param_range_map
-
 
     @classmethod
     def build_model_gbuf_range(cls, model, dtype):
@@ -165,7 +163,6 @@ class DistributedOptimizer(MixedPrecisionOptimizer):
 
         return data
 
-
     @classmethod
     def build_model_gbuf_range_map(cls, model):
         """
@@ -176,7 +173,6 @@ class DistributedOptimizer(MixedPrecisionOptimizer):
             dtype : cls.build_model_gbuf_range(model, dtype)
             for dtype in model._grad_buffers
         }
-
 
     @classmethod
     def build_model_param_gbuf_map(cls, model_gbuf_ranges):
@@ -190,7 +186,6 @@ class DistributedOptimizer(MixedPrecisionOptimizer):
                 for param, param_range_map in gbuf_range_map["param_map"].items():
                     param_gbuf_map[param] = (model_index, dtype)
         return param_gbuf_map
-
 
     @classmethod
     def build_optimizer_group_ranges(cls, param_groups, model_gbuf_ranges):
@@ -227,7 +222,6 @@ class DistributedOptimizer(MixedPrecisionOptimizer):
         group_ranges = [ g for g in group_ranges if len(g["params"]) > 0 ]
 
         return group_ranges
-
 
     @classmethod
     def build_model_and_main_param_groups(cls,
@@ -334,7 +328,6 @@ class DistributedOptimizer(MixedPrecisionOptimizer):
             shard_fp32_from_float16_groups,
         )
 
-
     def __init__(self, optimizer, clip_grad, log_num_zeros_in_grad,
                  params_have_main_grad, use_contiguous_buffers_in_local_ddp,
                  fp16, bf16, params_dtype, grad_scaler, models):
@@ -402,7 +395,6 @@ class DistributedOptimizer(MixedPrecisionOptimizer):
             [ g["orig_group"] for g in self.opt_group_ranges ]
         self.optimizer.load_state_dict(self.optimizer.state_dict())
 
-
     def get_model_param_range_map(self, param):
         """
         Given a model param, get the index sub-range of the param that this
@@ -413,14 +405,12 @@ class DistributedOptimizer(MixedPrecisionOptimizer):
         param_range_map = gbuf_range_map["param_map"][param]
         return param_range_map
 
-
     def get_model_parallel_group(self):
         """
         With the distributed optimizer, the model parallel group is the
         entire world.
         """
         return None
-
 
     def state_dict(self):
         """
@@ -433,7 +423,6 @@ class DistributedOptimizer(MixedPrecisionOptimizer):
         state_dict['shard_fp32_from_float16_groups'] = \
             self.shard_fp32_from_float16_groups
         return state_dict
-
 
     def load_state_dict(self, state_dict):
         """
@@ -467,7 +456,6 @@ class DistributedOptimizer(MixedPrecisionOptimizer):
                 state_dict["shard_fp32_from_float16_groups"]):
             for current_param, saved_param in zip(current_group, saved_group):
                 current_param.data.copy_(saved_param.data)
-
 
     def zero_grad(self, set_to_none=True):
         """
@@ -528,10 +516,8 @@ class DistributedOptimizer(MixedPrecisionOptimizer):
             for model in self.models
             for dtype, mem_buffer in model._grad_buffers.items()])
 
-
     def get_model_param_buffer_dp_views(self):
         return self.get_model_buffer_dp_views(self.param_buffers)
-
 
     def reduce_model_grads(self, args, timers):
         """
@@ -582,7 +568,6 @@ class DistributedOptimizer(MixedPrecisionOptimizer):
 
         timers('grads-reduce-scatter').stop()
 
-
     def gather_model_params(self, args, timers):
         """
         All-gather updated model params.
@@ -624,7 +609,6 @@ class DistributedOptimizer(MixedPrecisionOptimizer):
 
         timers('params-all-gather').stop()
 
-
     def _collect_main_grad_data_for_unscaling(self):
         """
         Note: this should be equivalent to the float-16 optimizer's method,
@@ -635,7 +619,6 @@ class DistributedOptimizer(MixedPrecisionOptimizer):
             for group in self.optimizer.param_groups
             for param in group["params"]
         ]
-
 
     def _get_model_and_main_params_data_float16(self):
         """
@@ -649,7 +632,6 @@ class DistributedOptimizer(MixedPrecisionOptimizer):
                 model_data.append(model_param.data)
                 main_data.append(main_param.data)
         return model_data, main_data
-
 
     def _copy_model_grads_to_main_grads(self):
         """
@@ -681,7 +663,6 @@ class DistributedOptimizer(MixedPrecisionOptimizer):
                          self.shard_fp32_from_float16_groups)
         copy_group_grads(self.model_fp32_groups,
                          self.shard_fp32_groups)
-
 
     def _copy_main_params_to_model_params(self):
         """

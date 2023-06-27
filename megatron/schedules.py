@@ -7,7 +7,6 @@ from torch.nn.parallel.distributed import DistributedDataParallel as torchDDP
 
 from megatron import get_args
 from megatron import get_num_microbatches
-from megatron import get_timers
 from megatron import p2p_communication
 from megatron.core import mpu
 from megatron.utils import unwrap_model
@@ -503,7 +502,7 @@ def forward_backward_pipelining_with_interleaving(forward_step_func,
     return forward_data_store
 
 
-def get_tensor_shapes(rank, model_type):
+def get_tensor_shapes(rank, model_type: ModelType):
     # Determine right tensor sizes (based on position of rank with respect to split
     # rank) and model size.
     # Send two tensors if model is T5 and rank is in decoder stage:

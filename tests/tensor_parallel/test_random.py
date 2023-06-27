@@ -1,23 +1,23 @@
-from megatron.core.tensor_parallel.random import CudaRNGStatesTracker
+import megatron.core.tensor_parallel.random
 from megatron.core.tensor_parallel.random import model_parallel_cuda_manual_seed
-from megatron.core.tensor_parallel.random import _CUDA_RNG_STATE_TRACKER
 from megatron.core.tensor_parallel.random import checkpoint
 from tests.test_utilities import Utils
 import pytest
 import torch
 
+
 def test_cuda_rng_states_tracker():
-    rng_tracker = CudaRNGStatesTracker()
-    rng_tracker.set_states({"state1":1234})
+    rng_tracker = megatron.core.tensor_parallel.random.CudaRNGStatesTracker()
+    rng_tracker.set_states({"state1": 1234})
     assert(rng_tracker.get_states()["state1"] == 1234)
     rng_tracker.reset()
     assert(rng_tracker.get_states() == {})
     seed = 1111
-    rng_tracker.add("state2",seed)
+    rng_tracker.add("state2", seed)
     with pytest.raises(Exception):
-        assert(rng_tracker.add("state3",seed))
+        assert(rng_tracker.add("state3", seed))
     with pytest.raises(Exception):
-        assert(rng_tracker.add("state2",111))
+        assert(rng_tracker.add("state2", 111))
     assert(rng_tracker.get_states()['state2'] is not None)
     with pytest.raises(Exception):
         assert()
@@ -27,11 +27,13 @@ def test_cuda_rng_states_tracker():
     rng_state = torch.cuda.get_rng_state()
     assert torch.equal(rng_tracker.get_states()['state2'], rng_state)
 
+
 def test_model_parallel_cuda_manual_seed():
     Utils.initialize_model_parallel(4,2)
     model_parallel_cuda_manual_seed(0)
-    assert(_CUDA_RNG_STATE_TRACKER.get_states()['model-parallel-rng'] is not None)
+    assert(megatron.core.tensor_parallel.random._CUDA_RNG_STATE_TRACKER.get_states()['model-parallel-rng'] is not None)
     Utils.destroy_model_parallel()
+
 
 def test_checkpoint():
     def test_forward(*input):

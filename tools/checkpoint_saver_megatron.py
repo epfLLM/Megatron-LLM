@@ -1,4 +1,3 @@
-
 import os
 import sys
 
@@ -26,7 +25,7 @@ def save_checkpoint(queue, args):
         sys.path.insert(0, args.megatron_path)
 
     try:
-        from megatron.arguments import (parse_args, validate_args)
+        import megatron.arguments
         from megatron.checkpointing import save_checkpoint
         from megatron.global_vars import set_global_variables, get_args
         from megatron.model import ModelType
@@ -115,11 +114,9 @@ def save_checkpoint(queue, args):
     elif md.params_dtype == torch.bfloat16:
         sys.argv.append('--bf16')
 
-    margs = parse_args()
-    validate_args(margs)
+    margs = megatron.arguments.parse_args()
+    megatron.arguments.validate_args(margs)
     set_global_variables(margs)
-
-    # margs = megatron args
     margs = get_args()
 
     if hasattr(md, 'consumed_train_samples'):
@@ -140,7 +137,7 @@ def save_checkpoint(queue, args):
     else:
         raise Exception(f'unrecognized model type: {args.model_type}')
 
-    def get_models(count, dtype, pre_process, post_process):
+    def _get_models(count, dtype, pre_process, post_process):
         models = [model_provider(pre_process, post_process).to(dtype) for _ in range(count)]
         return models
 
@@ -191,7 +188,7 @@ def save_checkpoint(queue, args):
     # Make models for first pipeline stage and fill in embeddings
     mpu.set_pipeline_model_parallel_rank(0)
     post_process = args.target_pipeline_parallel_size == 1
-    models = get_models(args.target_tensor_parallel_size, md.params_dtype, True, post_process)
+    models = _get_models(args.target_tensor_parallel_size, md.params_dtype, True, post_process)
     for tp_rank, model in enumerate(models):
         print(f"word embeddings shape {model.language_model.embedding.word_embeddings.weight.shape}")
         model.language_model.embedding.word_embeddings.weight.data.copy_(out_word_embed[tp_rank])
@@ -204,7 +201,7 @@ def save_checkpoint(queue, args):
         if pp_rank > 0:
             mpu.set_pipeline_model_parallel_rank(pp_rank)
             post_process = pp_rank == args.target_pipeline_parallel_size - 1
-            models = get_models(args.target_tensor_parallel_size, md.params_dtype, False, post_process)
+            models = _get_models(args.target_tensor_parallel_size, md.params_dtype, False, post_process)
 
         for layer in range(len(models[0].language_model.encoder.layers)):
             msg = queue_get(f"transformer layer {total_layer_num}")

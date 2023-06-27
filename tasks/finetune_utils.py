@@ -13,24 +13,21 @@ from megatron.core import mpu
 from megatron.checkpointing import load_checkpoint
 from megatron.checkpointing import save_checkpoint
 from megatron.model import ModelType
-from megatron.training import evaluate_and_print_results
-from megatron.training import setup_model_and_optimizer
-from megatron.training import train_step
+
+import megatron.training
+import megatron.utils
 from megatron.training import training_log
 from megatron.utils import average_losses_across_data_parallel_group
 from megatron.utils import calc_params_l2_norm
-from megatron.utils import check_adlr_autoresume_termination
 
 
-def process_batch(batch):
+def process_batch(batch, is_fp16: bool):
     """Process batch and produce inputs for the model."""
-    args = get_args()
-
     tokens = batch['text'].long().cuda().contiguous()
     types = batch['types'].long().cuda().contiguous()
     labels = batch['label'].long().cuda().contiguous()
     attention_mask = batch['padding_mask'].float().cuda().contiguous()
-    if args.fp16:
+    if is_fp16:
         attention_mask = attention_mask.half()
 
     return tokens, types, labels, attention_mask
@@ -45,21 +42,20 @@ def cross_entropy_loss_func(labels, output_tensor):
 
     # Reduce loss for logging.
     averaged_loss = average_losses_across_data_parallel_group([loss])
-
     return loss, {'lm loss': averaged_loss[0]}
 
 
 def _cross_entropy_forward_step(batch, model):
     """Simple forward step with cross-entropy loss."""
     timers = get_timers()
-
+    args = get_args()
     # Get the batch.
     timers('batch-generator', log_level=2).start()
     try:
         batch_ = next(batch)
     except BaseException:
         batch_ = batch
-    tokens, types, labels, attention_mask = process_batch(batch_)
+    tokens, types, labels, attention_mask = process_batch(batch_, args.fp16)
     timers('batch-generator').stop()
 
     # Forward model.
@@ -68,7 +64,8 @@ def _cross_entropy_forward_step(batch, model):
     return output_tensor, partial(cross_entropy_loss_func, labels)
 
 
-def build_data_loader(dataset, micro_batch_size, num_workers, drop_last,
+def build_data_loader(dataset,
+                      micro_batch_size, num_workers, drop_last,
         task_collate_fn=None):
     """Data loader. Note that batch-size is the local (per GPU) batch-size."""
 
@@ -141,10 +138,15 @@ def _build_train_valid_dataloaders(train_dataset, valid_dataset,
     return train_dataloader, valid_dataloader
 
 
-def _train(model, optimizer, opt_param_scheduler, forward_step,
-           train_dataloader, valid_dataloader, end_of_epoch_callback):
+def _train(model,
+           optimizer,
+           opt_param_scheduler,
+           forward_step,
+           train_dataloader,
+           valid_dataloader,
+           end_of_epoch_callback,
+           args):
     """Train the model."""
-    args = get_args()
     timers = get_timers()
 
     assert get_num_microbatches() == 1, "finetuning with gradient accumulation doesn't currently work"
@@ -182,7 +184,7 @@ def _train(model, optimizer, opt_param_scheduler, forward_step,
             start_iteration = 0
 
             # Train for one step.
-            out = train_step(forward_step, batch, model, optimizer, opt_param_scheduler)
+            out = megatron.training.train_step(forward_step, batch, model, optimizer, opt_param_scheduler, args)
 
             losses_dict, skipped_iter, grad_norm, num_zeros_in_grad = out
             iteration += 1
@@ -191,7 +193,8 @@ def _train(model, optimizer, opt_param_scheduler, forward_step,
             params_norm = None
             if args.log_params_norm:
                 params_norm = calc_params_l2_norm(model)
-            report_memory_flag = training_log(losses_dict, losses_dict_sum,
+            report_memory_flag = training_log(losses_dict,
+                                              losses_dict_sum,
                                               optimizer.param_groups[0]['lr'],
                                               iteration,
                                               optimizer.get_loss_scale().item(),
@@ -201,8 +204,8 @@ def _train(model, optimizer, opt_param_scheduler, forward_step,
             # Autoresume
             if args.adlr_autoresume and \
                (iteration % args.adlr_autoresume_interval == 0):
-                check_adlr_autoresume_termination(iteration, model,
-                                                  optimizer, opt_param_scheduler)
+                megatron.utils.check_adlr_autoresume_termination(iteration, model,
+                                                  optimizer, opt_param_scheduler, args)
 
             # Checkpointing
             saved_checkpoint = False
@@ -214,9 +217,9 @@ def _train(model, optimizer, opt_param_scheduler, forward_step,
             # Evaluation
             if args.eval_interval and iteration % args.eval_interval == 0:
                 prefix = 'iteration {}'.format(iteration)
-                evaluate_and_print_results(prefix, forward_step,
+                megatron.training.evaluate_and_print_results(prefix, forward_step,
                                            valid_dataloader, model,
-                                           iteration, None, False)
+                                           iteration, None, False, args=args)
 
             # Exiting based on iterations
             if args.exit_interval and iteration % args.exit_interval == 0:
@@ -235,7 +238,8 @@ def _train(model, optimizer, opt_param_scheduler, forward_step,
             end_of_epoch_callback(model, epoch)
 
 
-def finetune(train_valid_datasets_provider, model_provider,
+def finetune(train_valid_datasets_provider,
+             model_provider,
              model_type=ModelType.encoder_or_decoder,
              forward_step=_cross_entropy_forward_step,
              end_of_epoch_callback_provider=None,
@@ -266,7 +270,7 @@ def finetune(train_valid_datasets_provider, model_provider,
 
     # Build model, optimizer and learning rate scheduler.
     timers('model and optimizer', log_level=0).start()
-    model, optimizer, opt_param_scheduler = setup_model_and_optimizer(model_provider, model_type)
+    model, optimizer, opt_param_scheduler = megatron.training.setup_model_and_optimizer(model_provider, model_type, args=args)
     timers('model and optimizer').stop()
 
     # If pretrained checkpoint is provided and we have not trained for
@@ -294,8 +298,9 @@ def finetune(train_valid_datasets_provider, model_provider,
 
     # Finetune the model.
     if args.epochs > 0:
-        _train(model, optimizer, opt_param_scheduler, forward_step,
-               train_dataloader, valid_dataloader, end_of_epoch_callback)
+        _train(model,
+               optimizer, opt_param_scheduler, forward_step,
+               train_dataloader, valid_dataloader, end_of_epoch_callback, args)
     # Or just evaluate.
     else:
         if end_of_epoch_callback is not None:

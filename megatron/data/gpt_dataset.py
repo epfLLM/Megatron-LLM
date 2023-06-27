@@ -4,6 +4,7 @@
 
 import os
 import time
+from typing import Optional, List
 
 import numpy as np
 import torch
@@ -13,29 +14,35 @@ from megatron.core import mpu
 from megatron.data.blendable_dataset import BlendableDataset
 from megatron.data.dataset_utils import get_datasets_weights_and_num_samples
 from megatron.data.dataset_utils import get_train_valid_test_split_
-from megatron.data.indexed_dataset import make_dataset as make_indexed_dataset
+import megatron.data.indexed_dataset
 
 
-def build_train_valid_test_datasets(data_prefix, data_impl,
-                                    splits_string, train_valid_test_num_samples,
-                                    seq_length, seed, skip_warmup,
-                                    train_data_prefix=None, valid_data_prefix=None,
-                                    test_data_prefix=None,):
+def build_train_valid_test_datasets(data_prefix: Optional[str],
+                                    data_impl: str,
+                                    splits_string: str,
+                                    train_valid_test_num_samples: List[int],
+                                    seq_length: int,
+                                    seed: int,
+                                    skip_warmup: bool,
+                                    train_data_prefix=None,
+                                    valid_data_prefix=None,
+                                    test_data_prefix=None):
     """Build train, valid, and test datasets."""
-
     if data_prefix:
         print_rank_0("Single data path provided for train, valid & test")
         # Single dataset.
         if len(data_prefix) == 1:
             return _build_train_valid_test_datasets(data_prefix[0],
-                                                    data_impl, splits_string,
+                                                    data_impl,
+                                                    splits_string,
                                                     train_valid_test_num_samples,
-                                                    seq_length, seed, skip_warmup)
-
+                                                    seq_length,
+                                                    seed,
+                                                    skip_warmup)
         # Blending dataset.
         # Parse the values.
         output = get_datasets_weights_and_num_samples(data_prefix,
-                                                    train_valid_test_num_samples)
+                                                      train_valid_test_num_samples)
         prefixes, weights, datasets_train_valid_test_num_samples = output
 
         # Build individual datasets.
@@ -69,31 +76,35 @@ def build_train_valid_test_datasets(data_prefix, data_impl,
                 blending_test_dataset)
     else:
         print_rank_0("Separate data paths provided for train, valid & test. Split string will be ignored.")
-
         train_dataset, valid_dataset, test_dataset = None, None, None
         # Single dataset.
         if train_data_prefix is not None:
-            train_dataset = build_dataset("train", train_data_prefix, data_impl,
+            train_dataset = _build_dataset("train", train_data_prefix, data_impl,
                                         train_valid_test_num_samples[0], seq_length, seed,
                                         skip_warmup)
 
         if valid_data_prefix is not None:
-            valid_dataset = build_dataset("valid", valid_data_prefix, data_impl,
+            valid_dataset = _build_dataset("valid", valid_data_prefix, data_impl,
                                     train_valid_test_num_samples[1], seq_length, seed,
                                     False)
 
         if test_data_prefix is not None:
-            test_dataset = build_dataset("test", test_data_prefix, data_impl,
+            test_dataset = _build_dataset("test", test_data_prefix, data_impl,
                                     train_valid_test_num_samples[2], seq_length, seed,
                                     False)
+        return train_dataset, valid_dataset, test_dataset
 
-        return (train_dataset, valid_dataset, test_dataset)
 
-
-def build_dataset(dataset_name, data_prefix, data_impl, num_samples, seq_length, seed, skip_warmup):
+def _build_dataset(dataset_name,
+                   data_prefix,
+                   data_impl,
+                   num_samples,
+                   seq_length,
+                   seed,
+                   skip_warmup):
     dataset = None
     if len(data_prefix) == 1:
-        dataset = _build_dataset(dataset_name,
+        dataset = _build_dataset_kernel(dataset_name,
                         data_prefix[0], data_impl,
                         num_samples, seq_length,
                         seed, skip_warmup)
@@ -106,7 +117,7 @@ def build_dataset(dataset_name, data_prefix, data_impl, num_samples, seq_length,
         # Build individual datasets.
         datasets = []
         for i in range(len(prefixes)):
-            ds = _build_dataset(dataset_name, prefixes[i],
+            ds = _build_dataset_kernel(dataset_name, prefixes[i],
                             data_impl, dataset_num_samples[i],
                             seq_length, seed, skip_warmup)
             if ds:
@@ -114,11 +125,10 @@ def build_dataset(dataset_name, data_prefix, data_impl, num_samples, seq_length,
 
         if datasets:
             dataset = BlendableDataset(datasets, weights)
-
     return dataset
 
 
-def _build_dataset(dataset_name, data_prefix, data_impl,
+def _build_dataset_kernel(dataset_name, data_prefix, data_impl,
                 num_samples, seq_length, seed, skip_warmup):
     """
     Build dataset. This method is called when individual
@@ -146,9 +156,13 @@ def _build_dataset(dataset_name, data_prefix, data_impl,
     return dataset
 
 
-def _build_train_valid_test_datasets(data_prefix, data_impl, splits_string,
+def _build_train_valid_test_datasets(data_prefix,
+                                     data_impl,
+                                     splits_string: str,
                                      train_valid_test_num_samples,
-                                     seq_length, seed, skip_warmup):
+                                     seq_length,
+                                     seed,
+                                     skip_warmup):
     """Build train, valid, and test datasets."""
 
     # Indexed dataset.
@@ -171,7 +185,7 @@ def _build_train_valid_test_datasets(data_prefix, data_impl, splits_string,
     print_split_stats('validation', 1)
     print_split_stats('test', 2)
 
-    def build_dataset(index, name):
+    def _f(index, name):
         dataset = None
         if splits[index + 1] > splits[index]:
             documents = np.arange(start=splits[index], stop=splits[index + 1],
@@ -182,26 +196,23 @@ def _build_train_valid_test_datasets(data_prefix, data_impl, splits_string,
                                   seq_length, seed)
         return dataset
 
-    train_dataset = build_dataset(0, 'train')
-    valid_dataset = build_dataset(1, 'valid')
-    test_dataset = build_dataset(2, 'test')
+    train_dataset = _f(0, 'train')
+    valid_dataset = _f(1, 'valid')
+    test_dataset = _f(2, 'test')
 
-    return (train_dataset, valid_dataset, test_dataset)
+    return train_dataset, valid_dataset, test_dataset
 
 
 def get_indexed_dataset_(data_prefix, data_impl, skip_warmup):
-    """Build indexed dataset."""
     print_rank_0(' > building dataset index ...')
 
     start_time = time.time()
-    indexed_dataset = make_indexed_dataset(data_prefix,
+    indexed_dataset = megatron.data.indexed_dataset.make_dataset(data_prefix,
                                            data_impl,
                                            skip_warmup)
-    print_rank_0(' > finished creating indexed dataset in {:4f} '
-                 'seconds'.format(time.time() - start_time))
-    print_rank_0('    number of documents: {}'.format(
-        indexed_dataset.sizes.shape[0]))
-
+    assert indexed_dataset is not None
+    print_rank_0(' > finished creating indexed dataset in {:4f} seconds'.format(time.time() - start_time))
+    print_rank_0('    number of documents: {}'.format(indexed_dataset.sizes.shape[0]))
     return indexed_dataset
 
 

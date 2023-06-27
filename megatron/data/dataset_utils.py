@@ -405,7 +405,6 @@ def pad_and_convert_to_numpy(tokens, tokentypes, masked_positions,
     # Padding mask.
     padding_mask_np = np.array([1] * num_tokens + [0] * padding_length,
                                dtype=np.int64)
-
     # Lables and loss mask.
     labels = [-1] * max_seq_length
     loss_mask = [0] * max_seq_length
@@ -419,11 +418,16 @@ def pad_and_convert_to_numpy(tokens, tokentypes, masked_positions,
     return tokens_np, tokentypes_np, labels_np, padding_mask_np, loss_mask_np
 
 
-def build_train_valid_test_datasets(data_prefix, data_impl, splits_string,
+def build_train_valid_test_datasets(data_prefix,
+                                    data_impl,
+                                    splits_string,
                                     train_valid_test_num_samples,
                                     max_seq_length,
-                                    masked_lm_prob, short_seq_prob, seed,
-                                    skip_warmup, binary_head=False,
+                                    masked_lm_prob,
+                                    short_seq_prob,
+                                    seed,
+                                    skip_warmup,
+                                    binary_head=False,
                                     max_seq_length_dec=None,
                                     dataset_type='standard_bert'):
 

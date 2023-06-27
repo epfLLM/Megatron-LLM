@@ -1,17 +1,19 @@
 # Copyright (c) 2022, NVIDIA CORPORATION. All rights reserved.
 
 """Pretrain utilities."""
-
+import argparse
 from datetime import datetime
 import math
 import sys
 import time
+from typing import Callable
 
 # The earliest we can measure the start time.
 _TRAIN_START_TIME = time.time()
 import torch
 from torch.nn.parallel.distributed import DistributedDataParallel as torchDDP
 
+import megatron
 from megatron import get_args
 from megatron import get_signal_handler
 from megatron import get_timers
@@ -29,18 +31,16 @@ from megatron.model import Float16Module
 from megatron.model import ModelType
 from megatron.model import GPTModel
 from megatron.optimizer import get_megatron_optimizer
-from megatron.initialize import initialize_megatron
-from megatron.initialize import write_args_to_tensorboard
-from megatron.initialize import set_jit_fusion_options
+import megatron.initialize
+
 from megatron.optimizer_param_scheduler import OptimizerParamScheduler
 from megatron.model import DistributedDataParallel as LocalDDP
-from megatron.utils import check_adlr_autoresume_termination
+import megatron.utils
 from megatron.utils import unwrap_model
 from megatron.data.data_samplers import build_pretraining_data_loader
 from megatron.utils import calc_params_l2_norm
 from megatron.schedules import get_forward_backward_func
 from megatron.utils import report_memory
-from megatron.model.vision.knn_monitor import compute_feature_bank
 
 
 def print_datetime(string):
@@ -50,25 +50,24 @@ def print_datetime(string):
     print_rank_0('[' + string + '] datetime: {} '.format(time_str))
 
 
-def pretrain(train_valid_test_dataset_provider,
-             model_provider,
-             model_type,
+def pretrain(args,
+             train_valid_test_dataset_provider,
+             model_provider_func,
+             model_type: ModelType,
              forward_step_func,
-             process_non_loss_data_func=None,
-             extra_args_provider=None,
-             args_defaults={}):
+             process_non_loss_data_func=None):
     """Main training program.
 
     This function will run the followings in the order provided:
         1) initialize Megatron.
-        2) setup model, optimizer and lr schedule using the model_provider.
+        2) setup model, optimizer and lr schedule using the model_provider_func.
         3) call train_val_test_data_provider to get train/val/test datasets.
         4) train the modle using the forward_step_func.
 
     Arguments:
         train_valid_test_dataset_provider: a function that takes the size of
             train/valid/test dataset and returns `train, valid, test` datasets.
-        model_provider: a function that returns a vanilla version of the
+        model_provider_func: a function that returns a vanilla version of the
             model. By vanilla we mean a simple model on cpu with no fp16 or ddp.
         model_type: an enum that specifies the type of model being trained.
         forward_step_func: a function that takes a `data iterator` and `model`,
@@ -85,12 +84,9 @@ def pretrain(train_valid_test_dataset_provider,
         args_defaults: a dictionary from argument-name to argument-value. It
             to set already parse arguments.
     """
-
-    # Initalize and get arguments, timers, and Tensorboard writer.
-    initialize_megatron(extra_args_provider=extra_args_provider,
-                        args_defaults=args_defaults)
+    # # Initalize and get arguments, timers, and Tensorboard writer.
     # Set pytorch JIT layer fusion options and warmup JIT functions.
-    set_jit_fusion_options()
+    megatron.initialize.set_jit_fusion_options(args)
 
     # Adjust the startup time so it reflects the largest value.
     # This will be closer to what scheduler will see (outside of
@@ -100,20 +96,16 @@ def pretrain(train_valid_test_dataset_provider,
     torch.distributed.all_reduce(start_time_tensor,
                                  op=torch.distributed.ReduceOp.MIN)
     _TRAIN_START_TIME = start_time_tensor.item()
-    print_rank_0('time to initialize megatron (seconds): {:.3f}'.format(
-        time.time() - _TRAIN_START_TIME))
+    print_rank_0('time to initialize megatron (seconds): {:.3f}'.format(time.time() - _TRAIN_START_TIME))
     print_datetime('after megatron is initialized')
-
-    args = get_args()
     timers = get_timers()
 
     # Model, optimizer, and learning rate.
     timers('model-and-optimizer-setup', log_level=0).start(barrier=True)
-    model, optimizer, opt_param_scheduler = setup_model_and_optimizer(
-        model_provider, model_type)
+    model, optimizer, opt_param_scheduler = _setup_model_and_optimizer(
+        model_provider_func, model_type, args=args)
     timers('model-and-optimizer-setup').stop()
-    print_datetime('after model, optimizer, and learning rate '
-                   'scheduler are built')
+    print_datetime('after model, optimizer, and learning rate scheduler are built')
 
     # Data stuff.
     timers('train/valid/test-data-iterators-setup', log_level=0).start(
@@ -121,42 +113,46 @@ def pretrain(train_valid_test_dataset_provider,
     if args.virtual_pipeline_model_parallel_size is not None:
         all_data_iterators = [
             build_train_valid_test_data_iterators(
-                train_valid_test_dataset_provider)
+                train_valid_test_dataset_provider, args)
             for _ in range(len(model))
         ]
-        train_data_iterator = [data_iterators[0]
-                               for data_iterators in all_data_iterators]
-        valid_data_iterator = [data_iterators[1]
-                               for data_iterators in all_data_iterators]
-        test_data_iterator = [data_iterators[2]
-                              for data_iterators in all_data_iterators]
+        train_data_iterator = [di[0] for di in all_data_iterators]
+        valid_data_iterator = [di[1] for di in all_data_iterators]
+        test_data_iterator = [di[2] for di in all_data_iterators]
     else:
         train_data_iterator, valid_data_iterator, test_data_iterator \
             = build_train_valid_test_data_iterators(
-                train_valid_test_dataset_provider)
+                train_valid_test_dataset_provider, args)
     timers('train/valid/test-data-iterators-setup').stop()
     print_datetime('after dataloaders are built')
 
     # Print setup timing.
     print_rank_0('done with setup ...')
-    timers.log(['model-and-optimizer-setup',
-                'train/valid/test-data-iterators-setup'], barrier=True)
+    timers.log(['model-and-optimizer-setup', 'train/valid/test-data-iterators-setup'], barrier=True)
     print_rank_0('training ...')
 
     iteration = 0
     if args.do_train and args.train_iters > 0:
-        iteration = train(forward_step_func,
-                          model, optimizer, opt_param_scheduler,
-                          train_data_iterator, valid_data_iterator,
-                          process_non_loss_data_func)
+        iteration = _train(args,
+                           forward_step_func,
+                           model,
+                           optimizer,
+                           opt_param_scheduler,
+                           train_data_iterator,
+                           valid_data_iterator,
+                           process_non_loss_data_func)
     print_datetime('after training is done')
 
     if args.do_valid:
         prefix = 'the end of training for val data'
-        evaluate_and_print_results(prefix, forward_step_func,
-                                   valid_data_iterator, model,
-                                   iteration, process_non_loss_data_func,
-                                   False)
+        evaluate_and_print_results(prefix,
+                                   forward_step_func,
+                                   valid_data_iterator,
+                                   model,
+                                   iteration,
+                                   process_non_loss_data_func,
+                                   verbose=False,
+                                   args=args)
 
     if args.save and iteration != 0:
         save_checkpoint(iteration, model, optimizer, opt_param_scheduler)
@@ -167,11 +163,10 @@ def pretrain(train_valid_test_dataset_provider,
         evaluate_and_print_results(prefix, forward_step_func,
                                    test_data_iterator, model,
                                    0, process_non_loss_data_func,
-                                   True)
+                                   verbose=True, args=args)
 
 
-def update_train_iters(args):
-
+def _update_train_iters(args):
     # For iteration-based training, we don't need to do anything
     if args.train_iters:
         return
@@ -179,7 +174,6 @@ def update_train_iters(args):
     # Constant batch size with sample-based training.
     if args.rampup_batch_size is None:
         args.train_iters = args.train_samples // args.global_batch_size
-
     else:
         # Sample based training with rampup batch size.
         iterations = 0
@@ -196,15 +190,15 @@ def update_train_iters(args):
         iterations += (args.train_samples - consumed_samples) // \
                       args.global_batch_size
         args.train_iters = iterations
-
     print_rank_0('setting training iterations to {}'.format(args.train_iters))
 
 
-def get_model(model_provider_func, model_type=ModelType.encoder_or_decoder, wrap_with_ddp=True):
+def get_model(model_provider_func: Callable,
+              model_type=ModelType.encoder_or_decoder,
+              wrap_with_ddp: bool=True,
+              args=None):
     """Build the model."""
-    args = get_args()
-    args.model_type = model_type
-
+    assert args is not None
     # Build model.
     if mpu.get_pipeline_model_parallel_world_size() > 1 and \
        args.virtual_pipeline_model_parallel_size is not None:
@@ -256,8 +250,8 @@ def get_model(model_provider_func, model_type=ModelType.encoder_or_decoder, wrap
 
     # Disallow training and inference with Transformer Engine
     # for non-GPT models
-    args.allow_transformer_engine = all([type(m) == GPTModel for m in model])
-    assert args.allow_transformer_engine or args.transformer_impl == 'local', \
+    allow_transformer_engine = all([type(m) == GPTModel for m in model])
+    assert allow_transformer_engine or args.transformer_impl == 'local', \
         'Transformer Engine is only approved for GPT models'
 
     # Set tensor model parallel attributes if not set.
@@ -291,7 +285,6 @@ def get_model(model_provider_func, model_type=ModelType.encoder_or_decoder, wrap
             model = [torchDDP(model_module, device_ids=[i], output_device=i,
                               process_group=mpu.get_data_parallel_group())
                      for model_module in model]
-
         elif args.DDP_impl == 'local':
             model = [LocalDDP(model_module,
                               args.accumulate_allreduce_grads_in_fp32,
@@ -308,10 +301,8 @@ def get_model(model_provider_func, model_type=ModelType.encoder_or_decoder, wrap
     return model
 
 
-def get_optimizer_param_scheduler(optimizer):
+def _get_optimizer_param_scheduler(optimizer, args):
     """Build the learning rate scheduler."""
-    args = get_args()
-
     # Iteration-based training.
     if args.train_iters:
         if args.lr_decay_iters is None:
@@ -327,7 +318,7 @@ def get_optimizer_param_scheduler(optimizer):
         # We need to set training iters for later use. Technically
         # we need to adjust the training samples too (due to last
         # batch being incomplete) but we leave it as is for now.
-        update_train_iters(args)
+        _update_train_iters(args)
         if args.lr_decay_samples is None:
             args.lr_decay_samples = args.train_samples
         lr_decay_steps = args.lr_decay_samples
@@ -353,25 +344,23 @@ def get_optimizer_param_scheduler(optimizer):
         wd_incr_style=args.weight_decay_incr_style,
         use_checkpoint_opt_param_scheduler=args.use_checkpoint_opt_param_scheduler,
         override_opt_param_scheduler=args.override_opt_param_scheduler)
-
     return opt_param_scheduler
 
 
-def setup_model_and_optimizer(model_provider_func,
-                              model_type,
-                              no_wd_decay_cond=None,
-                              scale_lr_cond=None,
-                              lr_mult=1.0):
-    """Setup model and optimizer."""
-    args = get_args()
-
-    model = get_model(model_provider_func, model_type)
+def _setup_model_and_optimizer(model_provider_func,
+                               model_type,
+                               no_wd_decay_cond=None,
+                               scale_lr_cond=None,
+                               lr_mult=1.0,
+                               args=None):
+    assert args is not None
+    model = get_model(model_provider_func, model_type, args=args)
     unwrapped_model = unwrap_model(model,
                                    (torchDDP, LocalDDP, Float16Module))
 
     optimizer = get_megatron_optimizer(model, no_wd_decay_cond,
                                        scale_lr_cond, lr_mult)
-    opt_param_scheduler = get_optimizer_param_scheduler(optimizer)
+    opt_param_scheduler = _get_optimizer_param_scheduler(optimizer, args)
 
     if args.load is not None:
         timers = get_timers()
@@ -398,9 +387,8 @@ def setup_model_and_optimizer(model_provider_func,
 
 
 def train_step(forward_step_func, data_iterator,
-               model, optimizer, opt_param_scheduler):
+               model, optimizer, opt_param_scheduler, args):
     """Single training step."""
-    args = get_args()
     timers = get_timers()
 
     # Set grad to zero.
@@ -426,12 +414,6 @@ def train_step(forward_step_func, data_iterator,
     # Reduce gradients.
     optimizer.reduce_model_grads(args, timers)
 
-    # Vision gradients.
-    if args.vision_pretraining and args.vision_pretraining_type == "dino":
-        unwrapped_model = unwrap_model(model[0],
-                                       (torchDDP, LocalDDP, Float16Module))
-        unwrapped_model.cancel_gradients_last_layer(args.curr_iteration)
-
     # Update parameters.
     timers('optimizer', log_level=1).start(barrier=args.barrier_with_L1_time)
     update_successful, grad_norm, num_zeros_in_grad = optimizer.step(args, timers)
@@ -440,12 +422,6 @@ def train_step(forward_step_func, data_iterator,
     # Gather params.
     if update_successful:
         optimizer.gather_model_params(args, timers)
-
-    # Vision momentum.
-    if args.vision_pretraining and args.vision_pretraining_type == "dino":
-        unwrapped_model = unwrap_model(model[0],
-                                       (torchDDP, LocalDDP, Float16Module))
-        unwrapped_model.update_momentum(args.curr_iteration)
 
     # Update learning rate.
     if update_successful:
@@ -654,15 +630,18 @@ def save_checkpoint_and_time(iteration, model, optimizer, opt_param_scheduler):
     timers.log(['save-checkpoint'])
 
 
-def train(forward_step_func, model, optimizer, opt_param_scheduler,
-          train_data_iterator, valid_data_iterator,
+def _train(args, forward_step_func,
+          model,
+          optimizer,
+          opt_param_scheduler,
+          train_data_iterator,
+          valid_data_iterator,
           process_non_loss_data_func):
     """Train the model function."""
-    args = get_args()
     timers = get_timers()
 
     # Write args to tensorboard
-    write_args_to_tensorboard()
+    megatron.initialize.write_args_to_tensorboard(args)
 
     # Turn on training mode which enables dropout.
     for model_module in model:
@@ -685,7 +664,7 @@ def train(forward_step_func, model, optimizer, opt_param_scheduler,
                        train_data_iterator,
                        model,
                        optimizer,
-                       opt_param_scheduler)
+                       opt_param_scheduler, args)
         iteration += 1
         args.consumed_train_samples += mpu.get_data_parallel_world_size() * \
                                        args.micro_batch_size * \
@@ -705,8 +684,8 @@ def train(forward_step_func, model, optimizer, opt_param_scheduler,
         # Autoresume
         if args.adlr_autoresume and \
            (iteration % args.adlr_autoresume_interval == 0):
-            check_adlr_autoresume_termination(iteration, model, optimizer,
-                                              opt_param_scheduler)
+            megatron.utils.check_adlr_autoresume_termination(iteration, model, optimizer,
+                                              opt_param_scheduler, args)
 
         # Evaluation
         if args.eval_interval and iteration % args.eval_interval == 0 and \
@@ -715,7 +694,7 @@ def train(forward_step_func, model, optimizer, opt_param_scheduler,
             evaluate_and_print_results(prefix, forward_step_func,
                                        valid_data_iterator, model,
                                        iteration, process_non_loss_data_func,
-                                       False)
+                                       verbose=False, args=args)
 
         # Checkpointing
         saved_checkpoint = False
@@ -769,9 +748,6 @@ def evaluate(forward_step_func,
     """Evaluation."""
     args = get_args()
 
-    if args.vision_pretraining and args.vision_pretraining_type == "dino":
-        compute_feature_bank(model)
-
     # Turn on evaluation mode which disables dropout.
     for model_module in model:
         model_module.eval()
@@ -817,15 +793,16 @@ def evaluate(forward_step_func,
 
     for key in total_loss_dict:
         total_loss_dict[key] /= args.eval_iters * get_num_microbatches()
-
     return total_loss_dict, collected_non_loss_data
 
-def evaluate_and_print_results(prefix, forward_step_func,
+
+def evaluate_and_print_results(prefix,
+                               forward_step_func,
                                data_iterator, model,
                                iteration, process_non_loss_data_func,
-                               verbose=False):
+                               verbose=False,
+                               args=None):
     """Helper function to evaluate and dump results on screen."""
-    args = get_args()
     writer = get_tensorboard_writer()
 
     total_loss_dict, collected_non_loss_data = evaluate(
@@ -863,13 +840,10 @@ def cyclic_iter(iter):
         for x in iter:
             yield x
 
-def build_train_valid_test_data_iterators(
-        build_train_valid_test_datasets_provider):
-    """XXX"""
-    args = get_args()
 
+def build_train_valid_test_data_iterators(build_train_valid_test_datasets_provider: Callable,
+                                          args: argparse.Namespace):
     (train_dataloader, valid_dataloader, test_dataloader) = (None, None, None)
-
     print_rank_0('> building train, validation, and test datasets ...')
 
     # Backward compatibility, assume fixed batch size.
@@ -884,7 +858,6 @@ def build_train_valid_test_data_iterators(
 
     # Data loader only on rank 0 of each model parallel group.
     if mpu.get_tensor_model_parallel_rank() == 0:
-
         # Number of train/valid/test samples.
         if args.train_samples:
             train_samples = args.train_samples

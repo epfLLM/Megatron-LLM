@@ -13,7 +13,8 @@ from megatron import (
 )
 from megatron.core import tensor_parallel
 from megatron.data.dataset_utils import build_train_valid_test_datasets
-from megatron.model import T5Model, ModelType
+from megatron.model import ModelType
+import megatron.model
 from megatron.training import pretrain
 from megatron.utils import average_losses_across_data_parallel_group
 
@@ -54,17 +55,21 @@ to accumulate the encoder_hidden_state gradient across skip connections
 """
 
 
-def model_provider(pre_process=True, post_process=True,
-                   add_encoder=True, add_decoder=True):
+def model_provider(pre_process=True,
+                   post_process=True,
+                   add_encoder=True,
+                   add_decoder=True):
     """Build the model."""
-
     print_rank_0('building T5 model ...')
-    model = T5Model(num_tokentypes=0,
-                    parallel_output=True,
-                    pre_process=pre_process,
-                    post_process=post_process,
-                    add_encoder=add_encoder,
-                    add_decoder=add_decoder)
+
+    model_type_t5 = ModelType.encoder_and_decoder
+    model = megatron.model.T5Model(num_tokentypes=0,
+                                   parallel_output=True,
+                                   pre_process=pre_process,
+                                   post_process=post_process,
+                                   add_encoder=add_encoder,
+                                   add_decoder=add_decoder,
+                                   model_type=model_type_t5)
     return model
 
 
@@ -149,11 +154,18 @@ def train_valid_test_datasets_provider(train_val_test_num_samples):
         skip_warmup=(not args.mmap_warmup),
         dataset_type='t5')
     print_rank_0("> finished creating T5 datasets ...")
-
     return train_ds, valid_ds, test_ds
 
 
 if __name__ == "__main__":
+    model_type_t5 = ModelType.encoder_and_decoder
+    args_defaults = {'tokenizer_type': 'BertWordPieceLowerCase'}
+    megatron.initialize.initialize_megatron(extra_args_provider=None,
+                                            args_defaults=args_defaults)
+    args = megatron.get_args()
 
-    pretrain(train_valid_test_datasets_provider, model_provider, ModelType.encoder_and_decoder,
-             forward_step, args_defaults={'tokenizer_type': 'BertWordPieceLowerCase'})
+    pretrain(args,
+             train_valid_test_datasets_provider,
+             model_provider,
+             model_type_t5,
+             forward_step)

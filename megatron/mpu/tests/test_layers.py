@@ -171,11 +171,7 @@ class IdentityLayer2D(torch.nn.Module):
 
 
 def test_column_parallel_linear(tensor_model_parallel_size):
-
     mpu.initialize_model_parallel(tensor_model_parallel_size)
-    if torch.distributed.get_rank() == 0:
-        print('> testing ColumnParallelLinear with model parallel '
-              'size: {}'.format(tensor_model_parallel_size))
     tensor_model_parallel_size = mpu.get_tensor_model_parallel_world_size()
 
     seed = 12345
@@ -189,7 +185,7 @@ def test_column_parallel_linear(tensor_model_parallel_size):
     # Network
     identity_layer = IdentityLayer2D(batch_size, input_size).cuda()
     linear_layer = mpu.ColumnParallelLinear(
-        input_size, output_size, keep_master_weight_for_test=True).cuda()
+        input_size, output_size, keep_master_weight_for_test=True, world_size=tensor_model_parallel_size).cuda()
     loss_weight = torch.randn([batch_size, output_size]).cuda()
     # Forward
     input_ = identity_layer()
@@ -238,11 +234,7 @@ def test_column_parallel_linear(tensor_model_parallel_size):
 
 
 def test_row_parallel_linear(tensor_model_parallel_size):
-
     mpu.initialize_model_parallel(tensor_model_parallel_size)
-    if torch.distributed.get_rank() == 0:
-        print('> testing RowParallelLinear with model parallel '
-              'size: {}'.format(tensor_model_parallel_size))
     tensor_model_parallel_size = mpu.get_tensor_model_parallel_world_size()
 
     seed = 12345
@@ -256,7 +248,7 @@ def test_row_parallel_linear(tensor_model_parallel_size):
     # Network
     identity_layer = IdentityLayer2D(batch_size, input_size).cuda()
     linear_layer = mpu.RowParallelLinear(
-        input_size, output_size, keep_master_weight_for_test=True).cuda()
+        input_size, output_size, keep_master_weight_for_test=True, world_size=tensor_model_parallel_size).cuda()
     loss_weight = torch.randn([batch_size, output_size]).cuda()
     # Forward
     input_ = identity_layer()
@@ -397,9 +389,11 @@ def test_parallel_self_attention(tensor_model_parallel_size):
         print(' >> passed the test :-)')
 
 
-def parallel_transformer(tensor_model_parallel_size, num_att_heads_per_partition,
-                         hidden_size_per_att_head, batch_size, sequence_length):
-
+def parallel_transformer(tensor_model_parallel_size,
+                         num_att_heads_per_partition,
+                         hidden_size_per_att_head,
+                         batch_size,
+                         sequence_length):
     mpu.initialize_model_parallel(tensor_model_parallel_size)
     tensor_model_parallel_size = mpu.get_tensor_model_parallel_world_size()
 
@@ -434,11 +428,6 @@ def parallel_transformer(tensor_model_parallel_size, num_att_heads_per_partition
 
 
 def test_parallel_transformer_layer(tensor_model_parallel_size):
-
-    if torch.distributed.get_rank() == 0:
-        print('> testing ParallelTransformerLayer with model parallel '
-              'size: {}'.format(tensor_model_parallel_size))
-
     num_att_heads_per_partition = 3
     hidden_size_per_att_head = 7
     batch_size = 5

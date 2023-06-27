@@ -11,11 +11,9 @@ import megatron
 from megatron.model.enums import PositionEmbeddingType
 
 
-def parse_args(extra_args_provider=None, ignore_unknown_args=False):
-    """Parse all arguments."""
+def build_base_parser():
     parser = argparse.ArgumentParser(description='Megatron-LM Arguments',
                                      allow_abbrev=False)
-
     # Standard arguments.
     parser = _add_network_size_args(parser)
     parser = _add_regularization_args(parser)
@@ -33,16 +31,17 @@ def parse_args(extra_args_provider=None, ignore_unknown_args=False):
     parser = _add_logging_args(parser)
     parser = _add_inference_args(parser)
     parser = _add_transformer_engine_args(parser)
+    return parser
 
+
+def parse_args(extra_args_provider=None):
+    """Parse all arguments."""
+    parser = build_base_parser()
     # Custom arguments.
     if extra_args_provider is not None:
         parser = extra_args_provider(parser)
 
-    # Parse.
-    if ignore_unknown_args:
-        args, _ = parser.parse_known_args()
-    else:
-        args = parser.parse_args()
+    args = parser.parse_args()
 
     # Args from environment
     args.rank = int(os.getenv('RANK', '0'))
@@ -219,8 +218,9 @@ def validate_args(args, defaults={}):
         args.num_layers = args.encoder_num_layers
 
     # Check required arguments.
-    required_args = ['num_layers', 'hidden_size', 'num_attention_heads',
-                     'max_position_embeddings']
+    # required_args = ['num_layers', 'hidden_size', 'num_attention_heads',
+    #                  'max_position_embeddings']
+    required_args = ['num_layers', 'hidden_size', 'num_attention_heads']
     for req_arg in required_args:
         _check_arg_is_not_none(args, req_arg)
 
@@ -322,7 +322,7 @@ def validate_args(args, defaults={}):
     if args.sequence_parallel:
         args.async_tensor_model_parallel_allreduce = False
 
-    if os.environ.get('CUDA_DEVICE_MAX_CONNECTIONS') != "1":
+    if os.environ.get('CUDA_DEVICE_MAX_CONNECTIONS') and os.environ.get('CUDA_DEVICE_MAX_CONNECTIONS') != "1":
         if args.sequence_parallel:
             raise RuntimeError(
                 "Using sequence parallelism requires setting the environment variable "
@@ -425,12 +425,14 @@ def _add_network_size_args(parser):
                        help='If set, use original BERT residual connection '
                        'ordering.')
     group.add_argument('--use_bias', action='store_true',
-                       help='If set then use bias.') # Added during hackathon                 
+                       help='If set then use bias.')  # Added during hackathon
     # Extracted from: https://github.com/facebookresearch/llama/blob/main/llama/model.py
     group.add_argument('--use_rms_norm',
                        action='store_true',
-                       help='If set, use RMSNorm instead of LayerNorm.'
-                       )
+                       help='If set, use RMSNorm instead of LayerNorm.')
+    group.add_argument('--use_post_ln',
+                       action='store_true',
+                       help='If set, use Post-LN transformer (in the notation of https://sh-tsang.medium.com/review-pre-ln-transformer-on-layer-normalization-in-the-transformer-architecture-b6c91a89e9ab).')
     group.add_argument('--onnx_safe', type=bool, required=False,
                        help='Use workarounds for known problems with '
                        'Torch ONNX exporter')
@@ -442,8 +444,7 @@ def _add_network_size_args(parser):
     group.add_argument('--position_embedding_type', type=lambda x: PositionEmbeddingType[x],
                        choices=list(PositionEmbeddingType),
                        default=PositionEmbeddingType.absolute,
-                       help='Define position embedding type ("absolute" | "rotary"). "absolute" by default.'
-                       )
+                       help='Define position embedding type ("absolute" | "rotary"). "absolute" by default.')
     return parser
 
 
@@ -767,7 +768,8 @@ def _add_mixed_precision_args(parser):
     group.add_argument('--accumulate_allreduce_grads_in_fp32',
                        action='store_true',
                        help='Gradient accumulation and all-reduce in fp32.')
-    group.add_argument('--fp16_lm_cross_entropy', action='store_true',
+    group.add_argument('--fp16_lm_cross_entropy',
+                       action='store_true',
                        help='Move the cross entropy unreduced loss calculation'
                        'for lm head to fp16.')
     return parser
@@ -805,12 +807,6 @@ def _add_distributed_args(parser):
                        'a custom built image that support ring-exchange p2p.')
     group.add_argument('--local_rank', type=int, default=None,
                        help='local rank passed from distributed launcher.')
-    group.add_argument('--lazy_mpu_init', type=bool, required=False,
-                       help='If set to True, initialize_megatron() '
-                       'skips DDP initialization and returns function to '
-                       'complete it instead.Also turns on '
-                       '--use_cpu_initialization flag. This is for '
-                       'external DDP manager.' )
     group.add_argument('--use_cpu_initialization', action='store_true',
                        default=None, help='If set, affine parallel weights '
                        'initialization uses CPU')
@@ -1007,19 +1003,6 @@ def _add_vision_args(parser):
                        dest='data_sharding')
     group.add_argument('--head_lr_mult', type=float, default=1.0,
                        help='learning rate multiplier for head during finetuning')
-
-    # pretraining type and backbone selection`
-    group.add_argument('--vision_pretraining', action='store_true',
-                       help='flag to indicate vision pretraining')
-    group.add_argument('--vision_pretraining_type', type=str, default='classify',
-                       choices=['classify', 'inpaint', 'dino'],
-                       help='pretraining objectives')
-    group.add_argument('--vision_backbone_type', type=str, default='vit',
-                       choices=['vit', 'mit', 'swin'],
-                       help='backbone types types')
-    group.add_argument('--swin_backbone_type', type=str, default='tiny',
-                       choices=['tiny', 'base', 'h3'],
-                       help='pretraining objectives')
 
     # dino arguments
     group.add_argument('--iter_per_epoch', type=int, default=1250,

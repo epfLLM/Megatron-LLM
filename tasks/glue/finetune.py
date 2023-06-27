@@ -5,13 +5,16 @@
 from megatron import get_args
 from megatron import print_rank_0
 from megatron import get_tokenizer
-from megatron.model.classification import Classification
+import megatron.model.classification
 from tasks.eval_utils import accuracy_func_provider
-from tasks.finetune_utils import finetune
+import tasks.finetune_utils
+import megatron.initialize
+from megatron.model.enums import ModelType
 
 
-def glue_classification(num_classes, Dataset,
-                        name_from_datapath_func):
+def _glue_classification(num_classes,
+                         Dataset,
+                         name_from_datapath_func):
 
     def train_valid_datasets_provider():
         """Build train and validation dataset."""
@@ -25,15 +28,19 @@ def glue_classification(num_classes, Dataset,
 
         return train_dataset, valid_dataset
 
-    def model_provider(pre_process=True, post_process=True):
+    def model_provider(pre_process=True,
+                       post_process=True):
         """Build the model."""
         args = get_args()
 
-        print_rank_0('building classification model for {} ...'.format(
-            args.task))
-        model = Classification(num_classes=num_classes, num_tokentypes=2,
-                               pre_process=pre_process, post_process=post_process)
+        print_rank_0('building classification model for {} ...'.format(args.task))
 
+        model_type_glue = ModelType.encoder_or_decoder
+        model = megatron.model.classification.Classification(num_classes=num_classes,
+                                                             num_tokentypes=2,
+                                                             pre_process=pre_process,
+                                                             post_process=post_process,
+                                                             model_type=model_type_glue)
         return model
 
     def metrics_func_provider():
@@ -47,15 +54,18 @@ def glue_classification(num_classes, Dataset,
         return accuracy_func_provider(single_dataset_provider)
 
     """Finetune/evaluate."""
-    finetune(train_valid_datasets_provider, model_provider,
-             end_of_epoch_callback_provider=metrics_func_provider)
+    model_type_glue = ModelType.encoder_or_decoder
+    tasks.finetune_utils.finetune(train_valid_datasets_provider,
+                                  model_provider,
+                                  model_type_glue,
+                                  end_of_epoch_callback_provider=metrics_func_provider)
 
 
 def main():
+    megatron.initialize.initialize_megatron(extra_args_provider=None)
     args = get_args()
 
     if args.task == 'MNLI':
-
         num_classes = 3
         from tasks.glue.mnli import MNLIDataset as Dataset
 
@@ -76,4 +86,8 @@ def main():
         raise NotImplementedError('GLUE task {} is not implemented.'.format(
             args.task))
 
-    glue_classification(num_classes, Dataset, name_from_datapath)
+    _glue_classification(num_classes, Dataset, name_from_datapath)
+
+
+if __name__ == "__main__":
+    main()

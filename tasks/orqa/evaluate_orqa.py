@@ -3,8 +3,9 @@
 """Main tasks functionality."""
 
 from megatron import get_args, print_rank_0
-from megatron.indexer import IndexBuilder
-from tasks.orqa.evaluate_utils import ORQAEvaluator
+import megatron.indexer
+import tasks.orqa.evaluate_utils
+
 
 def main():
     """
@@ -20,15 +21,13 @@ def main():
 
     print_rank_0("Starting index builder!")
 
-    index_builder = IndexBuilder()
+    index_builder = megatron.indexer.IndexBuilder(args)
     index_builder.build_and_save_index()
     print_rank_0("Build and save indices: done!")
-
-
     print_rank_0("Starting evaluations!")
 
     # Set up the model and evaluator
-    evaluator = ORQAEvaluator()
+    evaluator = tasks.orqa.evaluate_utils.ORQAEvaluator()
 
     # Run evaluation
     if args.qa_data_dev is not None:

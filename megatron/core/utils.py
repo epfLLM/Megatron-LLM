@@ -59,6 +59,7 @@ def _kernel_make_viewless_tensor(inp, requires_grad):
     out.data = inp.data
     return out
 
+
 class MakeViewlessTensor(torch.autograd.Function):
     '''
     Autograd function to make a viewless tensor.
@@ -68,12 +69,15 @@ class MakeViewlessTensor(torch.autograd.Function):
     ParallelTransformer's hidden_states). Call this function by passing
     'keep_graph = True' to 'make_viewless_tensor()'.
     '''
+
     @staticmethod
     def forward(ctx, inp, requires_grad):
         return _kernel_make_viewless_tensor(inp, requires_grad)
+
     @staticmethod
     def backward(ctx, grad_output):
         return grad_output, None
+
 
 def make_viewless_tensor(inp, requires_grad, keep_graph):
     '''

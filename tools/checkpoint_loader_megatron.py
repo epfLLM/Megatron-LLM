@@ -27,8 +27,8 @@ def _load_checkpoint(queue, args):
         sys.path.insert(0, args.megatron_path)
 
     try:
-        from megatron.arguments import parse_args, validate_args
-        from megatron.global_vars import set_args, set_global_variables
+        import megatron.arguments
+        from megatron.global_vars import set_global_variables
         from megatron.checkpointing import load_args_from_checkpoint, load_checkpoint
         from megatron.model import ModelType, module
         from megatron.core import mpu
@@ -53,14 +53,14 @@ def _load_checkpoint(queue, args):
                 '--load', args.load_dir
                 ]
 
-    margs = parse_args()
+    margs = megatron.arguments.parse_args()
     margs = load_args_from_checkpoint(margs)
 
     # Arguments do sanity checks on the world size, but we don't care,
     # so trick it into thinking we are plenty of processes
     margs.world_size = margs.tensor_model_parallel_size * margs.pipeline_model_parallel_size
 
-    margs = validate_args(margs)
+    margs = megatron.arguments.validate_args(margs)
 
     def check_for_arg(arg_name):
         if getattr(margs, arg_name, None) is None:
@@ -96,7 +96,8 @@ def _load_checkpoint(queue, args):
 
     consumed_train_samples = None
     consumed_valid_samples = None
-    def get_models(count, dtype, pre_process, post_process):
+
+    def _get_models(count, dtype, pre_process, post_process):
         nonlocal consumed_train_samples
         nonlocal consumed_valid_samples
         models = []
@@ -166,7 +167,7 @@ def _load_checkpoint(queue, args):
     # Get first pipe stage
     mpu.parallel_state.set_pipeline_model_parallel_rank(0)
     post_process = pp_size == 1
-    models = get_models(tp_size, md.params_dtype, True, post_process)
+    models = _get_models(tp_size, md.params_dtype, True, post_process)
 
     md.consumed_train_samples = consumed_train_samples
     md.consumed_valid_samples = consumed_valid_samples
@@ -192,7 +193,7 @@ def _load_checkpoint(queue, args):
         if pp_rank > 0:
             mpu.parallel_state.set_pipeline_model_parallel_rank(pp_rank)
             post_process = pp_rank == pp_size - 1
-            models = get_models(tp_size, md.params_dtype, False, post_process)
+            models = _get_models(tp_size, md.params_dtype, False, post_process)
         for layer_num in range(len(models[0].language_model.encoder.layers)):
             message = {}
 
@@ -242,7 +243,6 @@ def _load_checkpoint(queue, args):
 
     # Send BERT lm head and binary head if it exists
     if md.model_type == 'BERT':
-        print("Sending LM Pooler")
         message = {
             "weight": models[0].language_model.pooler.dense.weight.data,
             "bias": models[0].language_model.pooler.dense.bias.data
@@ -266,6 +266,7 @@ def _load_checkpoint(queue, args):
             }
             queue_put("binary head", message)
     queue.put("done")
+
 
 def load_checkpoint(queue, args):
     try:

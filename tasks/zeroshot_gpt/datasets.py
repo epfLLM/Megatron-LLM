@@ -21,7 +21,6 @@ def build_dataset(task):
         return _build_lambada_dataset()
     if task == 'WIKITEXT103':
         return _build_wikitext103_dataset()
-
     raise NotImplementedError('dataset for {} task is not '
                               'implemented.'.format(task))
 

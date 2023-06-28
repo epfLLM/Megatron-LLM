@@ -31,10 +31,10 @@ def convert_to_megatron(weights: dict, size: int) -> dict:
         result[f"{prefix1}.mlp.dense_4h_to_h.weight"] = \
             weights[f"{prefix2}.mlp.dense_4h_to_h.weight"]
         # layers - TODO: no post_attention_layernorm in HF weights
-        result[f"{prefix1}.input_layer_norm.weight"] = \
-            weights[f"{prefix2}.input_layer_norm.weight"]
-        result[f"{prefix1}.input_layer_norm.bias"] = \
-            weights[f"{prefix2}.input_layer_norm.bias"]
+        result[f"{prefix1}.input_layernorm.weight"] = \
+            weights[f"{prefix2}.input_layernorm.weight"]
+        result[f"{prefix1}.input_layernorm.bias"] = \
+            weights[f"{prefix2}.input_layernorm.bias"]
         # qkv weights
         result[f"{prefix1}.attention.query_key_value.weight"] = \
             weights[f"{prefix2}.self_attention.query_key_value.weight"]
@@ -49,9 +49,9 @@ def main(size: int = 7, out: Optional[Path] = None,
     # get weights from huggingface
     print("Fetching weights from huggingface/specified directory...")
     model = AutoModelForCausalLM.from_pretrained(f"tiiuae/falcon-{size}b",
-                                                         trust_remote_code=True,
-                                                                                                          cache_dir=cache_dir)
-    hf_weights = model.load_state_dict()
+                                                 trust_remote_code=True,
+                                                 cache_dir=cache_dir)
+    hf_weights = model.state_dict()
     # convert state dict to be megatron-compatible
     megatron_weights = convert_to_megatron(hf_weights, size)
     # save converted weights in specified out
@@ -60,12 +60,12 @@ def main(size: int = 7, out: Optional[Path] = None,
 
 if __name__ == "__main__":
     parser = ArgumentParser(description="Convert Huggingface falcon weights to "
-                                                    "megatron-compatible weights")
-    parser.add_argument("--size", default=7, choices={7, 40},
-                                    help="The size of the falcon model (i.e. 7 or 40)")
+                                        "megatron-compatible weights")
+    parser.add_argument("--size", default=7, choices={7, 40}, type=int,
+                        help="The size of the falcon model (i.e. 7 or 40)")
     parser.add_argument("--out", type=Path,
-                                    help="The filename to store the megatron weights")
+                        help="The filename to store the megatron weights")
     parser.add_argument("--cache-dir", type=Path,
-                                    help="Directory to store the huggingface weights")
+                        help="Directory to store the huggingface weights")
     args = parser.parse_args()
     main(args.size, args.out, args.cache_dir)

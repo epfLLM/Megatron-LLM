@@ -142,6 +142,9 @@ def add_args(parser):
                        'dataset2-path ...')
     group.add_argument('--eval_ppl', action='store_true', default=False)
     group.add_argument('--stored_params', type=dict, default=dict())
+    group.add_argument("--model_type", type=ModelType, default=ModelType.encoder_or_decoder)
+    group.add_argument("--log_learning_rate_to_tensorboard", type=bool, default=True)
+    group.add_argument("--log_loss_scale_to_tensorboard", type=bool, default=True)
     # group.add_argument('--padded_vocab_size', type=int, default=100)
     #
     # group.add_argument('--world_size', type=int, default=1)

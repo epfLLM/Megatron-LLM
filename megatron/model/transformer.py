@@ -1024,6 +1024,7 @@ class ParallelTransformer(MegatronModule):
             self.layers = torch.nn.ModuleList(
                 [build_layer(i + 1 + offset) for i in range(self.num_layers)])
 
+        self.use_post_ln = args.use_post_ln
         if self.post_process:
             # Final layer norm before output.
             if not args.use_rms_norm:

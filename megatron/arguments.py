@@ -407,6 +407,9 @@ def _add_network_size_args(parser):
                        'This is set to 4*hidden_size if not provided')
     group.add_argument('--num_attention_heads', type=int, default=None,
                        help='Number of transformer attention heads.')
+    group.add_argument('--num_attention_heads_kv', type=int, default=None,
+                       help='Number of transformer attention heads for the keys and values. ' 
+                       'Used only when `use_multiquery_attn` is set to True.')
     group.add_argument('--kv_channels', type=int, default=None,
                        help='Projection weights dimension in multi-head '
                        'attention. This is set to '
@@ -622,6 +625,8 @@ def _add_training_args(parser):
     group.add_argument('--use_flash_attn', action='store_true',
                        help='use FlashAttention implementation of attention. '
                        'https://arxiv.org/abs/2205.14135')
+    group.add_argument('--use_multiquery_attn', action='store_true',
+                       help='use Multi-query attention.')
     group.add_argument('--optimizer', type=str, default='adam',
                        choices=['adam', 'sgd'],
                        help='Optimizer function')

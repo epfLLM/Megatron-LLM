@@ -448,6 +448,9 @@ def _add_network_size_args(parser):
                        choices=list(PositionEmbeddingType),
                        default=PositionEmbeddingType.absolute,
                        help='Define position embedding type ("absolute" | "rotary"). "absolute" by default.')
+    # Added mainly for Falcon
+    group.add_argument("--parallel_attn", action="store_true",
+                       help="Whether to use parallel attn (set flag to ignore dropout and post_attn norm)")
     return parser
 
 
@@ -904,7 +907,8 @@ def _add_data_args(parser):
                        choices=['BertWordPieceLowerCase',
                                 'BertWordPieceCase',
                                 'GPT2BPETokenizer',
-                                'SentencePieceTokenizer'],
+                                'SentencePieceTokenizer',
+                                'FalconTokenizer'],
                        help='What type of tokenizer to use.')
     group.add_argument('--tokenizer_model', type=str, default=None,
                        help='Sentencepiece tokenizer model.')

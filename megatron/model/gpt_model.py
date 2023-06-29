@@ -49,7 +49,8 @@ class GPTModel(MegatronModule):
                  num_tokentypes=0,
                  parallel_output=True,
                  pre_process=True,
-                 post_process=True):
+                 post_process=True,
+                 model_type=None):
         super(GPTModel, self).__init__()
         args = get_args()
 
@@ -68,7 +69,8 @@ class GPTModel(MegatronModule):
                                                          args.num_layers),
             pre_process=self.pre_process,
             post_process=self.post_process,
-            args=args)
+            args=args,
+            model_type=model_type)
 
         self.initialize_word_embeddings(init_method_normal, args)
 

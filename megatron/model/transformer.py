@@ -684,18 +684,20 @@ class ParallelTransformerLayer(MegatronModule):
         self.hidden_dropout = args.hidden_dropout
         self.bias_dropout_fusion = args.bias_dropout_fusion
         self.drop_path = DropPath(drop_path_rate) if drop_path_rate > 0.0 else None
+        self.parallel_attn = args.parallel_attn
 
         # Layernorm on the attention output
-        if not args.use_rms_norm:
-            self.post_attention_layernorm = LayerNorm(
-                args.hidden_size,
-                eps=args.layernorm_epsilon,
-                no_persist_layer_norm=args.no_persist_layer_norm,
-                sequence_parallel=args.sequence_parallel)
-        else:
-            self.post_attention_layernorm = RMSNorm(
-                args.hidden_size,
-                eps=args.layernorm_epsilon)
+        if not args.parallel_attn:
+            if not args.use_rms_norm:
+                self.post_attention_layernorm = LayerNorm(
+                    args.hidden_size,
+                    eps=args.layernorm_epsilon,
+                    no_persist_layer_norm=args.no_persist_layer_norm,
+                    sequence_parallel=args.sequence_parallel)
+            else:
+                self.post_attention_layernorm = RMSNorm(
+                    args.hidden_size,
+                    eps=args.layernorm_epsilon)
 
         if self.layer_type == LayerType.decoder:
             self.inter_attention = ParallelAttention(
@@ -747,33 +749,34 @@ class ParallelTransformerLayer(MegatronModule):
         else:
             residual = hidden_states
 
-        if self.drop_path is None:
-            # jit scripting for a nn.module (with dropout) is not
-            # triggerring the fusion kernel. For now, we use two
-            # different nn.functional routines to account for varying
-            # dropout semantics during training and inference phases.
-            if self.bias_dropout_fusion:
-                if self.training:
-                    bias_dropout_add_func = bias_dropout_add_fused_train
+        if not self.parallel_attn:
+            if self.drop_path is None:
+                # jit scripting for a nn.module (with dropout) is not
+                # triggerring the fusion kernel. For now, we use two
+                # different nn.functional routines to account for varying
+                # dropout semantics during training and inference phases.
+                if self.bias_dropout_fusion:
+                    if self.training:
+                        bias_dropout_add_func = bias_dropout_add_fused_train
+                    else:
+                        bias_dropout_add_func = bias_dropout_add_fused_inference
                 else:
-                    bias_dropout_add_func = bias_dropout_add_fused_inference
+                    bias_dropout_add_func = get_bias_dropout_add(self.training)
+
+                with self.bias_dropout_add_exec_handler():
+                    layernorm_input = bias_dropout_add_func(
+                        attention_output,
+                        attention_bias.expand_as(residual),
+                        residual,
+                        self.hidden_dropout)
             else:
-                bias_dropout_add_func = get_bias_dropout_add(self.training)
+                out = torch.nn.functional.dropout(attention_output + attention_bias,
+                                                  p=self.hidden_dropout,
+                                                  training=self.training)
+                layernorm_input = residual + self.drop_path(out)
 
-            with self.bias_dropout_add_exec_handler():
-                layernorm_input = bias_dropout_add_func(
-                    attention_output,
-                    attention_bias.expand_as(residual),
-                    residual,
-                    self.hidden_dropout)
-        else:
-            out = torch.nn.functional.dropout(attention_output + attention_bias,
-                                              p=self.hidden_dropout,
-                                              training=self.training)
-            layernorm_input = residual + self.drop_path(out)
-
-        # Layer norm post the self attention.
-        layernorm_output = self.post_attention_layernorm(layernorm_input)
+            # Layer norm post the self attention.
+            layernorm_output = self.post_attention_layernorm(layernorm_input)
 
         if self.layer_type == LayerType.decoder:
             attention_output, attention_bias = self.inter_attention(layernorm_output,

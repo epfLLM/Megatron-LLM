@@ -376,6 +376,10 @@ def fix_query_key_value_ordering(model, checkpoint_version):
             model = model[0]
         for name, param in model.named_parameters():
             if name.endswith(('.query_key_value.weight', '.query_key_value.bias')):
+                # multiquery attn does not require transposition
+                args = get_args()
+                if args.use_multiquery_attn:
+                    continue
                 if checkpoint_version == 0:
                     fixed_param = _transpose_first_dim(param.data, 3, True, model)
                 elif checkpoint_version == 1.0:

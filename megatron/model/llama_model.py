@@ -8,7 +8,7 @@ from megatron.core import tensor_parallel
 from .module import MegatronModule
 
 import megatron.model.language_model
-from .enums import AttnMaskType
+from .enums import AttnMaskType, PositionEmbeddingType
 from .utils import init_method_normal
 from .utils import scaled_init_method_normal
 
@@ -57,6 +57,13 @@ class LlamaModel(MegatronModule):
         self.pre_process = pre_process
         self.post_process = post_process
         self.fp16_lm_cross_entropy = args.fp16_lm_cross_entropy
+
+        # llama-specific asserts
+        # TODO this is prenormalization, right?
+        assert not args.use_post_ln, "LlamaModel requires pre-normalization, not use_post_ln"
+        assert args.use_rms_norm, "LlamaModel requires rms norm"
+        assert args.glu_activation == "swiglu", "LlamaModel requires swiglu activation"
+        assert args.position_embedding_type == PositionEmbeddingType.rotary, "LlamaModel requires rotary embedding"
 
         self.language_model, self._language_model_key = megatron.model.language_model.get_language_model(
             num_tokentypes=num_tokentypes,

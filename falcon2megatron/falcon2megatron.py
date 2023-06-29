@@ -8,7 +8,8 @@ from transformers import AutoModelForCausalLM
 
 
 def convert_to_megatron(weights: dict, size: int) -> dict:
-    result = {}
+    embedding = {}
+    transformer = {}
     if size == 7:
         n_layer = 32
     else:
@@ -17,28 +18,31 @@ def convert_to_megatron(weights: dict, size: int) -> dict:
     # weights independent of layers (i.e. token embeddings and layernorms
     assert torch.allclose(weights["lm_head.weight"],
                           weights["transformer.word_embeddings.weight"])
-    result["model.language_model.embedding.word_embeddings.weight"] = \
-        weights["transformer.word_embeddings.weight"]
-    result["model.language_model.transformer.final_layernorm.weight"] = \
-        weights["transformer.ln_f.weight"]
+    embedding["word_embeddings.weight"] = weights["transformer.word_embeddings.weight"]
+    transformer["final_layernorm.weight"] = weights["transformer.ln_f.weight"]
+    transformer["final_layernorm.bias"] = weights["transformer.ln_f.bias"]
 
+    # copy weights for each transformer layer
     for layer in trange(n_layer, desc="Converting weights"):
-        prefix1 = f"model.language_model.transformer.layers.{layer}"
+        prefix1 = f"layers.{layer}"
         prefix2 = f"transformer.h.{layer}"
         # mlp
-        result[f"{prefix1}.mlp.dense_h_to_4h.weight"] = \
+        transformer[f"{prefix1}.mlp.dense_h_to_4h.weight"] = \
             weights[f"{prefix2}.mlp.dense_h_to_4h.weight"]
-        result[f"{prefix1}.mlp.dense_4h_to_h.weight"] = \
+        transformer[f"{prefix1}.mlp.dense_4h_to_h.weight"] = \
             weights[f"{prefix2}.mlp.dense_4h_to_h.weight"]
-        # layers - TODO: no post_attention_layernorm in HF weights
-        result[f"{prefix1}.input_layernorm.weight"] = \
+        # layernorms
+        transformer[f"{prefix1}.input_layernorm.weight"] = \
             weights[f"{prefix2}.input_layernorm.weight"]
-        result[f"{prefix1}.input_layernorm.bias"] = \
+        transformer[f"{prefix1}.input_layernorm.bias"] = \
             weights[f"{prefix2}.input_layernorm.bias"]
         # qkv weights
-        result[f"{prefix1}.attention.query_key_value.weight"] = \
+        transformer[f"{prefix1}.attention.query_key_value.weight"] = \
             weights[f"{prefix2}.self_attention.query_key_value.weight"]
-    return result
+        # dense
+        transformer[f"{prefix1}.self_attention.dense.weight"] = \
+            weights[f"{prefix2}.self_attention.dense.weight"]
+    return {"embedding": embedding, "transformer": transformer}
 
 
 def main(size: int = 7, out: Optional[Path] = None,
@@ -52,10 +56,16 @@ def main(size: int = 7, out: Optional[Path] = None,
                                                  trust_remote_code=True,
                                                  cache_dir=cache_dir)
     hf_weights = model.state_dict()
+
     # convert state dict to be megatron-compatible
     megatron_weights = convert_to_megatron(hf_weights, size)
+
     # save converted weights in specified out
-    torch.save(megatron_weights, out)
+    (out/"release"/"mp_rank_00").mkdir(parents=True)
+    with open(out/"latest_checkpointed_iteration.txt", "w+") as f:
+        f.write("release")
+    megatron_weights = {"iteration": 1, "model": {"language_model": megatron_weights}}
+    torch.save(megatron_weights, out/"release"/"mp_rank_00"/"model_optim_rng.pt")
 
 
 if __name__ == "__main__":
@@ -64,7 +74,7 @@ if __name__ == "__main__":
     parser.add_argument("--size", default=7, choices={7, 40}, type=int,
                         help="The size of the falcon model (i.e. 7 or 40)")
     parser.add_argument("--out", type=Path,
-                        help="The filename to store the megatron weights")
+                        help="Directory to store the megatron weights (as checkpoint)")
     parser.add_argument("--cache-dir", type=Path,
                         help="Directory to store the huggingface weights")
     args = parser.parse_args()

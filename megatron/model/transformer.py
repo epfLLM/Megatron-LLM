@@ -342,6 +342,10 @@ class ParallelAttention(MegatronModule):
         self.params_dtype = args.params_dtype
         self.sequence_parallel = args.sequence_parallel
         self.use_flash_attn = args.use_flash_attn
+        self.use_multiquery_attn = args.use_multiquery_attn 
+        self.num_attention_heads_kv = args.num_attention_heads_kv # used when use_multiquery_attn == True 
+        self.num_attention_heads = args.num_attention_heads
+        self.seq_length = args.seq_length
         if self.use_flash_attn:
             if flash_attn_unpadded_func is None:
                 raise ImportError('FlashAttention is not installed, please install with '
@@ -350,8 +354,17 @@ class ParallelAttention(MegatronModule):
                                                           'self-attention for now')
             assert self.attn_mask_type == AttnMaskType.causal, ('FlashAttention code path only '
                                                                 'supports causal mask for now')
+        if self.use_multiquery_attn:
+            assert attention_type == AttnType.self_attn, ('Multi-query Attention code path only supports '
+                                                          'self-attention for now')
 
         projection_size = args.kv_channels * args.num_attention_heads
+
+        if self.use_multiquery_attn:
+            # then we need to project to num_attention_heads for the query and num_attention_heads_kv for keys and values
+            qkv_projection_size = args.kv_channels * args.num_attention_heads + 2 * args.kv_channels * args.num_attention_heads_kv
+        else:
+            qkv_projection_size = 3 * args.kv_channels * args.num_attention_heads
 
         # Per attention head and per partition values.
         self.hidden_size_per_attention_head = core.utils.divide(
@@ -363,7 +376,7 @@ class ParallelAttention(MegatronModule):
         if attention_type == AttnType.self_attn:
             self.query_key_value = megatron.core.tensor_parallel.ColumnParallelLinear(
                 args.hidden_size,
-                3 * projection_size,
+                qkv_projection_size,
                 bias=args.use_bias,
                 gather_output=False,
                 init_method=init_method,
@@ -414,7 +427,7 @@ class ParallelAttention(MegatronModule):
         if self.position_embedding_type == PositionEmbeddingType.rotary:
             self.freqs_cis = precompute_freqs_cis(
                 # self.params.dim // self.params.n_heads, self.params.max_seq_len * 2 # NOTE: LLaMA version
-                args.hidden_size // args.num_attention_heads, self.seq_length * 2
+                args.hidden_size // args.num_attention_heads, self.seq_length # * 2
             )
 
     def _checkpointed_attention_forward(self,
@@ -482,13 +495,33 @@ class ParallelAttention(MegatronModule):
             # [sq, b, (np * 3 * hn)] --> [sq, b, np, 3 * hn]
             new_tensor_shape = mixed_x_layer.size()[:-1] + \
                 (self.num_attention_heads_per_partition,
-                 3 * self.hidden_size_per_attention_head)
-            mixed_x_layer = mixed_x_layer.view(*new_tensor_shape)
+                3 * self.hidden_size_per_attention_head)
 
-            # [sq, b, np, 3 * hn] --> 3 [sq, b, np, hn]
-            (query_layer,
-             key_layer,
-             value_layer) = megatron.core.tensor_parallel.split_tensor_along_last_dim(mixed_x_layer, 3)
+            if self.use_multiquery_attn:
+                # if we use multi query, we simply expand smaller keys and values tensors to have the usual shapes and then
+                # feed those tensor to the standard attention/flash attention
+                sq, b, _, _ = new_tensor_shape
+                qkv = mixed_x_layer.view(sq, b, -1, self.num_attention_heads // self.num_attention_heads_kv + 2, self.hidden_size_per_attention_head)
+                query_layer = qkv[:, :, :, :-2]
+                key_layer = qkv[:, :, :, [-2]]
+                value_layer = qkv[:, :, :, [-1]]
+                key_layer = torch.broadcast_to(key_layer, query_layer.shape)
+                value_layer = torch.broadcast_to(value_layer, query_layer.shape)
+                # if self.use_flash_attn:
+                #     query_layer, key_layer, value_layer = [rearrange(x, "seq_len batch group num_heads head_dim -> batch seq_len (group num_heads) head_dim",
+                #                      head_dim=self.hidden_size_per_attention_head,) for x in [query_layer, key_layer, value_layer]]
+                # else:
+                #     query_layer, key_layer, value_layer = [rearrange(x, "seq_len batch group num_heads head_dim -> seq_len batch (group num_heads) head_dim",
+                #                      head_dim=self.hidden_size_per_attention_head,) for x in [query_layer, key_layer, value_layer]]
+                query_layer, key_layer, value_layer = [rearrange(x, "seq_len batch group num_heads head_dim -> seq_len batch (group num_heads) head_dim",
+                                     head_dim=self.hidden_size_per_attention_head,) for x in [query_layer, key_layer, value_layer]]
+            else:
+                mixed_x_layer = mixed_x_layer.view(*new_tensor_shape)
+
+                # [sq, b, np, 3 * hn] --> 3 [sq, b, np, hn]
+                (query_layer,
+                key_layer,
+                value_layer) = megatron.core.tensor_parallel.split_tensor_along_last_dim(mixed_x_layer, 3)
         else:
             # Attention heads [sk, b, h] --> [sk, b, (np * 2 * hn)]
             mixed_kv_layer, _ = self.key_value(encoder_output)
@@ -534,7 +567,7 @@ class ParallelAttention(MegatronModule):
         # Rotary embeddings
         # ==================================
         if self.position_embedding_type == PositionEmbeddingType.rotary:
-            query_layer, key_layer = apply_rotary_emb(query_layer, key_layer, self.freq_cis)
+            query_layer, key_layer = apply_rotary_emb(query_layer, key_layer, self.freqs_cis)
 
         # ==================================
         # core attention computation
@@ -548,8 +581,11 @@ class ParallelAttention(MegatronModule):
                 context_layer = self.core_attention(
                     query_layer, key_layer, value_layer, attention_mask)
         else:
+            # if not self.use_multiquery_attn: # else this has already been done before
+            #     q, k, v = [rearrange(x, 's b ... -> b s ...').contiguous()
+            #                for x in (query_layer, key_layer, value_layer)]
             q, k, v = [rearrange(x, 's b ... -> b s ...').contiguous()
-                       for x in (query_layer, key_layer, value_layer)]
+                           for x in (query_layer, key_layer, value_layer)]
             if not self.sequence_parallel:
                 with megatron.core.tensor_parallel.get_cuda_rng_tracker().fork():
                     context_layer = self.core_attention_flash(q, k, v)

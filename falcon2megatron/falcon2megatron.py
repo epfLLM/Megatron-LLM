@@ -31,17 +31,23 @@ def convert_to_megatron(weights: dict, size: int) -> dict:
             weights[f"{prefix2}.mlp.dense_h_to_4h.weight"]
         transformer[f"{prefix1}.mlp.dense_4h_to_h.weight"] = \
             weights[f"{prefix2}.mlp.dense_4h_to_h.weight"]
-        # layernorms
-        transformer[f"{prefix1}.input_layernorm.weight"] = \
-            weights[f"{prefix2}.input_layernorm.weight"]
-        transformer[f"{prefix1}.input_layernorm.bias"] = \
-            weights[f"{prefix2}.input_layernorm.bias"]
         # qkv weights
         transformer[f"{prefix1}.attention.query_key_value.weight"] = \
             weights[f"{prefix2}.self_attention.query_key_value.weight"]
         # dense
         transformer[f"{prefix1}.self_attention.dense.weight"] = \
             weights[f"{prefix2}.self_attention.dense.weight"]
+        # falcon7 and falcon40 have different names in the layernorm
+        if size == 7:
+            transformer[f"{prefix1}.input_layernorm.weight"] = \
+                weights[f"{prefix2}.input_layernorm.weight"]
+            transformer[f"{prefix1}.input_layernorm.bias"] = \
+                weights[f"{prefix2}.input_layernorm.bias"]
+        else:
+            transformer[f"{prefix1}.input_layernorm.weight"] = \
+                weights[f"{prefix2}.ln_attn.weight"]
+            transformer[f"{prefix1}.input_layernorm.bias"] = \
+                weights[f"{prefix2}.ln_attn.bias"]
     return {"embedding": embedding, "transformer": transformer}
 
 

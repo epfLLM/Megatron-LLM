@@ -427,7 +427,7 @@ class ParallelAttention(MegatronModule):
         if self.position_embedding_type == PositionEmbeddingType.rotary:
             self.freqs_cis = precompute_freqs_cis(
                 # self.params.dim // self.params.n_heads, self.params.max_seq_len * 2 # NOTE: LLaMA version
-                args.hidden_size // args.num_attention_heads, self.seq_length * 2
+                args.hidden_size // args.num_attention_heads, self.seq_length # * 2
             )
 
     def _checkpointed_attention_forward(self,
@@ -507,14 +507,14 @@ class ParallelAttention(MegatronModule):
                 value_layer = qkv[:, :, :, [-1]]
                 key_layer = torch.broadcast_to(key_layer, query_layer.shape)
                 value_layer = torch.broadcast_to(value_layer, query_layer.shape)
-                print(value_layer.shape)
-                if self.use_flash_attn:
-                    query_layer, key_layer, value_layer = [rearrange(x, "seq_len batch group num_heads head_dim -> batch batch (group num_heads) head_dim",
-                                     head_dim=self.head_dim,) for x in [query_layer, key_layer, value_layer]]
-                else:
-                    query_layer, key_layer, value_layer = [rearrange(x, "seq_len batch group num_heads head_dim -> seq_len batch (group num_heads) head_dim",
-                                     head_dim=self.head_dim,) for x in [query_layer, key_layer, value_layer]]
-                print(value_layer.shape)
+                # if self.use_flash_attn:
+                #     query_layer, key_layer, value_layer = [rearrange(x, "seq_len batch group num_heads head_dim -> batch seq_len (group num_heads) head_dim",
+                #                      head_dim=self.hidden_size_per_attention_head,) for x in [query_layer, key_layer, value_layer]]
+                # else:
+                #     query_layer, key_layer, value_layer = [rearrange(x, "seq_len batch group num_heads head_dim -> seq_len batch (group num_heads) head_dim",
+                #                      head_dim=self.hidden_size_per_attention_head,) for x in [query_layer, key_layer, value_layer]]
+                query_layer, key_layer, value_layer = [rearrange(x, "seq_len batch group num_heads head_dim -> seq_len batch (group num_heads) head_dim",
+                                     head_dim=self.hidden_size_per_attention_head,) for x in [query_layer, key_layer, value_layer]]
             else:
                 mixed_x_layer = mixed_x_layer.view(*new_tensor_shape)
 
@@ -567,7 +567,7 @@ class ParallelAttention(MegatronModule):
         # Rotary embeddings
         # ==================================
         if self.position_embedding_type == PositionEmbeddingType.rotary:
-            query_layer, key_layer = apply_rotary_emb(query_layer, key_layer, self.freq_cis)
+            query_layer, key_layer = apply_rotary_emb(query_layer, key_layer, self.freqs_cis)
 
         # ==================================
         # core attention computation
@@ -581,8 +581,10 @@ class ParallelAttention(MegatronModule):
                 context_layer = self.core_attention(
                     query_layer, key_layer, value_layer, attention_mask)
         else:
-            if not self.use_multiquery_attn: # else this has already been done before
-                q, k, v = [rearrange(x, 's b ... -> b s ...').contiguous()
+            # if not self.use_multiquery_attn: # else this has already been done before
+            #     q, k, v = [rearrange(x, 's b ... -> b s ...').contiguous()
+            #                for x in (query_layer, key_layer, value_layer)]
+            q, k, v = [rearrange(x, 's b ... -> b s ...').contiguous()
                            for x in (query_layer, key_layer, value_layer)]
             if not self.sequence_parallel:
                 with megatron.core.tensor_parallel.get_cuda_rng_tracker().fork():

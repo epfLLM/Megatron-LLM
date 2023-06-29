@@ -157,7 +157,7 @@ if __name__ == "__main__":
 
     base_parser = megatron.arguments.build_base_parser()
     final_parser = add_args(base_parser)
-    args = final_parser.parse_args(sys.argv[1:] + ['--tokenizer_type', 'FalconTokenizer'])
+    args = final_parser.parse_args(sys.argv[1:] + ['--tokenizer_type', 'GPT2BPETokenizer'])
     # args_defaults = {"micro_batch_size": 4,
     #                  "num_layers": 2,
     #                  "hidden_size": 3,

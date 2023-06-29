@@ -104,6 +104,7 @@ class ParallelMLP(MegatronModule):
             async_tensor_model_parallel_allreduce=args.async_tensor_model_parallel_allreduce,
             **_args_to_kwargs(args),
             world_size=world_size)
+        self.use_bias = args.use_bias
 
         self.bias_gelu_fusion = args.bias_gelu_fusion
 
@@ -132,9 +133,12 @@ class ParallelMLP(MegatronModule):
         if self.bias_gelu_fusion:
             intermediate_parallel = \
                 bias_gelu_impl(intermediate_parallel, bias_parallel)
-        else:
+        elif self.use_bias:
             intermediate_parallel = \
                 self.activation_func(intermediate_parallel + bias_parallel)
+        else:
+            intermediate_parallel = \
+                self.activation_func(intermediate_parallel)
 
         # [s, b, h]
         output, output_bias = self.dense_4h_to_h(intermediate_parallel)
@@ -601,6 +605,12 @@ class ParallelAttention(MegatronModule):
         return output, bias
 
 
+def dropout_add(x, residual, prob, training):
+    out = torch.nn.functional.dropout(x, p=prob, training=training)
+    out = residual + out
+    return out
+
+
 def bias_dropout_add(x, bias, residual, prob, training):
     # type: (Tensor, Tensor, Tensor, float, bool) -> Tensor
     out = torch.nn.functional.dropout(x + bias, p=prob, training=training)
@@ -612,6 +622,20 @@ def get_bias_dropout_add(training):
     def _bias_dropout_add(x, bias, residual, prob):
         return bias_dropout_add(x, bias, residual, prob, training)
     return _bias_dropout_add
+
+
+
+def dropout_add(x, residual, prob, training):
+    out = torch.nn.functional.dropout(x, p=prob, training=training)
+    out = residual + out
+    return out
+
+
+def get_dropout_add(training):
+    def _dropout_add(x, residual, prob):
+        return dropout_add(x, residual, prob, training)
+    return _dropout_add
+
 
 
 @torch.jit.script
@@ -685,6 +709,7 @@ class ParallelTransformerLayer(MegatronModule):
         self.bias_dropout_fusion = args.bias_dropout_fusion
         self.drop_path = DropPath(drop_path_rate) if drop_path_rate > 0.0 else None
         self.parallel_attn = args.parallel_attn
+        self.use_bias = args.use_bias
 
         # Layernorm on the attention output
         if not args.parallel_attn:
@@ -734,6 +759,32 @@ class ParallelTransformerLayer(MegatronModule):
                 encoder_output=None,
                 enc_dec_attn_mask=None,
                 inference_params=None):
+
+        def apply_dropout(x, bias, residual, prob, make_viewless=False):
+            # Jit compiled function creates 'view' tensor. This tensor
+            # potentially gets saved in the MPU checkpoint function context,
+            # which rejects view tensors. While making a viewless tensor here
+            # won't result in memory savings (like the data loader, or
+            # p2p_communication), it serves to document the origin of this
+            # 'view' tensor.
+            if self.use_bias:
+                bias = bias.expand_as(residual)
+                if self.drop_path is None:
+                    with self.bias_dropout_add_exec_handler():
+                        output = bias_dropout_add_func(x, bias, residual, prob)
+                    if make_viewless:
+                        return core.utils.make_viewless_tensor(inp = output,
+                                                               requires_grad = output.requires_grad,
+                                                               keep_graph = True)
+                    return output
+                out = torch.nn.functional.dropout(x + bias, p=prob, training=self.training)
+                return residual + self.drop_path(out)
+            elif self.drop_path is None:
+                with self.bias_dropout_add_exec_handler():
+                    return dropout_add_func(x, residual, prob)
+            out = torch.nn.functional.dropout(x, p=prob, training=self.training)
+            return residual + self.drop_path(out)
+                    
         # hidden_states: [s, b, h]
         # print(hidden_states)
         # print(attention_mask)
@@ -749,34 +800,28 @@ class ParallelTransformerLayer(MegatronModule):
         else:
             residual = hidden_states
 
-        if not self.parallel_attn:
-            if self.drop_path is None:
-                # jit scripting for a nn.module (with dropout) is not
-                # triggerring the fusion kernel. For now, we use two
-                # different nn.functional routines to account for varying
-                # dropout semantics during training and inference phases.
-                if self.bias_dropout_fusion:
-                    if self.training:
-                        bias_dropout_add_func = bias_dropout_add_fused_train
-                    else:
-                        bias_dropout_add_func = bias_dropout_add_fused_inference
+        if self.drop_path is None:
+            # jit scripting for a nn.module (with dropout) is not
+            # triggerring the fusion kernel. For now, we use two
+            # different nn.functional routines to account for varying
+            # dropout semantics during training and inference phases.
+            if not self.use_bias:
+                dropout_add_func = get_dropout_add(self.training)
+            elif self.bias_dropout_fusion:
+                if self.training:
+                    bias_dropout_add_func = bias_dropout_add_fused_train
                 else:
-                    bias_dropout_add_func = get_bias_dropout_add(self.training)
-
-                with self.bias_dropout_add_exec_handler():
-                    layernorm_input = bias_dropout_add_func(
-                        attention_output,
-                        attention_bias.expand_as(residual),
-                        residual,
-                        self.hidden_dropout)
+                    bias_dropout_add_func = bias_dropout_add_fused_inference
             else:
-                out = torch.nn.functional.dropout(attention_output + attention_bias,
-                                                  p=self.hidden_dropout,
-                                                  training=self.training)
-                layernorm_input = residual + self.drop_path(out)
+                bias_dropout_add_func = get_bias_dropout_add(self.training)
 
+        if not self.parallel_attn:
+            lyernorm_input = apply_dropout(attention_output, attention_bias,
+                                           residual, self.hidden_dropout)
             # Layer norm post the self attention.
             layernorm_output = self.post_attention_layernorm(layernorm_input)
+        else:
+            layernorm_input = attention_output
 
         if self.layer_type == LayerType.decoder:
             attention_output, attention_bias = self.inter_attention(layernorm_output,
@@ -787,13 +832,8 @@ class ParallelTransformerLayer(MegatronModule):
             else:
                 residual = layernorm_input
 
-            with self.bias_dropout_add_exec_handler():
-                layernorm_input = bias_dropout_add_func(
-                    attention_output,
-                    attention_bias.expand_as(residual),
-                    residual,
-                    self.hidden_dropout)
-
+            layernorm_input = apply_dropout(attention_output, attention_bias,
+                                            residual, self.hidden_dropout)
             # Layer norm post the decoder attention
             layernorm_output = self.post_inter_attention_layernorm(layernorm_input)
         mlp_output, mlp_bias = self.mlp(layernorm_output)
@@ -804,28 +844,8 @@ class ParallelTransformerLayer(MegatronModule):
         else:
             residual = layernorm_input
 
-        if self.drop_path is None:
-            with self.bias_dropout_add_exec_handler():
-                output = bias_dropout_add_func(
-                    mlp_output,
-                    mlp_bias.expand_as(residual),
-                    residual,
-                    self.hidden_dropout)
-
-            # Jit compiled function creates 'view' tensor. This tensor
-            # potentially gets saved in the MPU checkpoint function context,
-            # which rejects view tensors. While making a viewless tensor here
-            # won't result in memory savings (like the data loader, or
-            # p2p_communication), it serves to document the origin of this
-            # 'view' tensor.
-            output = core.utils.make_viewless_tensor(inp = output,
-                                                     requires_grad = output.requires_grad,
-                                                     keep_graph = True)
-        else:
-            out = torch.nn.functional.dropout(mlp_output + mlp_bias,
-                                              p=self.hidden_dropout,
-                                              training=self.training)
-            output = residual + self.drop_path(out)
+        output = apply_dropout(mlp_output, mlp_bias, residual, self.hidden_dropout,
+                               make_viewless=True)
         output = self.output_layernorm(output)
         return output
 

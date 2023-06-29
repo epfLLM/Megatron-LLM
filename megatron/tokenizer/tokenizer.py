@@ -30,9 +30,6 @@ def build_tokenizer(args):
     elif args.tokenizer_type == 'GPT2BPETokenizer':
         assert args.merge_file is not None
         tokenizer = _GPT2BPETokenizer(args.vocab_file, args.merge_file)
-    elif args.tokenizer_type == "FalconTokenizer":
-        from transformers import AutoTokenizer
-        tokenizer = AutoTokenizer.from_pretrained("tiiuae/falcon-7b")
     elif args.tokenizer_type == 'SentencePieceTokenizer':
         assert args.vocab_file is not None
         tokenizer = _SentencePieceTokenizer(args.vocab_file, vocab_extra_ids=args.vocab_extra_ids)

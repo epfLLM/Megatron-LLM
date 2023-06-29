@@ -150,7 +150,7 @@ def add_args(parser):
 if __name__ == "__main__":
     model_type_llama = ModelType.encoder_or_decoder,
 
-    args_defaults = {'tokenizer_type': 'FalconTokenizer'}
+    args_defaults = {'tokenizer_type': 'GPT2BPETokenizer'}
     extra_args_provider = add_args
 
     megatron.initialize.initialize_megatron(extra_args_provider, args_defaults)

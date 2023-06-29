@@ -63,7 +63,9 @@ class LlamaModel(MegatronModule):
         assert not args.use_post_ln, "LlamaModel requires pre-normalization, not use_post_ln"
         assert args.use_rms_norm, "LlamaModel requires rms norm"
         assert args.glu_activation == "swiglu", "LlamaModel requires swiglu activation"
+        assert not args.bias_gelu_fusion, "LlamaModel does not excpect fused_bias_gelu"
         assert args.position_embedding_type == PositionEmbeddingType.rotary, "LlamaModel requires rotary embedding"
+        assert not args.use_multiquery_attn, "LlamaModel does not use multiquery attention"
 
         self.language_model, self._language_model_key = megatron.model.language_model.get_language_model(
             num_tokentypes=num_tokentypes,

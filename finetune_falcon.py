@@ -150,14 +150,14 @@ def add_args(parser):
 if __name__ == "__main__":
     model_type_llama = ModelType.encoder_or_decoder,
 
-    args_defaults = {'tokenizer_type': 'GPT2BPETokenizer'}
+    args_defaults = {'tokenizer_type': 'FalconTokenizer'}
     extra_args_provider = add_args
 
     megatron.initialize.initialize_megatron(extra_args_provider, args_defaults)
 
     base_parser = megatron.arguments.build_base_parser()
     final_parser = add_args(base_parser)
-    args = final_parser.parse_args(sys.argv[1:] + ['--tokenizer_type', 'GPT2BPETokenizer'])
+    args = final_parser.parse_args(sys.argv[1:] + ['--tokenizer_type', 'FalconTokenizer'])
     # args_defaults = {"micro_batch_size": 4,
     #                  "num_layers": 2,
     #                  "hidden_size": 3,

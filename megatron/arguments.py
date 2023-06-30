@@ -907,7 +907,8 @@ def _add_data_args(parser):
                        choices=['BertWordPieceLowerCase',
                                 'BertWordPieceCase',
                                 'GPT2BPETokenizer',
-                                'SentencePieceTokenizer'],
+                                'SentencePieceTokenizer',
+                                'FalconTokenizer'],
                        help='What type of tokenizer to use.')
     group.add_argument('--tokenizer_model', type=str, default=None,
                        help='Sentencepiece tokenizer model.')

@@ -15,7 +15,7 @@ def build_tokenizer(args):
         print('> building {} tokenizer ...'.format(args.tokenizer_type),
               flush=True)
 
-    if args.tokenizer_type != 'SentencePieceTokenizer':
+    if args.tokenizer_type not in {'SentencePieceTokenizer', 'FalconTokenizer'}:
         assert args.vocab_file is not None
 
     # Select and instantiate the tokenizer.
@@ -33,6 +33,8 @@ def build_tokenizer(args):
     elif args.tokenizer_type == 'SentencePieceTokenizer':
         assert args.vocab_file is not None
         tokenizer = _SentencePieceTokenizer(args.vocab_file, vocab_extra_ids=args.vocab_extra_ids)
+    elif args.tokenizer_type == 'FalconTokenizer':
+        tokenizer = _FalconTokenizer()
     else:
         raise NotImplementedError('{} tokenizer is not '
                                   'implemented.'.format(args.tokenizer_type))
@@ -282,6 +284,39 @@ class _GPT2BPETokenizer(AbstractTokenizer):
     def eod(self):
         return self.eod_id
 
+
+class _FalconTokenizer(AbstractTokenizer):
+    """Wrapper of huggingface tokenizer."""
+
+    def __init__(self):
+        name = 'FalconTokenizer'
+        super().__init__(name)
+        from transformers import AutoTokenizer
+        self.tokenizer = AutoTokenizer.from_pretrained('tiiuae/falcon-40b')
+        self._eod = self.tokenizer.vocab['<|endoftext|>']
+        self._inv_vocab = {idx: token for token, idx in self.tokenizer.vocab.items()}
+
+    @property
+    def vocab_size(self):
+        return len(self.tokenizer.vocab)
+
+    @property
+    def vocab(self):
+        return self.tokenizer.vocab
+
+    def tokenize(self, text):
+        return self.tokenizer.encode(text)
+
+    def detokenize(self, token_ids):
+        return self.tokenizer.decode(token_ids)
+
+    @property
+    def inv_vocab(self):
+        return self._inv_vocab
+
+    @property
+    def eod(self):
+        return self._eod
 
 
 class _SentencePieceTokenizer(AbstractTokenizer):

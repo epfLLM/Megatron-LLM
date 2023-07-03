@@ -28,6 +28,7 @@ class FalconModel(GPTModel):
         assert args.use_flash_attn, "Falcon attention is only implemented with flash attn"
         assert not args.bias_gelu_fusion, "Falcon does not use bias_gelu_fusion"
         assert not args.bias_dropout_fusion, "Falcon does not use bias_dropout_fusion"
+        assert args.hidden_dropout == 0.0, "Falcon does not use dropout"
         super().__init__(num_tokentypes=num_tokentypes, parallel_output=parallel_output,
                          pre_process=pre_process, post_process=post_process,
                          model_type=model_type)

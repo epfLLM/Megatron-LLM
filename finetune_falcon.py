@@ -101,7 +101,7 @@ def _forward_step(data_iterator, model):
 def _train_valid_test_datasets_provider(train_val_test_num_samples: List[int]):
     """Build train, valid, and test datasets."""
     args = megatron.get_args()
-    model_name = "llama"
+    model_name = "falcon"
     assert args.data_path, "Not supporting None data_path"
     print_rank_0(f'> building train, validation, and test datasets for {model_name} ...')
     train_ds, valid_ds1, test_ds = megatron.data.gpt_dataset.build_train_valid_test_datasets(

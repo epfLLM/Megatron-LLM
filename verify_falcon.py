@@ -29,6 +29,7 @@ def megatron_forward(model, batch):
     assert torch.all(loss_mask)
     # we need to do two forward passes to get both the logits and the loss
     logits = model(tokens, position_ids, attention_mask, labels=None)
+    print("Megatron logits", logits[0, :3, :3])
     losses = model(tokens, position_ids, attention_mask, labels=labels)
     loss, _ = loss_func(loss_mask, losses)
     return logits, loss
@@ -38,7 +39,11 @@ def huggingface_forward(model, batch):
     args = get_args()
     batch = [tensor.to(args.huggingface_device) for tensor in batch]
     tokens, labels, loss_mask, attention_mask, position_ids = batch
-    output = model(input_ids=tokens, position_ids=position_ids, labels=labels)
+    output = model(input_ids=tokens, position_ids=position_ids, labels=labels,
+                   output_hidden_states=True)
+    for i, hidden_state in enumerate(output["hidden_states"]):
+        print("Huggingface", i, hidden_state[0, :3, :3])
+    print("HF logits", output["logits"][0, :3, :3])
     return output["logits"], output["loss"]
 
 

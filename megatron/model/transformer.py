@@ -778,7 +778,7 @@ class ParallelTransformerLayer(MegatronModule):
 
         # Second residual connection.
         if self.parallel_attn:
-            mlp_output += attention_output
+            mlp_output = mlp_output + attention_output
         else:
             if self.apply_residual_connection_post_layernorm:
                 residual = layernorm_output

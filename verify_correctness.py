@@ -1,5 +1,5 @@
 import torch
-from transformers import AutoModelForCausalLM
+from transformers import AutoModelForCausalLM, LlamaForCausalLM
 
 import megatron
 from megatron import get_args, print_rank_0, update_num_microbatches
@@ -7,17 +7,26 @@ from megatron.model.enums import ModelType
 from megatron.initialize import initialize_megatron
 from megatron.training import _setup_model_and_optimizer, build_train_valid_test_data_iterators
 
-from finetune_falcon import (add_args, _get_batch, loss_func, _model_provider,
-                             _train_valid_test_datasets_provider)
+from finetune_falcon import add_args, _get_batch, loss_func, _train_valid_test_datasets_provider
+from finetune_falcon import _model_provider as falcon_provider
+from finetune_llama import _model_provider as llama_provider
 
 
-def falcon_provider(size: int = 7):
+def hf_provider():
     args = get_args()
-    print_rank_0("Getting falcon model...")
-    model = AutoModelForCausalLM.from_pretrained(
-        f"tiiuae/falcon-{size}b", cache_dir=args.huggingface_cache,
-        trust_remote_code=True
-    )
+    print_rank_0("Getting huggingface model...")
+    if args.model_name == "falcon":
+        model = AutoModelForCausalLM.from_pretrained(
+            f"tiiuae/falcon-{args.model_size}b", cache_dir=args.huggingface_cache,
+            trust_remote_code=True
+        )
+    elif args.model_name == "llama":
+        model = LlamaForCausalLM.from_pretrained(
+            args.hf_weights, cache_dir=args.huggingface_cache,
+            trust_remote_code=True
+        )
+    else:
+        raise KeyError(f"Model {args.model_name} not implemented")
     model = model.eval().requires_grad_(False).to(args.huggingface_device)
     return model
 
@@ -107,6 +116,9 @@ def extra_args(parser):
     group = parser.add_argument_group(title="huggingface")
     group.add_argument("--huggingface_cache", default=None)
     group.add_argument("--huggingface_device", default="cuda:0")
+    group.add_argument("--model_size", type=int, default=7)
+    group.add_argument("--model_name", choices={"falcon", "llama"}, default="falcon")
+    group.add_argument("--hf_weights", help="Path to llama weights")
     return parser
 
 
@@ -117,9 +129,9 @@ if __name__ == "__main__":
     args = get_args()
 
     # VERIFICATION
+    model_provider = falcon_provider if args.model_name == "falcon" else llama_provider
     verify(args, _train_valid_test_datasets_provider,
-           _model_provider, megatron_forward,
-           falcon_provider, huggingface_forward,
+           model_provider, megatron_forward,
+           hf_provider, huggingface_forward,
            ModelType.encoder_or_decoder,)
-    print(model)
     print("Verification done, we are set now woohoo! :)")

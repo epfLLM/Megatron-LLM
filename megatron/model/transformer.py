@@ -24,11 +24,6 @@ from .glu_activations import GLU_ACTIVATIONS
 from megatron.model.positional_embeddings import precompute_freqs_cis, apply_rotary_emb
 
 
-try:
-    from flash_attn.flash_attn_interface import flash_attn_unpadded_func
-except ImportError:
-    flash_attn_unpadded_func = None
-
 """ We use the following notation throughout this file:
      h: hidden size
      n: number of attention heads
@@ -281,47 +276,6 @@ class CoreAttention(MegatronModule):
         return context_layer
 
 
-class FlashSelfAttention(torch.nn.Module):
-    """Implement the scaled dot product attention with softmax.
-    Arguments
-    ---------
-        softmax_scale: The temperature to use for the softmax attention.
-                      (default: 1/sqrt(d_keys) where d_keys is computed at
-                      runtime)
-        attention_dropout: The dropout rate to apply to the attention
-                           (default: 0.0)
-    """
-    def __init__(self, causal=False, softmax_scale=None, attention_dropout=0.0,
-                 device=None, dtype=None):
-        super().__init__()
-        assert flash_attn_unpadded_func is not None, ('Please install FlashAttention first, '
-                                                      'e.g., with pip install flash-attn')
-        self.causal = causal
-        self.softmax_scale = softmax_scale
-        self.dropout_p = attention_dropout
-
-    def forward(self, q, k, v):
-        """Implements the multihead softmax attention.
-        Arguments
-        ---------
-            q, k, v: The tensor containing the query, key, and value. (B, S, H, D)
-        """
-        assert q.dtype in [torch.float16, torch.bfloat16]
-        assert q.is_cuda
-        batch_size, seqlen = q.shape[0], q.shape[1]
-        q, k, v = [rearrange(x, 'b s ... -> (b s) ...') for x in [q, k, v]]
-        max_s = seqlen
-        cu_seqlens = torch.arange(0, (batch_size + 1) * seqlen, step=seqlen, dtype=torch.int32,
-                                  device=q.device)
-        output = flash_attn_unpadded_func(
-            q, k, v, cu_seqlens, cu_seqlens, max_s, max_s,
-            self.dropout_p if self.training else 0.0,
-            softmax_scale=self.softmax_scale, causal=self.causal
-        )
-        output = rearrange(output, '(b s) ... -> b s ...', b=batch_size)
-        return output
-
-
 class ParallelAttention(MegatronModule):
     """Parallel self-attention layer abstract class.
 
@@ -351,9 +305,6 @@ class ParallelAttention(MegatronModule):
         self.num_attention_heads = args.num_attention_heads
         self.seq_length = args.seq_length
         if self.use_flash_attn:
-            if flash_attn_unpadded_func is None:
-                raise ImportError('FlashAttention is not installed, please install with '
-                                  'pip install flash-attn')
             assert attention_type == AttnType.self_attn, ('FlashAttention code path only supports '
                                                           'self-attention for now')
             assert self.attn_mask_type == AttnMaskType.causal, ('FlashAttention code path only '
@@ -510,12 +461,6 @@ class ParallelAttention(MegatronModule):
                 value_layer = qkv[:, :, :, [-1]]
                 key_layer = torch.broadcast_to(key_layer, query_layer.shape)
                 value_layer = torch.broadcast_to(value_layer, query_layer.shape)
-                # if self.use_flash_attn:
-                #     query_layer, key_layer, value_layer = [rearrange(x, "seq_len batch group num_heads head_dim -> batch seq_len (group num_heads) head_dim",
-                #                      head_dim=self.hidden_size_per_attention_head,) for x in [query_layer, key_layer, value_layer]]
-                # else:
-                #     query_layer, key_layer, value_layer = [rearrange(x, "seq_len batch group num_heads head_dim -> seq_len batch (group num_heads) head_dim",
-                #                      head_dim=self.hidden_size_per_attention_head,) for x in [query_layer, key_layer, value_layer]]
                 query_layer, key_layer, value_layer = [rearrange(x, "seq_len batch group num_heads head_dim -> seq_len batch (group num_heads) head_dim",
                                      head_dim=self.hidden_size_per_attention_head,) for x in [query_layer, key_layer, value_layer]]
             else:

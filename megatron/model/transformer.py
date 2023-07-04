@@ -413,8 +413,7 @@ class ParallelAttention(MegatronModule):
         self.checkpoint_core_attention = args.recompute_granularity == 'selective'
 
         if self.use_flash_attn:
-            self.core_attention_flash = FlashSelfAttention(
-                causal=True, attention_dropout=args.attention_dropout)
+            self.core_attention_flash = F.scaled_dot_product_attention
 
         # Output.
         self.dense = megatron.core.tensor_parallel.RowParallelLinear(
@@ -585,17 +584,14 @@ class ParallelAttention(MegatronModule):
                 context_layer = self.core_attention(
                     query_layer, key_layer, value_layer, attention_mask)
         else:
-            # if not self.use_multiquery_attn: # else this has already been done before
-            #     q, k, v = [rearrange(x, 's b ... -> b s ...').contiguous()
-            #                for x in (query_layer, key_layer, value_layer)]
-            q, k, v = [rearrange(x, 's b ... -> b s ...').contiguous()
-                           for x in (query_layer, key_layer, value_layer)]
+            q, k, v = [rearrange(x, "s b n h -> b n s h").contiguous()
+                       for x in (query_layer, key_layer, value_layer)]
             if not self.sequence_parallel:
                 with megatron.core.tensor_parallel.get_cuda_rng_tracker().fork():
-                    context_layer = self.core_attention_flash(q, k, v)
+                    context_layer = self.core_attention_flash(q, k, v, is_causal=True)
             else:
-                context_layer = self.core_attention_flash(q, k, v)
-            context_layer = rearrange(context_layer, 'b s h d -> s b (h d)').contiguous()
+                context_layer = self.core_attention_flash(q, k, v, is_causal=True)
+            context_layer = rearrange(context_layer, 'b n s h -> s b (n h)').contiguous()
 
         # =================
         # Output. [sq, b, h]
@@ -784,17 +780,14 @@ class ParallelTransformerLayer(MegatronModule):
                     return dropout_add_func(x, residual, prob)
             out = torch.nn.functional.dropout(x, p=prob, training=self.training)
             return residual + self.drop_path(out)
-                    
+
         # hidden_states: [s, b, h]
-        # print(hidden_states)
-        # print(attention_mask)
-        # print(inference_params)
         # Layer norm at the beginning of the transformer layer.
         layernorm_output = self.input_layernorm(hidden_states)
         attention_output, attention_bias = self.self_attention(layernorm_output,
                                                                attention_mask,
                                                                inference_params=inference_params)
-        # print(self.apply_residual_connection_post_layernorm)
+
         if self.apply_residual_connection_post_layernorm:
             residual = layernorm_output
         else:
@@ -839,14 +832,18 @@ class ParallelTransformerLayer(MegatronModule):
         mlp_output, mlp_bias = self.mlp(layernorm_output)
 
         # Second residual connection.
-        if self.apply_residual_connection_post_layernorm:
-            residual = layernorm_output
+        if self.parallel_attn:
+            mlp_output += attention_output
         else:
-            residual = layernorm_input
+            if self.apply_residual_connection_post_layernorm:
+                residual = layernorm_output
+            else:
+                residual = layernorm_input
 
         output = apply_dropout(mlp_output, mlp_bias, residual, self.hidden_dropout,
                                make_viewless=True)
-        output = self.output_layernorm(output)
+        if not self.parallel_attn:
+            output = self.output_layernorm(output)
         return output
 
 

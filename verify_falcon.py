@@ -38,7 +38,7 @@ def huggingface_forward(model, batch):
     args = get_args()
     batch = [tensor.to(args.huggingface_device) for tensor in batch]
     tokens, labels, loss_mask, attention_mask, position_ids = batch
-    output = model(input_ids=tokens, position_ids=position_ids, labels=labels,
+    output = model(input_ids=tokens, position_ids=position_ids, labels=tokens,
                    output_hidden_states=True)
     return output["logits"], output["loss"]
 
@@ -56,8 +56,7 @@ def verify_step(forward1, model1, forward2, model2, iterator):
     abs_error = torch.max(torch.abs(logits1 - logits2))
     loss_error = torch.abs(loss1 - loss2)
     print("Max absoulute error in the logits: "
-          f"{abs_error:.3f} Abs loss error: {loss_error:.3f}, "
-          f"loss ratio: {loss1.item()/loss2.item():.3f}")
+          f"{abs_error:.3f} Abs loss error: {loss_error:.3f}")
 
 
 # heavily inspired from megatron.training.pretrain

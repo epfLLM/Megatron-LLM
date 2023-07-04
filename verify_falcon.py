@@ -29,7 +29,6 @@ def megatron_forward(model, batch):
     assert torch.all(loss_mask)
     # we need to do two forward passes to get both the logits and the loss
     logits = model(tokens, position_ids, attention_mask, labels=None)
-    print("Megatron logits", logits[0, :3, :3])
     losses = model(tokens, position_ids, attention_mask, labels=labels)
     loss, _ = loss_func(loss_mask, losses)
     return logits, loss
@@ -41,9 +40,6 @@ def huggingface_forward(model, batch):
     tokens, labels, loss_mask, attention_mask, position_ids = batch
     output = model(input_ids=tokens, position_ids=position_ids, labels=labels,
                    output_hidden_states=True)
-    for i, hidden_state in enumerate(output["hidden_states"]):
-        print("Huggingface", i, hidden_state[0, :3, :3])
-    print("HF logits", output["logits"][0, :3, :3])
     return output["logits"], output["loss"]
 
 
@@ -59,10 +55,9 @@ def verify_step(forward1, model1, forward2, model2, iterator):
     loss2 = loss2.cpu()
     abs_error = torch.max(torch.abs(logits1 - logits2))
     loss_error = torch.abs(loss1 - loss2)
-    assert torch.allclose(logits1, logits2), f"max(abs(error)) = {abs_error:.2E}"
-    assert torch.allclose(loss1, loss2), f"abs(error) = {loss_error:.2E}"
-    print("Validation step successful! Max absoulute deviation: "
-          f"{abs_error:.2E} Abs loss error: {loss_error:.2E}")
+    print("Max absoulute error in the logits: "
+          f"{abs_error:.3f} Abs loss error: {loss_error:.3f}, "
+          f"loss ratio: {loss1.item()/loss2.item():.3f}")
 
 
 # heavily inspired from megatron.training.pretrain

@@ -754,8 +754,8 @@ class ParallelTransformerLayer(MegatronModule):
                 bias_dropout_add_func = get_bias_dropout_add(self.training)
 
         if not self.parallel_attn:
-            lyernorm_input = apply_dropout(attention_output, attention_bias,
-                                           residual, self.hidden_dropout)
+            layernorm_input = apply_dropout(attention_output, attention_bias,
+                                            residual, self.hidden_dropout)
             # Layer norm post the self attention.
             layernorm_output = self.post_attention_layernorm(layernorm_input)
         else:

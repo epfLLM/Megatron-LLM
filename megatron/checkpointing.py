@@ -247,15 +247,21 @@ def save_checkpoint(iteration, model, optimizer, opt_param_scheduler):
     # Only rank zero of the data parallel writes to the disk.
     model = unwrap_model(model)
 
-    print_rank_0('saving checkpoint at iteration {:7d} to {}'.format(
-        iteration, args.save))
+    release = iteration == "release"
+    if release:
+        print_rank_0('saving checkpoint marked as release to {}'.format(
+            iteration, args.save))
+    else:
+        print_rank_0('saving checkpoint at iteration {:7d} to {}'.format(
+            iteration, args.save))
 
     # Collect rng state across data parallel ranks.
     rng_state = get_rng_state()
 
     # Checkpoint file names.
     model_checkpoint_name, optim_checkpoint_name = \
-        get_checkpoint_names(args.save, iteration, args.use_distributed_optimizer)
+        get_checkpoint_names(args.save, iteration, args.use_distributed_optimizer,
+                             release=release)
 
     # Collect args, model, RNG.
     model_state_dict = {}
@@ -313,8 +319,12 @@ def save_checkpoint(iteration, model, optimizer, opt_param_scheduler):
     if torch.distributed.is_initialized():
         torch.distributed.barrier()
 
-    print_rank_0('  successfully saved checkpoint at iteration {:7d} to {}'.format(
-        iteration, args.save))
+    if release:
+        print_rank_0('  successfully saved checkpoint marked as release to {}'.format(
+            iteration, args.save))
+    else:
+        print_rank_0('  successfully saved checkpoint at iteration {:7d} to {}'.format(
+            iteration, args.save))
 
     # And update the latest iteration
     if not torch.distributed.is_initialized() or torch.distributed.get_rank() == 0:
@@ -524,6 +534,16 @@ def load_args_from_checkpoint(args, load_arg='load'):
     _set_arg('max_position_embeddings')
     _set_arg('tokenizer_type')
     _set_arg('padded_vocab_size')
+
+    _set_arg('position_embedding_type', force=True)
+    _set_arg('num_attention_heads_kv')
+    _set_arg('bias_droput_fusion')
+    _set_arg('bias_gelu_fusion')
+    _set_arg('hidden_dropout', force=True)
+    _set_arg('parallel_attn', force=True)
+    _set_arg('use_flash_attn', force=True)
+    _set_arg('use_multiquery_attn', force=True)
+    # bias_droput_fusion=False, bias_gelu_fusion=False, hidden_dropout=0.0, hidden_size=4544, iteration=1, max_position_embeddings=2048, num_attention_heads=71, num_attention_heads_kv=1, num_layers=32, parallel_attn=True, params_dtype=torch.float32, pipeline_model_parallel_size=1, position_embedding_type='rotary', seq_length=2048, tensor_model_parallel_size=1, tokenizer_type='FalconTokenizer', use_flash_attn=True, use_multiquery_attn=True
     if checkpoint_version < 3.0:
         _set_arg('tensor_model_parallel_size',
                  'model_parallel_size')

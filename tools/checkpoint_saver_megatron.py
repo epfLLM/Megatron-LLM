@@ -28,6 +28,7 @@ def save_checkpoint(queue, args):
         import megatron.arguments
         from megatron.checkpointing import save_checkpoint
         from megatron.global_vars import set_global_variables, get_args
+        from megatron.model.enums import PositionEmbeddingType
         from megatron.model import ModelType
         from megatron.tokenizer.tokenizer import _vocab_size_with_padding
         from megatron import fused_kernels
@@ -104,8 +105,19 @@ def save_checkpoint(queue, args):
                 '--no_save_rng',
                 '--no_initialization',
                 '--save_interval', '1',
+                '--hidden_dropout', str(md.hidden_dropout),
+                '--position_embedding_type', str(md.position_embedding_type),
                 '--save', args.save_dir
                 ]
+    if md.use_multiquery_attn:
+        sys.argv += ["--use_multiquery_attn"]
+    if md.num_attention_heads_kv is not None:
+        sys.argv += ["--num_attention_heads_kv", str(md.num_attention_heads_kv)]
+    if md.parallel_attn:
+        sys.argv += ["--parallel_attn"]
+    if md.use_flash_attn:
+        sys.argv += ["--use_flash_attn"]
+
 
     if md.make_vocab_size_divisible_by is not None:
         sys.argv.extend(['--make_vocab_size_divisible_by', str(md.make_vocab_size_divisible_by)])
@@ -134,6 +146,9 @@ def save_checkpoint(queue, args):
     elif md.model_type == 'BERT':
         from pretrain_bert import model_provider
         margs.model_type = ModelType.encoder_or_decoder
+    elif md.model_type == 'falcon':
+        from finetune_falcon import _model_provider as model_provider
+        margs.model_type = ModelType.encoder_or_decoder
     else:
         raise Exception(f'unrecognized model type: {args.model_type}')
 
@@ -142,6 +157,7 @@ def save_checkpoint(queue, args):
         return models
 
     # fake initializing distributed
+    mpu._DATA_PARALLEL_GROUP = 0
     mpu.set_tensor_model_parallel_world_size(args.target_tensor_parallel_size)
     mpu.set_pipeline_model_parallel_world_size(args.target_pipeline_parallel_size)
     mpu.set_tensor_model_parallel_rank(0)
@@ -151,7 +167,10 @@ def save_checkpoint(queue, args):
     # Embeddings
     embeddings_msg = queue_get("embeddings")
 
-    pos_embed = embeddings_msg.pop("position embeddings")
+    if md.position_embedding_type == PositionEmbeddingType.absolute:
+        pos_embed = embeddings_msg.pop("position embeddings")
+    else:
+        pos_embed = None
     orig_word_embed = embeddings_msg.pop("word embeddings")
     check_message(embeddings_msg)
 
@@ -192,7 +211,8 @@ def save_checkpoint(queue, args):
     for tp_rank, model in enumerate(models):
         print(f"word embeddings shape {model.language_model.embedding.word_embeddings.weight.shape}")
         model.language_model.embedding.word_embeddings.weight.data.copy_(out_word_embed[tp_rank])
-        model.language_model.embedding.position_embeddings.weight.data.copy_(pos_embed)
+        if pos_embed is not None:
+            model.language_model.embedding.position_embeddings.weight.data.copy_(pos_embed)
 
     # Transformer layers
     total_layer_num = 0
@@ -209,17 +229,21 @@ def save_checkpoint(queue, args):
             # duplicated tensors
             input_layernorm_weight = msg.pop("input layernorm weight")
             input_layernorm_bias = msg.pop("input layernorm bias")
-            dense_bias = msg.pop("dense bias")
-            post_layernorm_weight = msg.pop("post layernorm weight")
-            post_layernorm_bias = msg.pop("post layernorm bias")
-            mlp_l1_bias = msg.pop("mlp l1 bias")
+            if not md.parallel_attn:
+                post_layernorm_weight = msg.pop("post layernorm weight")
+                post_layernorm_bias = msg.pop("post layernorm bias")
+            if md.use_bias:
+                dense_bias = msg.pop("dense bias")
+                mlp_l1_bias = msg.pop("mlp l1 bias")
 
             # Split up the parallel tensors
             qkv_weight = torch.chunk(msg.pop("qkv weight"), args.target_tensor_parallel_size, dim=0)
-            qkv_bias = torch.chunk(msg.pop("qkv bias"), args.target_tensor_parallel_size, dim=0)
+            if md.use_bias:
+                qkv_bias = torch.chunk(msg.pop("qkv bias"), args.target_tensor_parallel_size, dim=0)
             dense_weight = torch.chunk(msg.pop("dense weight"), args.target_tensor_parallel_size, dim=1)
             mlp_l0_weight = torch.chunk(msg.pop("mlp l0 weight"), args.target_tensor_parallel_size, dim=0)
-            mlp_l0_bias = torch.chunk(msg.pop("mlp l0 bias"), args.target_tensor_parallel_size, dim=0)
+            if md.use_bias:
+                mlp_l0_bias = torch.chunk(msg.pop("mlp l0 bias"), args.target_tensor_parallel_size, dim=0)
             mlp_l1_weight = torch.chunk(msg.pop("mlp l1 weight"), args.target_tensor_parallel_size, dim=1)
 
             # Save them to the model
@@ -228,15 +252,18 @@ def save_checkpoint(queue, args):
                 l.input_layernorm.weight.data.copy_(input_layernorm_weight)
                 l.input_layernorm.bias.data.copy_(input_layernorm_bias)
                 l.self_attention.query_key_value.weight.data.copy_(qkv_weight[tp_rank])
-                l.self_attention.query_key_value.bias.data.copy_(qkv_bias[tp_rank])
                 l.self_attention.dense.weight.data.copy_(dense_weight[tp_rank])
-                l.self_attention.dense.bias.data.copy_(dense_bias)
-                l.post_attention_layernorm.weight.data.copy_(post_layernorm_weight)
-                l.post_attention_layernorm.bias.data.copy_(post_layernorm_bias)
+                if md.use_bias:
+                    l.self_attention.query_key_value.bias.data.copy_(qkv_bias[tp_rank])
+                    l.self_attention.dense.bias.data.copy_(dense_bias)
+                if not md.parallel_attn:
+                    l.post_attention_layernorm.weight.data.copy_(post_layernorm_weight)
+                    l.post_attention_layernorm.bias.data.copy_(post_layernorm_bias)
                 l.mlp.dense_h_to_4h.weight.data.copy_(mlp_l0_weight[tp_rank])
-                l.mlp.dense_h_to_4h.bias.data.copy_(mlp_l0_bias[tp_rank])
                 l.mlp.dense_4h_to_h.weight.data.copy_(mlp_l1_weight[tp_rank])
-                l.mlp.dense_4h_to_h.bias.data.copy_(mlp_l1_bias)
+                if md.use_bias:
+                    l.mlp.dense_h_to_4h.bias.data.copy_(mlp_l0_bias[tp_rank])
+                    l.mlp.dense_4h_to_h.bias.data.copy_(mlp_l1_bias)
             total_layer_num = total_layer_num + 1
             check_message(msg)
 

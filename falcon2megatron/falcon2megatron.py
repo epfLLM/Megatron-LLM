@@ -1,6 +1,8 @@
+import os
+import sys
 from pathlib import Path
 from typing import Optional
-from argparse import ArgumentParser
+from argparse import ArgumentParser, Namespace
 
 import torch
 from tqdm.auto import trange
@@ -52,9 +54,15 @@ def convert_to_megatron(weights: dict, size: int) -> dict:
 
 
 def main(size: int = 7, out: Optional[Path] = None,
-                 cache_dir: Optional[Path] = None):
+         cache_dir: Optional[Path] = None, megatron_path: Optional[Path] = None):
     if out is None:
         out = Path(f"falcon{size}b_megatron.pt").absolute()
+
+    # imports megatron
+    sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), os.path.pardir)))
+    if megatron_path is not None:
+        sys.path.insert(0, args.megatron_path)
+    from megatron.model.enums import PositionEmbeddingType
 
     # get weights from huggingface
     print("Fetching weights from huggingface/specified directory...")
@@ -66,12 +74,38 @@ def main(size: int = 7, out: Optional[Path] = None,
     # convert state dict to be megatron-compatible
     megatron_weights = convert_to_megatron(hf_weights, size)
 
+    # set args
+    dtype = megatron_weights["embedding"]["word_embeddings.weight"].dtype
+    if size == 7:
+        args = {"num_layers": 32, "hidden_size": 4544,
+                "num_attention_heads": 71, "num_attention_heads_kv": 1}
+    else:
+        args = {"num_layers": 60, "hidden_size": 8192,
+                "num_attention_heads": 128, "num_attention_heads_kv": 8}
+    args.update({
+        "tensor_model_parallel_size": 1,
+        "pipeline_model_parallel_size": 1,
+        "tokenizer_type": "FalconTokenizer",
+        "iteration": "release",
+        "params_dtype": dtype,
+        "seq_length": 2048,
+        "max_position_embeddings": 2048,
+        "use_flash_attn": True,
+        "bias_gelu_fusion": False,
+        "bias_droput_fusion": False,
+        "hidden_dropout": 0.0,
+        "position_embedding_type": PositionEmbeddingType.rotary,
+        "use_multiquery_attn": True,
+        "parallel_attn": True,
+    })
+
     # save converted weights in specified out
     (out/"release"/"mp_rank_00").mkdir(parents=True)
     with open(out/"latest_checkpointed_iteration.txt", "w+") as f:
         f.write("release")
-    megatron_weights = {"iteration": 1, "model": {"language_model": megatron_weights}}
-    torch.save(megatron_weights, out/"release"/"mp_rank_00"/"model_optim_rng.pt")
+    final_dict = {"iteration": "release", "model": {"language_model": megatron_weights},
+                  "checkpoint_version": 3.0, "args": Namespace(**args)}
+    torch.save(final_dict, out/"release"/"mp_rank_00"/"model_optim_rng.pt")
 
 
 if __name__ == "__main__":
@@ -83,5 +117,7 @@ if __name__ == "__main__":
                         help="Directory to store the megatron weights (as checkpoint)")
     parser.add_argument("--cache-dir", type=Path,
                         help="Directory to store the huggingface weights")
+    parser.add_argument("--megatron-path", type=Path,
+                        help="Path where to find megatron code")
     args = parser.parse_args()
-    main(args.size, args.out, args.cache_dir)
+    main(args.size, args.out, args.cache_dir, args.megatron_path)

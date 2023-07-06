@@ -87,7 +87,7 @@ def pretrain(args,
     # # Initalize and get arguments, timers, and Tensorboard writer.
     # Set pytorch JIT layer fusion options and warmup JIT functions.
     megatron.initialize.set_jit_fusion_options(args)
-
+    # gradient_accumulation_fusion
     # Adjust the startup time so it reflects the largest value.
     # This will be closer to what scheduler will see (outside of
     # image ... launches.
@@ -98,41 +98,41 @@ def pretrain(args,
     _TRAIN_START_TIME = start_time_tensor.item()
     print_rank_0('time to initialize megatron (seconds): {:.3f}'.format(time.time() - _TRAIN_START_TIME))
     print_datetime('after megatron is initialized')
-    timers = get_timers()
+    # timers = get_timers()
 
     # Model, optimizer, and learning rate.
-    timers('model-and-optimizer-setup', log_level=0).start(barrier=True)
+    # timers('model-and-optimizer-setup', log_level=0).start(barrier=True)
     model, optimizer, opt_param_scheduler = _setup_model_and_optimizer(
         model_provider_func, model_type, args=args)
-    timers('model-and-optimizer-setup').stop()
+    # timers('model-and-optimizer-setup').stop()
     print_datetime('after model, optimizer, and learning rate scheduler are built')
 
     # Data stuff.
-    timers('train/valid/test-data-iterators-setup', log_level=0).start(
-        barrier=True)
+    # timers('train/valid/test-data-iterators-setup', log_level=0).start(barrier=True)
     if args.virtual_pipeline_model_parallel_size is not None:
-        all_data_iterators = [
-            build_train_valid_test_data_iterators(
-                train_valid_test_dataset_provider, args)
-            for _ in range(len(model))
-        ]
+        all_data_iterators = [None] * range(len(model))
+        for _ in range(len(model)):
+            all_data_iterators[_], do = _build_train_valid_test_data_iterators(train_valid_test_dataset_provider, args)
         train_data_iterator = [di[0] for di in all_data_iterators]
         valid_data_iterator = [di[1] for di in all_data_iterators]
         test_data_iterator = [di[2] for di in all_data_iterators]
     else:
-        train_data_iterator, valid_data_iterator, test_data_iterator \
-            = build_train_valid_test_data_iterators(
-                train_valid_test_dataset_provider, args)
-    timers('train/valid/test-data-iterators-setup').stop()
+        all_data_iterators, do = _build_train_valid_test_data_iterators(train_valid_test_dataset_provider, args)
+        train_data_iterator, valid_data_iterator, test_data_iterator = all_data_iterators
+            # timers('train/valid/test-data-iterators-setup').stop()
     print_datetime('after dataloaders are built')
 
     # Print setup timing.
     print_rank_0('done with setup ...')
-    timers.log(['model-and-optimizer-setup', 'train/valid/test-data-iterators-setup'], barrier=True)
+    # timers.log(['model-and-optimizer-setup', 'train/valid/test-data-iterators-setup'], barrier=True)
     print_rank_0('training ...')
+    # do_train = args.do_train
+    # do_valid = args.do_valid
+    # do_test = args.do_test
+    do_train, do_valid, do_test = do
 
     iteration = 0
-    if args.do_train and args.train_iters > 0:
+    if do_train and args.train_iters > 0:
         iteration = _train(args,
                            forward_step_func,
                            model,
@@ -143,7 +143,7 @@ def pretrain(args,
                            process_non_loss_data_func)
     print_datetime('after training is done')
 
-    if args.do_valid:
+    if do_valid:
         prefix = 'the end of training for val data'
         evaluate_and_print_results(prefix,
                                    forward_step_func,
@@ -157,7 +157,7 @@ def pretrain(args,
     if args.save and iteration != 0:
         save_checkpoint(iteration, model, optimizer, opt_param_scheduler)
 
-    if args.do_test:
+    if do_test:
         # Run on test data.
         prefix = 'the end of training for test data'
         evaluate_and_print_results(prefix, forward_step_func,
@@ -841,7 +841,7 @@ def cyclic_iter(iter):
             yield x
 
 
-def build_train_valid_test_data_iterators(build_train_valid_test_datasets_provider: Callable,
+def _build_train_valid_test_data_iterators(build_train_valid_test_datasets_provider: Callable,
                                           args: argparse.Namespace):
     (train_dataloader, valid_dataloader, test_dataloader) = (None, None, None)
     print_rank_0('> building train, validation, and test datasets ...')
@@ -879,10 +879,8 @@ def build_train_valid_test_data_iterators(build_train_valid_test_datasets_provid
             train_val_test_num_samples)
 
         # Build dataloders.
-        train_dataloader = build_pretraining_data_loader(
-            train_ds, args.consumed_train_samples)
-        valid_dataloader = build_pretraining_data_loader(
-            valid_ds, args.consumed_valid_samples)
+        train_dataloader = build_pretraining_data_loader(train_ds, args.consumed_train_samples)
+        valid_dataloader = build_pretraining_data_loader(valid_ds, args.consumed_valid_samples)
         test_dataloader = build_pretraining_data_loader(test_ds, 0)
 
         # Flags to know if we need to do training/validation/testing.
@@ -899,10 +897,13 @@ def build_train_valid_test_data_iterators(build_train_valid_test_datasets_provid
     torch.distributed.broadcast(flags,
                                 mpu.get_tensor_model_parallel_src_rank(),
                                 group=mpu.get_tensor_model_parallel_group())
-    args.do_train = flags[0].item()
-    args.do_valid = flags[1].item()
-    args.do_test = flags[2].item()
-
+    do_train = flags[0].item()
+    do_valid = flags[1].item()
+    do_test = flags[2].item()
+    #
+    # args.do_train = do_train
+    # args.do_valid = do_valid
+    # args.do_test = do_test
     # Build iterators.
     dl_type = args.dataloader_type
     assert dl_type in ['single', 'cyclic']
@@ -924,5 +925,6 @@ def build_train_valid_test_data_iterators(build_train_valid_test_datasets_provid
                              else iter(cyclic_iter(test_dataloader))
     else:
         test_data_iterator = None
-
-    return train_data_iterator, valid_data_iterator, test_data_iterator
+    all_data_iterators = (train_data_iterator, valid_data_iterator, test_data_iterator)
+    do = (do_train, do_valid, do_test)
+    return all_data_iterators, do

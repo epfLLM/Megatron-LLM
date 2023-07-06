@@ -3,7 +3,7 @@
 
 
 """Fine-tune GPT"""
-
+import functools
 from functools import partial
 import os
 import sys
@@ -29,9 +29,9 @@ from megatron.utils import average_losses_across_data_parallel_group
 from megatron.core import tensor_parallel
 
 
-def _model_provider(pre_process: bool,
-                    post_process: bool):
-    args = megatron.get_args()
+def _model_provider_unwrapped(pre_process: bool,
+                              post_process: bool,
+                              args):
     """Build the model."""
     print_rank_0('building Llama model ...')
     # pre_process = False
@@ -142,17 +142,15 @@ def add_args(parser):
                        'dataset2-path ...')
     group.add_argument('--eval_ppl', action='store_true', default=False)
     group.add_argument('--stored_params', type=dict, default=dict())
-    # group.add_argument('--padded_vocab_size', type=int, default=100)
+    group.add_argument('--padded_vocab_size', type=int, default=100)
     #
     # group.add_argument('--world_size', type=int, default=1)
     # group.add_argument('--rank', type=int, default=1)
-
     return parser
 
 
 if __name__ == "__main__":
     model_type_llama = ModelType.encoder_or_decoder,
-
     args_defaults = {'tokenizer_type': 'GPT2BPETokenizer'}
     extra_args_provider = add_args
 
@@ -170,6 +168,7 @@ if __name__ == "__main__":
     args_defaults = {}
     #  --position_embedding_type rotary
 
+    args.gradient_accumulation_fusion = False
     args.rank = int(os.getenv('RANK', '0'))
     args.world_size = int(os.getenv("WORLD_SIZE", '1'))
 
@@ -177,11 +176,9 @@ if __name__ == "__main__":
     # megatron.core.tensor_parallel.random._CUDA_RNG_STATE_TRACKER.add(_MODEL_PARALLEL_RNG_TRACKER_NAME,
     #                             111)
 
-    # megatron.initialize.initialize_megatron(extra_args_provider=None,
-    #                                         args_defaults=args_defaults)
-    # args = megatron.arguments.parse_args(extra_args_provider=extra_args_provider)
-
     megatron.arguments.validate_args(args, args_defaults)
+    _model_provider = functools.partial(_model_provider_unwrapped, args=args)
+    # megatron.initialize._compile_dependencies(args)
     megatron.training.pretrain(args,
                                _train_valid_test_datasets_provider,
                                _model_provider,

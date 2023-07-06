@@ -1,7 +1,7 @@
 import functools
 import math
 import warnings
-from typing import Optional, Tuple, Union
+from typing import Callable, Optional, Tuple, Union
 
 
 from torch.profiler import profile, record_function, ProfilerActivity
@@ -102,7 +102,7 @@ class Attention(nn.Module):
                 f" {self.num_heads})."
             )
 
-        self.maybe_rotary = RotaryEmbedding(config.head_dim) if config.rotary else lambda q, k: (q, k)
+        self.rotary_embedding = RotaryEmbedding(config.head_dim)
 
         # Layer-wise attention scaling
         self.inv_norm_factor = 1.0 / math.sqrt(self.head_dim)
@@ -137,12 +137,95 @@ class Attention(nn.Module):
         v = torch.broadcast_to(v, q.shape)
 
         q, k, v = [
-            # rearrange(
-            #     x,
-            #     "batch seq_len group num_heads head_dim ->\
-            #     batch seq_len (group num_heads) head_dim",
-            #     head_dim=self.head_dim,
-            # )
+            rearrange(
+                _,
+                "batch seq_len group num_heads head_dim ->\
+                batch seq_len (group num_heads) head_dim"
+            )
+            for _ in [q, k, v]
+        ]
+        return q, k, v
+
+    def forward(
+        self,
+        hidden_states: torch.Tensor,
+        attention_mask: torch.Tensor,
+    ):
+        fused_qkv = self.query_key_value(hidden_states)  # [batch_size, seq_length, 3 x hidden_size]
+        # 3 x [batch_size, seq_length, num_heads, head_dim]
+        (query_layer, key_layer, value_layer) = self._split_heads(fused_qkv)
+
+        batch_size, q_length, _, _ = query_layer.shape
+        query_layer = query_layer.transpose(1, 2).reshape(batch_size * self.num_heads, q_length, self.head_dim)
+        key_layer = key_layer.transpose(1, 2).reshape(batch_size * self.num_heads, q_length, self.head_dim)
+        value_layer = value_layer.transpose(1, 2).reshape(batch_size * self.num_heads, q_length, self.head_dim)
+
+        query_layer, key_layer = self.rotary_embedding(query_layer, key_layer)
+
+        query_layer_ = query_layer.reshape(batch_size, self.num_heads, -1, self.head_dim)
+        key_layer_ = key_layer.reshape(batch_size, self.num_heads, -1, self.head_dim)
+        value_layer_ = value_layer.reshape(batch_size, self.num_heads, -1, self.head_dim)
+
+        attn_output = F.scaled_dot_product_attention(query_layer_, key_layer_, value_layer_, None, 0.0, is_causal=True)
+
+        x = attn_output.view(batch_size, self.num_heads, q_length, self.head_dim)
+        x = x.permute(0, 2, 1, 3)
+        attn_output = x.reshape(batch_size, q_length, self.num_heads * self.head_dim)
+        output_tensor = self.dense(attn_output)
+        return output_tensor
+
+
+class MatobaAttention(nn.Module):
+    def __init__(self, config):
+        super().__init__()
+
+        self.hidden_size = config.hidden_size
+        self.num_heads = config.n_head
+        self.head_dim = self.hidden_size // self.num_heads
+        self.split_size = self.hidden_size
+        self.hidden_dropout = config.hidden_dropout
+
+        if self.head_dim * self.num_heads != self.hidden_size:
+            raise ValueError(
+                f"`hidden_size` must be divisible by num_heads (got `hidden_size`: {self.hidden_size} and `num_heads`:"
+                f" {self.num_heads})."
+            )
+
+        self.rotary_embedding = RotaryEmbeddingMatoba(self.head_dim, self.num_heads)
+
+        # Layer-wise attention scaling
+        self.inv_norm_factor = 1.0 / math.sqrt(self.head_dim)
+        self.beta = self.inv_norm_factor
+
+        self.query_key_value = Linear(
+            self.hidden_size,
+            (config.n_head_kv * 2 + config.n_head) * self.head_dim,
+            bias=config.bias,
+        )
+        self.dense = Linear(self.hidden_size, self.hidden_size, bias=config.bias)
+        self.attention_dropout = nn.Dropout(config.attention_dropout)
+        self.num_kv = config.n_head_kv
+
+    def _split_heads(self, fused_qkv: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        """
+        Split the last dimension into (num_heads, head_dim), results share same memory
+        storage as `fused_qkv`
+        Args:
+            fused_qkv (`torch.tensor`, *required*): [batch_size, seq_length, num_heads * 3 * head_dim]
+        Returns:
+            query: [batch_size, seq_length, num_heads, head_dim]
+            key: [batch_size, seq_length, num_heads, head_dim]
+            value: [batch_size, seq_length, num_heads, head_dim]
+        """
+        batch, seq_len, _ = fused_qkv.shape
+        qkv = fused_qkv.view(batch, seq_len, -1, self.num_heads // self.num_kv + 2, 64)
+        q = qkv[:, :, :, :-2]
+        k = qkv[:, :, :, [-2]]
+        v = qkv[:, :, :, [-1]]
+        k = torch.broadcast_to(k, q.shape)
+        v = torch.broadcast_to(v, q.shape)
+
+        q, k, v = [
             rearrange(
                 x,
                 "batch seq_len group num_heads head_dim ->\
@@ -152,60 +235,29 @@ class Attention(nn.Module):
         ]
         return q, k, v
 
-    def _merge_heads(self, x: torch.Tensor) -> torch.Tensor:
-        """
-        Merge heads together over the last dimenstion
-        Args:
-            x: (`torch.tensor`, *required*): [batch_size * num_heads, seq_length, head_dim]
-        Returns:
-            torch.tensor: [batch_size, seq_length, num_heads * head_dim]
-        """
-        # What we want to achieve is:
-        # batch_size * num_heads, seq_length, head_dim -> batch_size, seq_length, num_heads * head_dim
-        batch_size_and_num_heads, seq_length, _ = x.shape
-        batch_size = batch_size_and_num_heads // self.num_heads
-
-        # First view to decompose the batch size
-        # batch_size * num_heads, seq_length, head_dim -> batch_size, num_heads, seq_length, head_dim
-        x = x.view(batch_size, self.num_heads, seq_length, self.head_dim)
-
-        # batch_size, num_heads, seq_length, head_dim -> batch_size, seq_length, num_heads, head_dim
-        x = x.permute(0, 2, 1, 3)
-
-        # batch_size, seq_length, num_heads, head_dim -> batch_size, seq_length, num_heads * head_dim
-        return x.reshape(batch_size, seq_length, self.num_heads * self.head_dim)
-
     def forward(
         self,
         hidden_states: torch.Tensor,
         attention_mask: torch.Tensor,
     ):
         fused_qkv = self.query_key_value(hidden_states)  # [batch_size, seq_length, 3 x hidden_size]
-        # print("fused_qkv", fused_qkv.shape)
 
-        # 3 x [batch_size, seq_length, num_heads, head_dim]
         (query_layer, key_layer, value_layer) = self._split_heads(fused_qkv)
-        # print("qkv", query_layer.shape, key_layer.shape, value_layer.shape)
-
         batch_size, q_length, _, _ = query_layer.shape
 
         query_layer = query_layer.transpose(1, 2).reshape(batch_size * self.num_heads, q_length, self.head_dim)
-        key_layer = key_layer.transpose(1, 2).reshape(
-            batch_size * self.num_heads,
-            q_length,
-            self.head_dim,
-        )
+        key_layer = key_layer.transpose(1, 2).reshape(batch_size * self.num_heads, q_length, self.head_dim)
         value_layer = value_layer.transpose(1, 2).reshape(batch_size * self.num_heads, q_length, self.head_dim)
-        query_layer, key_layer = self.maybe_rotary(query_layer, key_layer)
-
-        _, kv_length, _ = key_layer.shape
+        query_layer, key_layer = self.rotary_embedding(query_layer, key_layer)
+        # query_layer
+        query_layer = rearrange(query_layer, "i j k l -> (j k) i l")
+        key_layer = rearrange(key_layer, "i j k l -> (j k) i l")
 
         query_layer_ = query_layer.reshape(batch_size, self.num_heads, -1, self.head_dim)
         key_layer_ = key_layer.reshape(batch_size, self.num_heads, -1, self.head_dim)
         value_layer_ = value_layer.reshape(batch_size, self.num_heads, -1, self.head_dim)
 
         attn_output = F.scaled_dot_product_attention(query_layer_, key_layer_, value_layer_, None, 0.0, is_causal=True)
-
         x = attn_output.view(batch_size, self.num_heads, q_length, self.head_dim)
         x = x.permute(0, 2, 1, 3)
         attn_output = x.reshape(batch_size, q_length, self.num_heads * self.head_dim)
@@ -291,44 +343,63 @@ class RotaryEmbeddingMatoba(torch.nn.Module):
     def __init__(
         self,
         head_dim: int,
-        seq_length: int,
         num_head: int,
         theta=10000.0,
     ):
         super().__init__()
         self.head_dim = head_dim
-        self.seq_length = seq_length
         self.num_head = num_head
-        self.freqs_cis = precompute_freqs_cis(head_dim, seq_length, theta)
+        self.theta = theta
 
     def forward(self, q: torch.Tensor, k: torch.Tensor) -> torch.Tensor:
+        # qk = torch.stack((q, k), 0)
+        seq_length = q.shape[1]
+        freqs_cis = precompute_freqs_cis(self.head_dim, seq_length, self.theta)
         k3 = rearrange(k, "(batch num_heads) seq_len (ri half_head_dim) -> seq_len batch num_heads half_head_dim ri",
                                num_heads=self.num_head, ri=2)
         q3 = rearrange(q, "(batch num_heads) seq_len (ri half_head_dim) -> seq_len batch num_heads half_head_dim ri",
                                num_heads=self.num_head, ri=2)
-        # xq_ = torch.view_as_complex(q3.contiguous())
-        # xk_ = torch.view_as_complex(k3.contiguous())
         xq_ = torch.view_as_complex(q3.contiguous())
         xk_ = torch.view_as_complex(k3.contiguous())
 
-        # freqs_cis = reshape_for_broadcast(self.freqs_cis, xq_).to(q.device)
+        xq_out_new = torch.view_as_real(torch.einsum("ijkl,il->ijkl", xq_, freqs_cis))
+        xk_out_new = torch.view_as_real(torch.einsum("ijkl,il->ijkl", xk_, freqs_cis))
 
-        # xq_o1 = torch.view_as_real(xq_ * freqs_cis)
-        # xk_o1 = torch.view_as_real(xk_ * freqs_cis)
-        xq_out_new = torch.view_as_real(torch.einsum("ijkl,il->ijkl", xq_, self.freqs_cis))
-        xk_out_new = torch.view_as_real(torch.einsum("ijkl,il->ijkl", xk_, self.freqs_cis))
-        # torch.testing.assert_close(xq_o1, xq_out_new)
-
+        # xq_out = rearrange(xq_out_new, "i j k l m -> i j k (m l)").type_as(q)
+        # xk_out = rearrange(xk_out_new, "i j k l m -> i j k (m l)").type_as(k)
+        #
         xq_out = xq_out_new.transpose(-1, -2).flatten(3).type_as(q)
         xk_out = xk_out_new.transpose(-1, -2).flatten(3).type_as(k)
         if False:
-            # xq_out_new = torch.einsum("ijkl,ab->kijl", q1, freqs_cis)
-            freqs_cis_r = torch.view_as_real(self.freqs_cis)
-            # xq_out_new = torch.einsum("ijklm,il->ijklm", q3, self.freqs_cis).transpose(-1, -2).flatten(3)
-            # xq_out_new = torch.einsum("ijklm,ilm->ijklm", q3, freqs_cis_r).transpose(-1, -2).flatten(3)
-            xq_out_new = torch.einsum("ijkl,il->ijklm", xq_, self.freqs_cis).transpose(-1, -2).flatten(3)
-            torch.testing.assert_close(xq_out, xq_out_new)
+            g = rearrange(xq_out_new, "i j k l m -> i j k (m l)").type_as(q)
+
         return xq_out, xk_out
+
+
+class RotaryEmbeddingMatoba2(torch.nn.Module):
+    def __init__(
+        self,
+        head_dim: int,
+        num_head: int,
+        theta=10000.0,
+    ):
+        super().__init__()
+        self.head_dim = head_dim
+        self.num_head = num_head
+        self.theta = theta
+
+    def forward(self, q: torch.Tensor, k: torch.Tensor) -> torch.Tensor:
+        qk = torch.stack((q, k), 0)
+        seq_length = qk.shape[2]
+        freqs_cis = precompute_freqs_cis(self.head_dim, seq_length, self.theta)
+        qk3 = rearrange(qk, "i (batch num_heads) seq_len (ri half_head_dim) -> i seq_len batch num_heads half_head_dim ri",
+                               num_heads=self.num_head, ri=2)
+        xqk_ = torch.view_as_complex(qk3.contiguous())
+
+        xqk_out_new = torch.view_as_real(torch.einsum("Aijkl,il->Aijkl", xqk_, freqs_cis))
+
+        xqk_out = xqk_out_new.transpose(-1, -2).flatten(4).type_as(qk)
+        return xqk_out[0], xqk_out[1]
 
 
 class RotaryEmbedding(torch.nn.Module):
@@ -339,7 +410,6 @@ class RotaryEmbedding(torch.nn.Module):
     ):
         super().__init__()
         inv_freq = 1.0 / (base ** (torch.arange(0, head_dim, 2).float() / head_dim))
-        # print(inv_freq)
         self.register_buffer("inv_freq", inv_freq, persistent=False)
         self.head_dim = head_dim
         self.seq_len_cached = None
@@ -378,16 +448,15 @@ class RotaryEmbedding(torch.nn.Module):
 
 
 class DummyConf:
-    n_head = 128
+    n_head = 21
     # head_dim = 64
-    head_dim = 128
-
+    # head_dim = 128
+    head_dim = 256
     hidden_size = head_dim * n_head
     split_size = 9
     hidden_dropout = 0.0
     attention_dropout = 0.0
-    rotary = True
-    n_head_kv = 8
+    n_head_kv = n_head
     bias = False
 
 
@@ -396,7 +465,7 @@ def method1(batch_size: int,
             k: torch.Tensor):
     nb, seq_length, head_dim = q.shape
     num_head = nb // batch_size
-    falcon_rotary = RotaryEmbedding(conf.head_dim)
+    falcon_rotary = RotaryEmbedding(head_dim)
 
     q_falcon, k_falcon = falcon_rotary(q, k)
     pattern = "batch num_heads seq_len head_dim -> seq_len batch num_heads head_dim"
@@ -413,11 +482,8 @@ def method2(batch_size: int,
     freqs_cis = precompute_freqs_cis(head_dim, seq_length)
 
     pattern = "batch num_heads seq_len head_dim -> seq_len batch num_heads head_dim"
-    # q = rearrange(q.view(batch_size, num_head, seq_length, head_dim), pattern).contiguous()
-    # k = rearrange(k.view(batch_size, num_head, seq_length, head_dim), pattern).contiguous()
     q = rearrange(q.view(batch_size, num_head, seq_length, head_dim), pattern)
     k = rearrange(k.view(batch_size, num_head, seq_length, head_dim), pattern)
-    # ---------- current ----------
     q_out, k_out = apply_rotary_emb(q, k, freqs_cis)
     return q_out, k_out
 
@@ -427,44 +493,38 @@ def method3(batch_size: int,
             k: torch.Tensor):
     nb, seq_length, head_dim = q.shape
     num_head = nb // batch_size
-    matoba_rotary = RotaryEmbeddingMatoba(head_dim, seq_length, num_head)
+    matoba_rotary = RotaryEmbeddingMatoba(head_dim, num_head)
     q_out, k_out = matoba_rotary(q, k)
     return q_out, k_out
 
 
-if __name__ == "__main__":
-    seq_length = 199
+def method4(batch_size: int,
+            q: torch.Tensor,
+            k: torch.Tensor):
+    nb, seq_length, head_dim = q.shape
+    num_head = nb // batch_size
+    matoba_rotary2 = RotaryEmbeddingMatoba2(head_dim, num_head)
+    q_out, k_out = matoba_rotary2(q, k)
+    return q_out, k_out
+
+
+def benchmark_rotary_embeddings():
+    seq_length = 104
     batch_size = 32
 
     conf = DummyConf()
-    attention_mask = torch.ones((batch_size, seq_length), device='cpu')
 
-    causal_mask = prepare_attn_mask(
-        attention_mask,
-        input_shape=(batch_size, seq_length),
-        past_key_values_length=0,
-    )
-    attn = Attention(conf)
-
-    x = torch.randn((batch_size, seq_length, conf.hidden_size))
-    y = attn(x, causal_mask)
-
-    falcon_rotary = RotaryEmbedding(conf.head_dim)
-    matoba_rotary = RotaryEmbeddingMatoba(conf.head_dim, seq_length, conf.n_head)
-
-    # ---------- falcon ----------
     nb = batch_size * conf.n_head
     q = torch.randn(nb, seq_length, conf.head_dim)  # batch_size * self.num_heads, q_length, self.head_dim)
     k = torch.randn(nb, seq_length, conf.head_dim)
 
-    # methods = [method1, method2, method3]
-    methods = [method1, method3, method2]
+    methods = [method1, method2, method3]
+    # methods = [method1, method3, method2, method4]
     # methods = list(reversed([method1, method2, method3]))
     num_methods = len(methods)
 
     qs, ks = [None] * num_methods, [None] * num_methods
     for idx, method in enumerate(methods):
-
         bef = torch.cuda.Event(enable_timing=True)
         aft = torch.cuda.Event(enable_timing=True)
 
@@ -475,11 +535,11 @@ if __name__ == "__main__":
         with profile(activities=activities,
                      profile_memory=True, record_shapes=True) as prof:
             bef.record()
+            precompute_freqs_cis.cache_clear()
             q_, k_ = method(batch_size, q, k)
             aft.record()
 
         print(prof.key_averages().table(sort_by="self_cpu_memory_usage", row_limit=10))
-
 
         # Waits for everything to finish running
         torch.cuda.synchronize()
@@ -490,17 +550,63 @@ if __name__ == "__main__":
     for idx in range(1, num_methods):
         torch.testing.assert_close(ks[0], ks[idx], rtol=0.001, atol=0.0001)
         torch.testing.assert_close(qs[0], qs[idx], rtol=0.001, atol=0.0001)
-    #
-    # q1, k1 = method1(batch_size, q, k)
-    # q2, k2 = method2(batch_size, q, k)
-    # q3, k3 = method3(batch_size, q, k)
-    #
-    # #
-    # # ---------- new ----------
-    #
-    # torch.testing.assert_close(k1, k2, rtol=0.001, atol=0.0001)
-    # torch.testing.assert_close(q1, q2, rtol=0.001, atol=0.0001)
-    #
-    # torch.testing.assert_close(k1, k3, rtol=0.001, atol=0.0001)
-    # torch.testing.assert_close(q1, q3, rtol=0.001, atol=0.0001)
-    #
+
+
+def benchmark_rotary_attention():
+    seq_length = 344
+    batch_size = 32
+    conf = DummyConf()
+
+    attention_mask = torch.ones((batch_size, seq_length), device='cpu')
+
+    causal_mask = prepare_attn_mask(
+        attention_mask,
+        input_shape=(batch_size, seq_length),
+        past_key_values_length=0,
+    )
+    attn_orig = Attention(conf)
+    attn_mato = MatobaAttention(conf)
+
+    attn_mato.query_key_value = attn_orig.query_key_value
+    attn_mato.dense = attn_orig.dense
+
+    x = torch.randn((batch_size, seq_length, conf.hidden_size))
+
+    # f1 = functools.partial(attn_orig, x=x, causal_mask=causal_mask)
+    f1 = functools.partial(attn_orig, x, causal_mask)
+    f2 = functools.partial(attn_mato, x, causal_mask)
+
+    y1, t1, res1 = profile_call(f1)
+    y2, t2, res2 = profile_call(f2)
+    torch.testing.assert_close(y1, y2)
+
+    print(f"Falcon {t1}")
+    print(f"Falcon {res1}")
+
+    print(f"New {t2}")
+    print(f"New {res2}")
+
+
+def profile_call(f: Callable):
+    bef = torch.cuda.Event(enable_timing=True)
+    aft = torch.cuda.Event(enable_timing=True)
+    f()  # warmup
+    activities = [ProfilerActivity.CPU, ProfilerActivity.CUDA]
+
+    with profile(activities=activities,
+                 profile_memory=True, record_shapes=True) as prof:
+        bef.record()
+        precompute_freqs_cis.cache_clear()
+        y = f()
+        aft.record()
+
+    torch.cuda.synchronize()
+    prof_results = prof.key_averages().table(sort_by="self_cpu_memory_usage", row_limit=10)
+    t = bef.elapsed_time(aft)
+    return y, t, prof_results
+
+
+if __name__ == "__main__":
+    benchmark_rotary_embeddings()
+
+    # benchmark_rotary_attention()

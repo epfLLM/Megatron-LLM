@@ -119,7 +119,7 @@ if __name__ == "__main__":
     output, bias = pa(x, attention_mask)
     print(output, bias)
 
-    pa.core_attention(query_layer, key_layer, value_layer, attention_mask)
+    # pa.core_attention(query_layer, key_layer, value_layer, attention_mask)
 
 
 

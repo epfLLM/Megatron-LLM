@@ -44,6 +44,7 @@ except ImportError:
         hyperparameters: transformer hyperparameters
 """
 
+
 class DropPath(MegatronModule):
     """Drop paths (Stochastic Depth) per sample
     (when applied in main path of residual blocks).
@@ -342,6 +343,8 @@ class ParallelAttention(MegatronModule):
         self.params_dtype = args.params_dtype
         self.sequence_parallel = args.sequence_parallel
         self.use_flash_attn = args.use_flash_attn
+        self.seq_length = args.seq_length
+
         if self.use_flash_attn:
             if flash_attn_unpadded_func is None:
                 raise ImportError('FlashAttention is not installed, please install with '
@@ -381,7 +384,6 @@ class ParallelAttention(MegatronModule):
                 async_tensor_model_parallel_allreduce=args.async_tensor_model_parallel_allreduce,
                 **_args_to_kwargs(args),
                 world_size=world_size)
-
             self.key_value = megatron.core.tensor_parallel.ColumnParallelLinear(
                 args.hidden_size,
                 2 * projection_size,
@@ -523,10 +525,8 @@ class ParallelAttention(MegatronModule):
             sequence_end = sequence_start + key_layer.size(0)
             assert sequence_end <= inference_key_memory.size(0)
             # Copy key and values.
-            inference_key_memory[sequence_start:sequence_end,
-                                 batch_start:batch_end, ...] = key_layer
-            inference_value_memory[sequence_start:sequence_end,
-                                   batch_start:batch_end, ...] = value_layer
+            inference_key_memory[sequence_start:sequence_end, batch_start:batch_end, ...] = key_layer
+            inference_value_memory[sequence_start:sequence_end, batch_start:batch_end, ...] = value_layer
             key_layer = inference_key_memory[:sequence_end, batch_start:batch_end, ...]
             value_layer = inference_value_memory[:sequence_end, batch_start:batch_end, ...]
         
@@ -560,7 +560,6 @@ class ParallelAttention(MegatronModule):
         # =================
         # Output. [sq, b, h]
         # =================
-        # print(self.dense)
         output, bias = self.dense(context_layer)
         return output, bias
 

@@ -361,7 +361,7 @@ class TransformerLanguageModel(MegatronModule):
         self.add_pooler = add_pooler
         self.encoder_hidden_state = None
 
-        s = args.max_position_embeddings
+        s = args.seq_length
         ell = args.num_layers
         v = args.padded_vocab_size
         h = args.hidden_size

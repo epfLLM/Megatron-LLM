@@ -116,6 +116,9 @@ def get_args():
                        help='Chunk size assigned to each worker process')
     group.add_argument('--log_interval', type=int, default=100,
                        help='Interval between progress updates')
+    group.add_argument("--no_new_tokens", action="store_false", dest="new_tokens",
+                       help=("Whether to add special tokens (e.g. CLS, MASK, etc) "
+                             "in the sentenciepiece tokenizer or not"))
     args = parser.parse_args()
     args.keep_empty = False
 

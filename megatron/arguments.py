@@ -914,6 +914,9 @@ def _add_data_args(parser):
                        help='What type of tokenizer to use.')
     group.add_argument('--tokenizer_model', type=str, default=None,
                        help='Sentencepiece tokenizer model.')
+    group.add_argument("--no_new_tokens", action="store_false", dest="new_tokens",
+                       help=("Do not add special tokens (e.g. CLS, MASK, etc) "
+                             "in the sentenciepiece tokenizer"))
     group.add_argument('--data_impl', type=str, default='infer',
                        choices=['lazy', 'cached', 'mmap', 'infer'],
                        help='Implementation of indexed datasets.')

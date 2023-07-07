@@ -5,17 +5,18 @@ NNODES=1
 RANK=0
 WORLD_SIZE=$(($GPUS_PER_NODE*$NNODES))
 
-DATA_PATH=/pure-mlo-scratch/data/wikitext-megatron/wikitext-train_text_document
-TENSORBOARD_PATH=/pure-mlo-scratch/sfan/megatron-llama/tensorboard/
+DATA_PATH=/pure-mlo-scratch/alhernan/data/wikitext-llama-32000/wiki-train_text_document
 
 ## if using llama-7B:
-CHECKPOINT_PATH=/pure-mlo-scratch/llama/convert_7B.pth
+CHECKPOINT_PATH=/pure-mlo-scratch/alhernan/megatron-data/checkpoints/llama7b/
 NUM_LAYERS=32
 HIDDEN_SIZE=4096
 KV=1
 NUM_HEADS=32
 SIZE=7
 MODEL=llama
+TOKENIZER=SentencePieceTokenizer
+EXTRA_ARGS="--vocab_file=/pure-mlo-scratch/llama/tokenizer.model --no_new_tokens --ffn_hidden_size 11008"
 
 # ## if using falcon7:
 # CHECKPOINT_PATH=/scratch/alhernan/megatron-data/checkpoints/falcon7b/
@@ -25,6 +26,8 @@ MODEL=llama
 # NUM_HEADS=71
 # SIZE=7
 # MODEL=falcon
+# TOKENIZER=FalconTokenizer
+# EXTRA_ARGS=""
 
 ## if using falcon40:
 # CHECKPOINT_PATH=/scratch/alhernan/megatron-data/checkpoints/falcon40b/
@@ -34,6 +37,8 @@ MODEL=llama
 # NUM_HEADS=128
 # SIZE=40
 # MODEL=falcon
+# TOKENIZER=FalconTokenizer
+# EXTRA_ARGS=""
 
 
 DISTRIBUTED_ARGS="--nproc_per_node 1 --nnodes 1 --node_rank 0 --master_addr localhost --master_port 8000"
@@ -46,7 +51,6 @@ torchrun $DISTRIBUTED_ARGS verify_correctness.py \
        --hidden_size $HIDDEN_SIZE \
        --use_flash_attn \
        --no_bias_gelu_fusion \
-       --num_attention_heads_kv $KV \
        --num_attention_heads $NUM_HEADS \
        --micro_batch_size 1 \
        --global_batch_size 16 \
@@ -71,11 +75,12 @@ torchrun $DISTRIBUTED_ARGS verify_correctness.py \
        --eval_interval 1000 \
        --eval_iters 10 \
        --hidden_dropout 0.0 \
-       --tensorboard_dir ${TENSORBOARD_PATH} \
        --position_embedding_type rotary \
-       --use_multiquery_attn \
-       --parallel_attn \
        --no_bias_dropout_fusion \
-       --huggingface_cache /scratch/alhernan/huggingface_cache/ \
-       --huggingface_device "cuda:4" \
-       --model_size $SIZE
+       --huggingface_cache /pure-mlo-scratch/alhernan/huggingface_cache/ \
+       --huggingface_device "cuda:1" \
+       --tokenizer_type $TOKENIZER \
+       --model_size $SIZE \
+       --use_rms_norm \
+       --glu_activation swiglu \
+       $EXTRA_ARGS

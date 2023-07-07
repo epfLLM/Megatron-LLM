@@ -213,6 +213,8 @@ def get_indexed_dataset_(data_prefix, data_impl, skip_warmup):
     assert indexed_dataset is not None
     print_rank_0(' > finished creating indexed dataset in {:4f} seconds'.format(time.time() - start_time))
     print_rank_0('    number of documents: {}'.format(indexed_dataset.sizes.shape[0]))
+    n_tokens = _num_tokens(np.arange(start=0, stop=indexed_dataset.sizes.shape[0], step=1, dtype=np.int32), indexed_dataset.sizes)
+    print_rank_0('    number of tokens: {}'.format(n_tokens))
     return indexed_dataset
 
 
@@ -396,6 +398,7 @@ def _build_index_mappings(name, data_prefix, documents, sizes,
     shuffle_idx = np.load(shuffle_idx_filename, allow_pickle=True, mmap_mode='r')
     print_rank_0('    loaded indexed file in {:3.3f} seconds'.format(
         time.time() - start_time))
+    print_rank_0('    total number of tokens: {}'.format(_num_tokens(documents, sizes)))
     print_rank_0('    total number of samples: {}'.format(
         sample_idx.shape[0]))
     print_rank_0('    total number of epochs: {}'.format(num_epochs))

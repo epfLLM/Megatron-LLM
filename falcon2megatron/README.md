@@ -62,7 +62,7 @@ Once the weights are splitted, make sure to use the new checkpoint directory (se
 
 ## Falcon tokenizing
 
-Work in progress...
+More information available at `tokenize-utils/README.md`
 
 ## Falcon training
 
@@ -74,3 +74,4 @@ The loss should decrease across iterations.
 **Important**:
 - No data preprocessing has been done using falcon tokenizer yet, so the initial loss is still very high.
 - Falcon-40B does not fit in 8 GPUs when trying to train, so it hasn't been tested yet.
+- If you get an `ImportError: cannot import name 'helpers' from 'megatron.data'`, try running `cd megatron/data; make; cd ../../` to compile the `helpers` module.

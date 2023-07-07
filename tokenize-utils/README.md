@@ -67,6 +67,18 @@ group.add_argument('--log_interval', type=int, default=100,
 args = parser.parse_args()
 ```
 
+If you want to tokenize using llama tokenizer:
+```
+python tools/preprocess_data.py \
+        --input=/scratch/pagliard/dummy-data/train.json \
+        --output_prefix=wiki-train \
+        --dataset_impl=mmap \
+        --tokenizer_type=SentencePieceTokenizer \
+        --vocab_file=/pure-mlo-scratch/llama/tokenizer.model \
+        --workers=128 \
+        --chunk_size=2048 \
+```
+
 ## Tokenizing inside docker
 
 The `run_dock.sh` contains a simple command:

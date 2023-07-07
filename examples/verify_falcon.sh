@@ -5,11 +5,12 @@ NNODES=1
 RANK=0
 WORLD_SIZE=$(($GPUS_PER_NODE*$NNODES))
 
-DATA_PATH=/scratch/wikitext-megatron/wikitext-train_text_document
-TENSORBOARD_PATH=/scratch/alhernan/megatron-data/tensorboard/
+DATA_PATH=/pure-mlo-scratch/pagliard/data/wikitext-falcon/wiki-train_text_document
+TENSORBOARD_PATH=/pure-mlo-scratch/alhernan/megatron-data/tensorboard/
 
 ## if using falcon7:
-CHECKPOINT_PATH=/scratch/alhernan/megatron-data/checkpoints/falcon7b/
+# CHECKPOINT_PATH=/pure-mlo-scratch/alhernan/megatron-data/checkpoints/falcon7b/
+CHECKPOINT_PATH=/pure-mlo-scratch/alhernan/megatron-data/checkpoints/falcon7b-tp1-pp1/
 NUM_LAYERS=32
 HIDDEN_SIZE=4544
 KV=1
@@ -39,7 +40,7 @@ torchrun $DISTRIBUTED_ARGS verify_correctness.py \
        --num_attention_heads_kv $KV \
        --num_attention_heads $NUM_HEADS \
        --micro_batch_size 1 \
-       --global_batch_size 16 \
+       --global_batch_size 1 \
        --seq_length 2048 \
        --max_position_embeddings 2048 \
        --train_iters 500000 \
@@ -66,6 +67,6 @@ torchrun $DISTRIBUTED_ARGS verify_correctness.py \
        --use_multiquery_attn \
        --parallel_attn \
        --no_bias_dropout_fusion \
-       --huggingface_cache /scratch/alhernan/huggingface_cache/ \
-       --huggingface_device "cuda:4" \
+       --huggingface_cache /pure-mlo-scratch/alhernan/huggingface_cache/ \
+       --huggingface_device "cuda:1" \
        --model_size $SIZE

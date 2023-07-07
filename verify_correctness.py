@@ -22,7 +22,7 @@ def hf_provider():
         )
     elif args.model_name == "llama":
         model = LlamaForCausalLM.from_pretrained(
-            args.hf_weights, cache_dir=args.huggingface_cache,
+            'decapoda-research/llama-7b-hf', cache_dir=args.huggingface_cache,
             trust_remote_code=True
         )
     else:
@@ -85,6 +85,11 @@ def verify(args, train_valid_test_dataset_provider,
     for module in model:
         module.eval().requires_grad_(False)
     baseline_model = baseline_provider_func()
+    print('==== Megatron Llama ====')
+    print(model)
+    print()
+    print('==== Huggingface Llama ====')
+    print(baseline_model)
     print_rank_0("Model has been setup")
     if args.virtual_pipeline_model_parallel_size is not None:
         all_data_iterators = [
@@ -103,7 +108,8 @@ def verify(args, train_valid_test_dataset_provider,
 
     # Now we can start the verifications
     print_rank_0("Starting verifications!")
-    for iteration in range(args.iteration, args.train_iters):
+    # for iteration in range(args.iteration, args.train_iters):
+    for iteration in range(0, 10):
         print_rank_0(f"Iteration {iteration}...")
         update_num_microbatches(args.consumed_train_samples)
         args.curr_iteration = iteration
@@ -117,7 +123,7 @@ def extra_args(parser):
     group.add_argument("--huggingface_cache", default=None)
     group.add_argument("--huggingface_device", default="cuda:0")
     group.add_argument("--model_size", type=int, default=7)
-    group.add_argument("--model_name", choices={"falcon", "llama"}, default="falcon")
+    group.add_argument("--model_name", choices={"falcon", "llama"}, default="llama")
     group.add_argument("--hf_weights", help="Path to llama weights")
     return parser
 

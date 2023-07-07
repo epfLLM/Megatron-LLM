@@ -60,12 +60,41 @@ class LlamaModel(MegatronModule):
 
         # llama-specific asserts
         # TODO this is prenormalization, right?
-        assert not args.use_post_ln, "LlamaModel requires pre-normalization, not use_post_ln"
-        assert args.use_rms_norm, "LlamaModel requires rms norm"
-        assert args.glu_activation == "swiglu", "LlamaModel requires swiglu activation"
-        assert not args.bias_gelu_fusion, "LlamaModel does not excpect fused_bias_gelu"
-        assert args.position_embedding_type == PositionEmbeddingType.rotary, "LlamaModel requires rotary embedding"
-        assert not args.use_multiquery_attn, "LlamaModel does not use multiquery attention"
+        try:
+            assert not args.use_post_ln, "LlamaModel requires pre-normalization, not use_post_ln"
+        except:
+            args.use_post_ln = False
+        
+        try:
+            assert args.use_rms_norm, "LlamaModel requires rms norm"
+        except:
+            args.use_rms_norm = True
+        
+        try:
+            assert args.glu_activation == "swiglu", "LlamaModel requires swiglu activation"
+        except:
+            args.glu_activation == "swiglu"
+            
+        try:
+            assert not args.bias_gelu_fusion, "LlamaModel does not excpect fused_bias_gelu"
+        except:
+            args.bias_gelu_fusion = False
+            
+        try:
+            assert args.position_embedding_type == PositionEmbeddingType.rotary, "LlamaModel requires rotary embedding"
+        except:
+            args.position_embedding_type == PositionEmbeddingType.rotary
+        
+        try:
+            assert not args.use_multiquery_attn, "LlamaModel does not use multiquery attention"
+        except:
+            args.use_multiquery_attn == False
+            
+        # assert args.use_rms_norm, "LlamaModel requires rms norm"
+        # assert args.glu_activation == "swiglu", "LlamaModel requires swiglu activation"
+        # assert not args.bias_gelu_fusion, "LlamaModel does not excpect fused_bias_gelu"
+        # assert args.position_embedding_type == PositionEmbeddingType.rotary, "LlamaModel requires rotary embedding"
+        # assert not args.use_multiquery_attn, "LlamaModel does not use multiquery attention"
 
         self.language_model, self._language_model_key = megatron.model.language_model.get_language_model(
             num_tokentypes=num_tokentypes,

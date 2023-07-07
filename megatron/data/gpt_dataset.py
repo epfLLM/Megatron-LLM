@@ -349,13 +349,13 @@ def _build_index_mappings(name, data_prefix, documents, sizes,
             start_time = time.time()
             # Use C++ implementation for speed.
             # First compile and then import.
-            from megatron.data import helpers
+            # from megatron.data import helpers
             assert doc_idx.dtype == np.int32
             assert sizes.dtype == np.int32
-            sample_idx = helpers.build_sample_idx(sizes, doc_idx, seq_length,
-                                                  num_epochs, tokens_per_epoch)
-            # sample_idx = _build_sample_idx(sizes, doc_idx, seq_length,
-            #                               num_epochs, tokens_per_epoch)
+            # sample_idx = helpers.build_sample_idx(sizes, doc_idx, seq_length,
+            #                                       num_epochs, tokens_per_epoch)
+            sample_idx = _build_sample_idx(sizes, doc_idx, seq_length,
+                                          num_epochs, tokens_per_epoch)
             np.save(sample_idx_filename, sample_idx, allow_pickle=True)
             print_rank_0(' > elasped time to build and save sample-idx mapping '
                          '(seconds): {:4f}'.format(time.time() - start_time))

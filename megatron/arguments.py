@@ -881,6 +881,8 @@ def _add_data_args(parser):
     group.add_argument('--vocab_extra_ids', type=int, default=0,
                        help='Number of additional vocabulary tokens. '
                             'They are used for span masking in the T5 model')
+    group.add_argument('--vocab_extra_ids_list', type=str, default=None,
+                       help='comma separated list of special vocab ids to add to the tokenizer')
     group.add_argument('--seq_length', type=int, default=None,
                        help='Maximum sequence length to process.')
     group.add_argument('--encoder_seq_length', type=int, default=None,

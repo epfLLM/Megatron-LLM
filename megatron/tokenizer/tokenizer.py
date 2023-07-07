@@ -32,9 +32,9 @@ def build_tokenizer(args):
         tokenizer = _GPT2BPETokenizer(args.vocab_file, args.merge_file)
     elif args.tokenizer_type == 'SentencePieceTokenizer':
         assert args.vocab_file is not None
-        tokenizer = _SentencePieceTokenizer(args.vocab_file, vocab_extra_ids=args.vocab_extra_ids)
+        tokenizer = _SentencePieceTokenizer(args.vocab_file, vocab_extra_ids=args.vocab_extra_ids, vocab_extra_ids_list=args.vocab_extra_ids_list)
     elif args.tokenizer_type == 'FalconTokenizer':
-        tokenizer = _FalconTokenizer()
+        tokenizer = _FalconTokenizer(vocab_extra_ids_list=args.vocab_extra_ids_list)
     else:
         raise NotImplementedError('{} tokenizer is not '
                                   'implemented.'.format(args.tokenizer_type))
@@ -288,12 +288,16 @@ class _GPT2BPETokenizer(AbstractTokenizer):
 class _FalconTokenizer(AbstractTokenizer):
     """Wrapper of huggingface tokenizer."""
 
-    def __init__(self):
+    def __init__(self, vocab_extra_ids_list=None):
         name = 'FalconTokenizer'
         super().__init__(name)
         from transformers import AutoTokenizer
         self.tokenizer = AutoTokenizer.from_pretrained('tiiuae/falcon-40b')
         self._eod = self.tokenizer.vocab['<|endoftext|>']
+
+        if vocab_extra_ids_list:
+            self.tokenizer.add_special_tokens({'additional_special_tokens': tokenizer.additional_special_tokens + vocab_extra_ids_list.split(",")})
+
         self._inv_vocab = {idx: token for token, idx in self.tokenizer.vocab.items()}
 
     @property
@@ -322,15 +326,15 @@ class _FalconTokenizer(AbstractTokenizer):
 class _SentencePieceTokenizer(AbstractTokenizer):
     """SentencePieceTokenizer-Megatron wrapper"""
 
-    def __init__(self, model_file, vocab_extra_ids=0):
+    def __init__(self, model_file, vocab_extra_ids=0, vocab_extra_ids_list=None):
         name = 'SentencePieceTokenizer'
         super().__init__(name)
 
         import sentencepiece
         self._tokenizer = sentencepiece.SentencePieceProcessor(model_file=model_file)
-        self._initalize(vocab_extra_ids)
+        self._initalize(vocab_extra_ids, vocab_extra_ids_list)
 
-    def _initalize(self, vocab_extra_ids):
+    def _initalize(self, vocab_extra_ids, vocab_extra_ids_list):
         self._vocab = {}
         self._inv_vocab = {}
 
@@ -389,6 +393,10 @@ class _SentencePieceTokenizer(AbstractTokenizer):
             t = "<extra_id_{}>".format(i)
             _add_special_token(t)
             self._t5_tokens += [t]
+        if vocab_extra_ids_list:
+            for t in vocab_extra_ids_list.split(","):
+                _add_special_token(t)
+        print("Special tokens: {}".format(self._special_tokens))
 
     @property
     def vocab_size(self):

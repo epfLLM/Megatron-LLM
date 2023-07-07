@@ -1,32 +1,34 @@
-# Falcon and Megatron
+# Welcome to Megatron
 
-This file documents the usage of all currently-implemented falcon features in the megatron project.
+This file documents the usage of all currently-implemented falcon and llama features in the megatron project.
 The main features are:
-1. **Falcon weight converting**.
-   Converting existing falcon weights to a megatron-compatible format.
-1. **Falcon correctness verification**.
-   Verifying that the current implementation of falcon in the megatron code matches the official implementation.
-1. **Falcon checkpoint splitter**.
+1. **Weight converting**.
+   Converting existing weights to a megatron-compatible format.
+1. **Correctness verification**.
+   Verifying that the current implementation in the megatron code matches the official implementation.
+1. **Checkpoint splitter**.
    Split the checkpoint saved in one file into multiple files, in order to use model parallelism.
-1. **Falcon tokenizing**.
-1. **Falcon training**.
-   Train falcon :D
+1. **Tokenizing**.
+1. **Training**.
 
-## Falcon weight converting
+## Weight converting
 
-The main file to do the weight conversion is `falcon2megatron/falcon2megatron.py`.
-This file fetches the weights directly from the [huggingface implementation](https://huggingface.co/tiiuae/falcon-40b), so no additional files are required to run the script.
+The main file to do the weight conversion is `weights2megatron/weights2megatron.py`.
+When converting falcon weights, this file fetches the weights directly from the [huggingface implementation](https://huggingface.co/tiiuae/falcon-40b), so no additional files are required to run the script.
 To extract, the 40B model for instance, run:
 ```
-python falcon2megatron.py --size=40 --out=/path/to/output/directory/
+python weights2megatron.py --size=40 --out=/path/to/output/directory/
 ```
 This uses huggingface default cache directory to store the original weights.
 To change the cache use:
 ```
-python falcon2megatron.py --size=40 --out=/path/to/output/directory/ --cache-dir=/path/to/huggingface/cache/directory/
+python weights2megatron.py --size=40 --out=/path/to/output/directory/ --cache-dir=/path/to/huggingface/cache/directory/
 ```
 
 See also `examples/fetch_falcon.sh`.
+
+Llama weights are not so easily available, but the MLO lab has access to them so we are ok.
+In this case you also need to specify the directory specified as `--cache-dir` will be used to fetch the llama weights, for instance run:
 
 ## Falcon correctness verification
 

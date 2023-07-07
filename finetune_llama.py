@@ -156,35 +156,18 @@ def add_args(parser):
 if __name__ == "__main__":
     model_type_llama = ModelType.encoder_or_decoder,
 
-    args_defaults = {'tokenizer_type': 'GPT2BPETokenizer'}
+    args_defaults = {'tokenizer_type': 'SentencePieceTokenizer'}
     extra_args_provider = add_args
-
     megatron.initialize.initialize_megatron(extra_args_provider, args_defaults)
 
-    base_parser = megatron.arguments.build_base_parser()
-    final_parser = add_args(base_parser)
-    args = final_parser.parse_args(sys.argv[1:] + ['--tokenizer_type', 'GPT2BPETokenizer'])
-    # args_defaults = {"micro_batch_size": 4,
-    #                  "num_layers": 2,
-    #                  "hidden_size": 3,
-    #                  "num_attention_heads": 3,
-    #                  "max_position_embeddings": 13,
-    #                  "seq_length": 10}
-    args_defaults = {}
-    #  --position_embedding_type rotary
 
-    args.rank = int(os.getenv('RANK', '0'))
-    args.world_size = int(os.getenv("WORLD_SIZE", '1'))
-
-    _MODEL_PARALLEL_RNG_TRACKER_NAME = 'model-parallel-rng'
+    # _MODEL_PARALLEL_RNG_TRACKER_NAME = 'model-parallel-rng'
     # megatron.core.tensor_parallel.random._CUDA_RNG_STATE_TRACKER.add(_MODEL_PARALLEL_RNG_TRACKER_NAME,
     #                             111)
 
-    # megatron.initialize.initialize_megatron(extra_args_provider=None,
-    #                                         args_defaults=args_defaults)
-    # args = megatron.arguments.parse_args(extra_args_provider=extra_args_provider)
+    args = megatron.get_args()
 
-    megatron.arguments.validate_args(args, args_defaults)
+
     megatron.training.pretrain(args,
                                _train_valid_test_datasets_provider,
                                _model_provider,

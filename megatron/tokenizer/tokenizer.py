@@ -337,6 +337,7 @@ class _SentencePieceTokenizer(AbstractTokenizer):
         self._initalize(vocab_extra_ids, vocab_extra_ids_list, new_tokens)
 
     def _initalize(self, vocab_extra_ids, vocab_extra_ids_list, new_tokens):
+        self._vocab = {}
         self._inv_vocab = {}
 
         self._special_tokens = {}

@@ -297,7 +297,7 @@ class _FalconTokenizer(AbstractTokenizer):
         self._eod = self.tokenizer.vocab['<|endoftext|>']
 
         if vocab_extra_ids_list and new_tokens:
-            self.tokenizer.add_special_tokens({'additional_special_tokens': tokenizer.additional_special_tokens + vocab_extra_ids_list.split(",")})
+            self.tokenizer.add_special_tokens({'additional_special_tokens': self.tokenizer.additional_special_tokens + vocab_extra_ids_list.split(",")})
 
         self._inv_vocab = {idx: token for token, idx in self.tokenizer.vocab.items()}
 

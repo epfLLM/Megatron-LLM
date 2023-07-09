@@ -499,6 +499,19 @@ def _add_logging_args(parser):
     group.add_argument('--log_world_size_to_tensorboard',
                        action='store_true',
                        help='Enable world size logging to tensorboard.')
+    group.add_argument('--wandb_logger',
+                       action='store_true',
+                       help='Enable logging to Weights & Biases instead of tensorboard.')
+    group.add_argument('--wandb_project', type=str, default=None,
+                       help='Project name for Weights & Biases.')
+    group.add_argument('--wandb_entity', type=str, default=None,
+                       help='Entity/team name for Weights & Biases.')
+    group.add_argument('--wandb_id',type=str,default=None,
+                       help="Unique ID to identify this run, alternatively can set `WANDB_RUN_ID`.")
+    group.add_argument('--wandb_resume',action="store_true",
+                       help="If set, we resume logging for the id given instead of launching a new run (errors if id given and resume=False).")
+    group.add_argument("--wandb_api_key",type=str,default=None,
+                       help="API key for Weights & Biases, needs to be set if not set in environment variable `WANDB_API_KEY`.")
     return parser
 
 

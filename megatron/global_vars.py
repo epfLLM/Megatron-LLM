@@ -45,7 +45,7 @@ def get_tokenizer():
 
 
 def get_tensorboard_writer():
-    """Return tensorboard writer. It can be None so no need
+    """Return our wrapped tensorboard/wandb writer. It can be None so no need
     to check if it is initialized."""
     return _GLOBAL_TENSORBOARD_WRITER
 
@@ -117,23 +117,42 @@ def rebuild_tokenizer(args):
 
 
 def _set_tensorboard_writer(args):
-    """Set tensorboard writer."""
+    """Set our wrapped tensorboard/wandb writer."""
     global _GLOBAL_TENSORBOARD_WRITER
     _ensure_var_is_not_initialized(_GLOBAL_TENSORBOARD_WRITER,
                                    'tensorboard writer')
 
-    if hasattr(args, 'tensorboard_dir') and \
-       args.tensorboard_dir and args.rank == (args.world_size - 1):
+    if getattr(args,"wandb_logger",False):
+        """
+        if this arg is set to True, we check the other wandb relevant arguments and
+        return a shim which exposes the wandb logging via a tensorboard-y API
+        """
+        raise NotImplementedError(f"TODO: need to finish the implemenation")
+        #TODO: check wandb distributed logging, I assume we still only want ton log this on a single rank? 
+        # if yes, need to keep args.rank == (args.world_size - 1):
         try:
-            from torch.utils.tensorboard import SummaryWriter
-            print('> setting tensorboard ...')
-            _GLOBAL_TENSORBOARD_WRITER = SummaryWriter(
-                log_dir=args.tensorboard_dir,
-                max_queue=args.tensorboard_queue_size)
+            from megatron.wandb import WandBConfig,WandbTBShim
+            cfg=WandBConfig.from_args(args) 
+            shim=WandbTBShim(cfg)
+            print('> setting wandb ...')
+            _GLOBAL_TENSORBOARD_WRITER=shim
         except ModuleNotFoundError:
-            print('WARNING: TensorBoard writing requested but is not '
-                  'available (are you using PyTorch 1.1.0 or later?), '
-                  'no TensorBoard logs will be written.', flush=True)
+            print('WARNING: WanDB writing requested but is not '
+                  'available, '
+                  'no WandB logs will be written.', flush=True)
+    else:
+        if hasattr(args, 'tensorboard_dir') and \
+           args.tensorboard_dir and args.rank == (args.world_size - 1):
+            try:
+                from torch.utils.tensorboard import SummaryWriter
+                print('> setting tensorboard ...')
+                _GLOBAL_TENSORBOARD_WRITER = SummaryWriter(
+                    log_dir=args.tensorboard_dir,
+                    max_queue=args.tensorboard_queue_size)
+            except ModuleNotFoundError:
+                print('WARNING: TensorBoard writing requested but is not '
+                      'available (are you using PyTorch 1.1.0 or later?), '
+                      'no TensorBoard logs will be written.', flush=True)
 
 
 def _set_adlr_autoresume(args):
@@ -169,6 +188,7 @@ def _ensure_var_is_initialized(var, name):
 def _ensure_var_is_not_initialized(var, name):
     """Make sure the input variable is not None."""
     assert var is None, '{} is already initialized.'.format(name)
+
 
 
 

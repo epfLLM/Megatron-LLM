@@ -195,11 +195,14 @@ def _set_random_seed(seed_, data_parallel_random_init=False):
 
 def write_args_to_tensorboard(args):
     """Write arguments to tensorboard."""
-    writer = get_tensorboard_writer()
-    if writer:
-        for arg in vars(args):
-            writer.add_text(arg, str(getattr(args, arg)),
-                            global_step=args.iteration)
+    # NOTE: if we use wandb, then the args are logged on creation, so nothing happens in this 
+    # function. 
+    if not getattr(args,"wandb_logger",False):
+        writer = get_tensorboard_writer()
+        if writer:
+            for arg in vars(args):
+                writer.add_text(arg, str(getattr(args, arg)),
+                                global_step=args.iteration)
 
 
 def set_jit_fusion_options(args):

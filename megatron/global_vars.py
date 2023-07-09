@@ -127,19 +127,17 @@ def _set_tensorboard_writer(args):
         if this arg is set to True, we check the other wandb relevant arguments and
         return a shim which exposes the wandb logging via a tensorboard-y API
         """
-        raise NotImplementedError(f"TODO: need to finish the implemenation")
-        #TODO: check wandb distributed logging, I assume we still only want ton log this on a single rank? 
-        # if yes, need to keep args.rank == (args.world_size - 1):
-        try:
-            from megatron.wandb import WandBConfig,WandbTBShim
-            cfg=WandBConfig.from_args(args) 
-            shim=WandbTBShim(cfg)
-            print('> setting wandb ...')
-            _GLOBAL_TENSORBOARD_WRITER=shim
-        except ModuleNotFoundError:
-            print('WARNING: WanDB writing requested but is not '
-                  'available, '
-                  'no WandB logs will be written.', flush=True)
+        if args.rank == (args.world_size - 1):
+            try:
+                from megatron.wandb import WandBConfig,WandbTBShim
+                cfg=WandBConfig.from_args(args) 
+                shim=WandbTBShim(cfg)
+                print('> setting wandb ...')
+                _GLOBAL_TENSORBOARD_WRITER=shim
+            except ModuleNotFoundError:
+                print('WARNING: WanDB writing requested but is not '
+                      'available, '
+                      'no WandB logs will be written.', flush=True)
     else:
         if hasattr(args, 'tensorboard_dir') and \
            args.tensorboard_dir and args.rank == (args.world_size - 1):

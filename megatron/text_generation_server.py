@@ -5,7 +5,7 @@ import json
 import threading
 from flask import Flask, request, jsonify, current_app
 from flask_restful import Resource, Api
-from megatron import get_args
+
 from megatron.text_generation import generate_and_post_process
 from megatron.text_generation import beam_search_and_post_process
 
@@ -13,6 +13,7 @@ from megatron.text_generation import beam_search_and_post_process
 GENERATE_NUM = 0
 BEAM_NUM = 1
 lock = threading.Lock()
+
 
 class MegatronGenerate(Resource):
     def __init__(self, model):
@@ -29,8 +30,6 @@ class MegatronGenerate(Resource):
         torch.distributed.broadcast(choice, 0)
     
     def put(self):
-        args = get_args()
-       
         if not "prompts" in request.get_json():
             return "prompts argument required", 400
         

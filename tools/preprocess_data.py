@@ -18,7 +18,7 @@ try:
 except ImportError:
     nltk_available = False
 
-from megatron.tokenizer import build_tokenizer
+import megatron.tokenizer
 from megatron.data import indexed_dataset
 
 
@@ -35,9 +35,11 @@ class CustomLanguageVars(nltk.tokenize.punkt.PunktLanguageVars):
             (?P<next_tok>\S+)     #  <-- Normally you would have \s+ here
         ))"""
 
+
 class IdentitySplitter(object):
     def tokenize(self, *text):
         return text
+
 
 class Encoder(object):
     def __init__(self, args):
@@ -45,7 +47,7 @@ class Encoder(object):
 
     def initializer(self):
         # Use Encoder class as a container for global data
-        Encoder.tokenizer = build_tokenizer(self.args)
+        Encoder.tokenizer = megatron.tokenizer.build_tokenizer(self.args)
         if self.args.split_sentences:
             if not nltk_available:
                 print("NLTK is not available to split sentences.")
@@ -79,7 +81,8 @@ class Encoder(object):
             ids[key] = doc_ids
         return ids, len(json_line)
 
-def get_args():
+
+def _get_args():
     parser = argparse.ArgumentParser()
     group = parser.add_argument_group(title='input data')
     group.add_argument('--input', type=str, required=True,
@@ -132,8 +135,7 @@ def get_args():
     return args
 
 
-def main():
-    args = get_args()
+def main(args):
     startup_start = time.time()
 
     print("Opening", args.input)
@@ -143,7 +145,7 @@ def main():
         nltk.download("punkt", quiet=True)
 
     encoder = Encoder(args)
-    tokenizer = build_tokenizer(args)
+    tokenizer = megatron.tokenizer.build_tokenizer(args)
     pool = multiprocessing.Pool(args.workers, initializer=encoder.initializer)
     encoded_docs = pool.imap(encoder.encode, fin, args.chunk_size)
     #encoded_docs = map(encoder.encode, fin)
@@ -158,10 +160,8 @@ def main():
     output_idx_files = {}
     builders = {}
     for key in args.json_keys:
-        output_bin_files[key] = "{}_{}_{}.bin".format(args.output_prefix,
-                                                      key, level)
-        output_idx_files[key] = "{}_{}_{}.idx".format(args.output_prefix,
-                                                      key, level)
+        output_bin_files[key] = "{}_{}_{}.bin".format(args.output_prefix, key, level)
+        output_idx_files[key] = "{}_{}_{}.idx".format(args.output_prefix, key, level)
         builders[key] = indexed_dataset.make_builder(output_bin_files[key],
                                                impl=args.dataset_impl,
                                                vocab_size=tokenizer.vocab_size)
@@ -193,4 +193,5 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    args = _get_args()
+    main(args)

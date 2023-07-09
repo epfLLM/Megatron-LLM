@@ -9,9 +9,11 @@ import torch
 import torch.utils.checkpoint
 from torch import nn
 from torch.nn import functional as F
-torch.manual_seed(111)
-
 from einops import rearrange
+
+import megatron.model.positional_embeddings
+
+torch.manual_seed(111)
 
 
 class RotaryEmbedding(torch.nn.Module):
@@ -606,7 +608,28 @@ def profile_call(f: Callable):
     return y, t, prof_results
 
 
+def test_rotary_embeddings_regression():
+    seq_length = 104
+    batch_size = 32
+
+    conf = DummyConf()
+
+    nb = batch_size * conf.n_head
+    q = torch.randn(nb, seq_length, conf.head_dim)  # batch_size * self.num_heads, q_length, self.head_dim)
+    k = torch.randn(nb, seq_length, conf.head_dim)
+    hidden_size = conf.hidden_size
+    num_attention_heads = conf.n_head
+
+    freq_cis = megatron.model.positional_embeddings.precompute_freqs_cis(
+        # self.params.dim // self.params.n_heads, self.params.max_seq_len * 2 # NOTE: LLaMA version
+        hidden_size // num_attention_heads, seq_length * 2
+    )
+
+    query_layer, key_layer = megatron.model.positional_embeddings.apply_rotary_emb(q, k, freq_cis)
+
+
 if __name__ == "__main__":
+    test_rotary_embeddings_regression()
     benchmark_rotary_embeddings()
 
     # benchmark_rotary_attention()

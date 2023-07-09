@@ -80,6 +80,7 @@ class T5Model(MegatronModule):
                  model_type=None):
         super(T5Model, self).__init__()
         args = get_args()
+        padded_vocab_size = args.padded_vocab_size
 
         self.fp16_lm_cross_entropy = args.fp16_lm_cross_entropy
         self.parallel_output = parallel_output
@@ -103,8 +104,7 @@ class T5Model(MegatronModule):
             post_process=self.post_process,
             args=args,
             model_type=model_type)
-
-        self.initialize_word_embeddings(init_method_normal, args)
+        self.initialize_word_embeddings(init_method_normal, padded_vocab_size, args)
 
         if self.post_process and self.add_decoder:
             self.lm_head = T5LMHead(

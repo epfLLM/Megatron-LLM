@@ -118,7 +118,7 @@ def post_language_model_processing(lm_output, pooled_output,
             lm_loss = tensor_parallel.vocab_parallel_cross_entropy(lm_logits.float(),
                                                         lm_labels)
         # [s, b] => [b s]
-        lm_loss = lm_loss.transpose(0,1).contiguous()
+        lm_loss = lm_loss.transpose(0, 1).contiguous()
         return lm_loss, binary_logits
 
 
@@ -134,6 +134,7 @@ class BertModel(MegatronModule):
                  model_type=None):
         super(BertModel, self).__init__()
         args = get_args()
+        padded_vocab_size = args.padded_vocab_size
 
         self.fp16_lm_cross_entropy = args.fp16_lm_cross_entropy
         self.add_binary_head = add_binary_head
@@ -144,7 +145,6 @@ class BertModel(MegatronModule):
         init_method = init_method_normal(args.init_method_std)
         scaled_init_method = scaled_init_method_normal(args.init_method_std,
                                                        args.num_layers)
-
         self.language_model, self._language_model_key = megatron.model.language_model.get_language_model(
             num_tokentypes=num_tokentypes,
             add_pooler=self.add_binary_head,
@@ -156,7 +156,7 @@ class BertModel(MegatronModule):
             args=args,
             model_type=model_type)
 
-        self.initialize_word_embeddings(init_method_normal, args)
+        self.initialize_word_embeddings(init_method_normal, padded_vocab_size, args)
         if self.post_process:
             self.lm_head = BertLMHead(
                 self.word_embeddings_weight().size(0),

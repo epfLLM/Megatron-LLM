@@ -23,6 +23,7 @@ def save_checkpoint(queue, args):
                      os.path.pardir)))
     if args.megatron_path is not None:
         sys.path.insert(0, args.megatron_path)
+    raise ValueError(f"This was deliberately broken by Kyle Matoba in July 2023 -- if you need to use this please contact him: kyle.matoba@epfl.ch")
 
     try:
         import megatron.arguments

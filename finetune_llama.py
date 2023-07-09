@@ -91,13 +91,13 @@ def loss_func(loss_mask, output_tensor):
     return loss, {'lm loss': averaged_loss[0]}
 
 
-def _forward_step(data_iterator, model):
+def _forward_step(data_iterator, model, args):
     """Forward step."""
     timers = get_timers()
 
     # Get the batch.
     timers('batch-generator').start()
-    tokens, labels, loss_mask, attention_mask, position_ids = _get_batch(data_iterator)
+    tokens, labels, loss_mask, attention_mask, position_ids = _get_batch(data_iterator, args)
     timers('batch-generator').stop()
 
     output_tensor = model(tokens, position_ids, attention_mask, labels=labels)
@@ -110,6 +110,7 @@ def _train_valid_test_datasets_provider(train_val_test_num_samples: List[int]):
     model_name = "llama"
     assert args.data_path, "Not supporting None data_path"
     print_rank_0(f'> building train, validation, and test datasets for {model_name} ...')
+
     train_ds, valid_ds1, test_ds = megatron.data.gpt_dataset.build_train_valid_test_datasets(
         data_prefix=args.data_path,
         data_impl=args.data_impl,
@@ -142,7 +143,7 @@ def add_args(parser):
                        'dataset2-path ...')
     group.add_argument('--eval_ppl', action='store_true', default=False)
     group.add_argument('--stored_params', type=dict, default=dict())
-    group.add_argument('--padded_vocab_size', type=int, default=100)
+    # group.add_argument('--padded_vocab_size', type=int, default=100)
     #
     # group.add_argument('--world_size', type=int, default=1)
     # group.add_argument('--rank', type=int, default=1)
@@ -179,9 +180,10 @@ if __name__ == "__main__":
     megatron.arguments.validate_args(args, args_defaults)
     _model_provider = functools.partial(_model_provider_unwrapped, args=args)
     # megatron.initialize._compile_dependencies(args)
+    _forward_step_fun = functools.partial(_forward_step, args=args)
     megatron.training.pretrain(args,
                                _train_valid_test_datasets_provider,
                                _model_provider,
                                model_type_llama,
-                               _forward_step)
+                               _forward_step_fun)
     print(f"done {dt.datetime.now(dt.timezone.utc)}")

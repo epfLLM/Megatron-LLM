@@ -5,12 +5,10 @@
 
 import torch
 
+from megatron import get_args
 from megatron.core import mpu
 from .communication import broadcast_float_list
-from .generation import (
-        generate_tokens_probs_and_return_on_first_stage,
-        score_and_return_on_first_stage,
-        beam_search_and_return_on_first_stage)
+import megatron.text_generation.generation
 from .tokenization import (
     tokenize_prompts,
     detokenize_generations)
@@ -64,8 +62,8 @@ def generate_and_post_process(model,
 
         return prompts_plus_generations, prompts_plus_generations_segments, \
             output_log_probs, tokens
-
     return None
+
 
 def generate(model,
              prompts=None,
@@ -89,7 +87,9 @@ def generate(model,
            corresponding length.
        output_log_probs: log probs of the tokens.
     """
+    args = get_args()
 
+    padded_vocab_size = args.padded_vocab_size
     # Make sure input params are avaialble to all ranks.
     values = [tokens_to_generate,
               return_output_log_probs,
@@ -118,7 +118,7 @@ def generate(model,
         torch.random.manual_seed(random_seed)
 
     # Tokenize prompts and get the batch.
-    # Note that these tensors are broadcaseted to all ranks.
+    # Note that these tensors are broadcasted to all ranks.
     if torch.distributed.get_rank() == 0:
         assert prompts is not None
     
@@ -126,12 +126,12 @@ def generate(model,
         prompts=prompts, tokens_to_generate=tokens_to_generate, add_BOS=add_BOS)
 
     if tokens_to_generate == 0:
-        return score_and_return_on_first_stage(
-            model, context_tokens_tensor, context_length_tensor)
-    
+        return megatron.text_generation.generation.score_and_return_on_first_stage(
+            model, context_tokens_tensor, context_length_tensor, padded_vocab_size, args)
+
     # Main inference function.
     # Note that the outputs are available on the first stage.
-    return generate_tokens_probs_and_return_on_first_stage(
+    return megatron.text_generation.generation.generate_tokens_probs_and_return_on_first_stage(
         model, context_tokens_tensor, context_length_tensor,
         return_output_log_probs=return_output_log_probs,
         top_k=top_k_sampling,
@@ -142,7 +142,10 @@ def generate(model,
         use_eod_token_for_early_termination=use_eod_token_for_early_termination,
         stop_on_double_eol=stop_on_double_eol,
         stop_on_eol=stop_on_eol,
-        prevent_newline_after_colon=prevent_newline_after_colon)
+        prevent_newline_after_colon=prevent_newline_after_colon,
+        padded_vocab_size=padded_vocab_size,
+        args=args)
+
 
 def beam_search_and_post_process(model,
                                  prompts=None,
@@ -157,7 +160,7 @@ def beam_search_and_post_process(model,
     move to cpu and convert to list."""
 
     # Main inference.
-    tokens, scores = beam_search(model,
+    tokens, scores = _beam_search(model,
                                  prompts=prompts,
                                  tokens_to_generate=tokens_to_generate,
                                  beam_size=beam_size,
@@ -175,7 +178,18 @@ def beam_search_and_post_process(model,
 
     return None
 
-def beam_search(model, prompts=None, tokens_to_generate=0, beam_size=0, add_BOS=False, stop_token=50256, num_return_gen=1, length_penalty=1, prevent_newline_after_colon=False):
+
+def _beam_search(model,
+                prompts=None,
+                tokens_to_generate=0,
+                beam_size=0,
+                add_BOS=False,
+                stop_token=50256,
+                num_return_gen=1,
+                length_penalty=1,
+                prevent_newline_after_colon=False):
+    args = get_args()
+    padded_vocab_size = args.padded_vocab_size
     # Make sure input params are avaialble to all ranks.
     values = [tokens_to_generate,
               beam_size,
@@ -196,6 +210,6 @@ def beam_search(model, prompts=None, tokens_to_generate=0, beam_size=0, add_BOS=
     context_tokens_tensor, context_length_tensor = tokenize_prompts(
         prompts=prompts, tokens_to_generate=tokens_to_generate, add_BOS=add_BOS)
     
-    return beam_search_and_return_on_first_stage(model, context_tokens_tensor, context_length_tensor, 
+    return megatron.text_generation.generation.beam_search_and_return_on_first_stage(model, context_tokens_tensor, context_length_tensor,
             beam_size, stop_token=stop_token, num_return_gen=num_return_gen, length_penalty=length_penalty,
-            prevent_newline_after_colon=prevent_newline_after_colon)
+            prevent_newline_after_colon=prevent_newline_after_colon, padded_vocab_size=padded_vocab_size, args=args)

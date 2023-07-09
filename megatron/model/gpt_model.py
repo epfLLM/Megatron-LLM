@@ -52,6 +52,7 @@ class GPTModel(MegatronModule):
                  post_process=True):
         super(GPTModel, self).__init__()
         args = get_args()
+        padded_vocab_size = args.padded_vocab_size
 
         self.parallel_output = parallel_output
         self.pre_process = pre_process
@@ -68,7 +69,7 @@ class GPTModel(MegatronModule):
             pre_process=self.pre_process,
             post_process=self.post_process)
 
-        self.initialize_word_embeddings(init_method_normal, args)
+        self.initialize_word_embeddings(init_method_normal, padded_vocab_size, args)
 
     def set_input_tensor(self, input_tensor):
         """See megatron.model.transformer.set_input_tensor()"""

@@ -1,7 +1,7 @@
 # Copyright (c) 2022, NVIDIA CORPORATION. All rights reserved.
 
 """Transformer based language model."""
-from typing import Callable
+from typing import Callable, Optional
 
 import torch
 
@@ -139,23 +139,24 @@ class Embedding(MegatronModule):
     """
 
     def __init__(self,
-                 hidden_size,
-                 vocab_size,
-                 max_position_embeddings,
-                 embedding_dropout_prob,
-                 init_method,
-                 num_tokentypes=0):
+                 hidden_size: int,
+                 vocab_size: int,
+                 max_position_embeddings: Optional[int],
+                 embedding_dropout_prob: float,
+                 init_method: Callable,
+                 num_tokentypes: int=0,
+                 args=None):
+        assert args is not None
         super(Embedding, self).__init__()
 
         self.hidden_size = hidden_size
         self.init_method = init_method
         self.num_tokentypes = num_tokentypes
 
-        args = megatron.get_args()
-
         # Word embeddings (parallel).
         self.word_embeddings = tensor_parallel.VocabParallelEmbedding(
-            vocab_size, self.hidden_size,
+            vocab_size,
+            self.hidden_size,
             init_method=self.init_method,
             params_dtype=args.params_dtype,
             use_cpu_initialization=args.use_cpu_initialization,
@@ -348,7 +349,7 @@ class TransformerLanguageModel(MegatronModule):
                  model_type=None):
         super(TransformerLanguageModel, self).__init__()
         assert args is not None
-
+        padded_vocab_size = args.padded_vocab_size
         self.pre_process = pre_process
         self.post_process = post_process
         self.hidden_size = args.hidden_size
@@ -363,7 +364,7 @@ class TransformerLanguageModel(MegatronModule):
 
         s = args.seq_length
         ell = args.num_layers
-        v = args.padded_vocab_size
+        v = padded_vocab_size
         h = args.hidden_size
         mlp_mult_term = 64 if args.glu_activation else 16
 
@@ -380,11 +381,11 @@ class TransformerLanguageModel(MegatronModule):
         # Embeddings.
         if self.pre_process:
             self.embedding = Embedding(self.hidden_size,
-                                       args.padded_vocab_size,
+                                       padded_vocab_size,
                                        args.max_position_embeddings,
                                        args.hidden_dropout,
                                        self.init_method,
-                                       self.num_tokentypes)
+                                       self.num_tokentypes, args)
             self._embedding_key = 'embedding'
 
         # Transformer.
@@ -478,6 +479,7 @@ class TransformerLanguageModel(MegatronModule):
         # Run encoder.
         if enc_hidden_states is None:
             if self.encoder is not None:
+                # https://discuss.pytorch.org/t/solved-assertion-srcindex-srcselectdimsize-failed-on-gpu-for-torch-cat/1804/3
                 encoder_output = self.encoder(
                     encoder_input,
                     enc_attn_mask,

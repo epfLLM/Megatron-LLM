@@ -93,8 +93,7 @@ def train_valid_test_datasets_provider(train_val_test_num_samples):
     """Build train, valid, and test datasets."""
     args = get_args()
 
-    print_rank_0('> building train, validation, and test datasets '
-                 'for GPT ...')
+    print_rank_0('> building train, validation, and test datasets for GPT ...')
     train_ds, valid_ds, test_ds = megatron.data.gpt_dataset.build_train_valid_test_datasets(
         data_prefix=args.data_path,
         data_impl=args.data_impl,
@@ -105,7 +104,7 @@ def train_valid_test_datasets_provider(train_val_test_num_samples):
         skip_warmup=(not args.mmap_warmup),
         train_data_prefix=args.train_data_path,
         valid_data_prefix=args.valid_data_path,
-        test_data_prefix=args.test_data_path,)
+        test_data_prefix=args.test_data_path)
     print_rank_0("> finished creating GPT datasets ...")
 
     return train_ds, valid_ds, test_ds

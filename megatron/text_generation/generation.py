@@ -17,7 +17,7 @@ from .sampling import sample
 from .beam_utils import BeamHypotheses
 
 
-def score_and_return_on_first_stage(model, tokens, lengths):
+def score_and_return_on_first_stage(model, tokens, lengths, padded_vocab_size, args):
     """Function for just scoring.
     Arguments:
         model: no interleaving is supported.
@@ -29,8 +29,6 @@ def score_and_return_on_first_stage(model, tokens, lengths):
         output_log_probs: log probability of the selected tokens. size: [b, s]
     """
 
-    args = get_args()
-
     batch_size = tokens.size(0)
     max_prompt_length = lengths.max().item()
     assert max_prompt_length == tokens.size(1)
@@ -39,10 +37,10 @@ def score_and_return_on_first_stage(model, tokens, lengths):
         raise ValueError("Length of prompt + tokens_to_generate longer than allowed")
     
     if max_prompt_length * batch_size > args.max_tokens_to_oom:
-        raise ValueError("Too many tokens.  " + str(max_prompt_length*batch_size)+ " is greater than "+str(args.max_tokens_to_oom))
+        raise ValueError("Too many tokens.  " + str(max_prompt_length*batch_size) + " is greater than " + str(args.max_tokens_to_oom))
 
     # forward step.
-    forward_step = ForwardStep(model, batch_size, max_prompt_length)
+    forward_step = ForwardStep(model, batch_size, max_prompt_length, padded_vocab_size, args)
 
     # ===================
     # Pre-allocate memory
@@ -86,6 +84,7 @@ def score_and_return_on_first_stage(model, tokens, lengths):
     
     return tokens, lengths, output_log_probs
 
+
 def generate_tokens_probs_and_return_on_first_stage(
         model, tokens, lengths,
         return_output_log_probs=False,
@@ -94,8 +93,9 @@ def generate_tokens_probs_and_return_on_first_stage(
         use_eod_token_for_early_termination=True,
         stop_on_double_eol=False,
         stop_on_eol=False,
-        prevent_newline_after_colon=True
-        ):
+        prevent_newline_after_colon=True,
+        padded_vocab_size=None,
+        args=None):
     """Main token generation function.
     Arguments:
         model: no interleaving is supported.
@@ -122,8 +122,7 @@ def generate_tokens_probs_and_return_on_first_stage(
             the generated sequence. size: [b]
         output_log_probs: log probability of the selected tokens. size: [b, s]
     """
-
-    args = get_args()
+    assert padded_vocab_size is not None
     tokenizer = get_tokenizer()
 
     batch_size = tokens.size(0)
@@ -137,7 +136,7 @@ def generate_tokens_probs_and_return_on_first_stage(
         raise ValueError("Too many tokens.  " + str(max_sequence_length*batch_size)+ " is greater than "+str(args.max_tokens_to_oom))
 
     # forward step.
-    forward_step = ForwardStep(model, batch_size, max_sequence_length)
+    forward_step = ForwardStep(model, batch_size, max_sequence_length, padded_vocab_size, args)
 
     # Added termination_id to support the case that we want to terminate the
     # generation once that id is generated.
@@ -285,10 +284,19 @@ def generate_tokens_probs_and_return_on_first_stage(
 
     return tokens, generated_sequence_lengths, output_log_probs
 
-def beam_search_and_return_on_first_stage(model, tokens, lengths, beam_size, stop_token, num_return_gen, length_penalty, prevent_newline_after_colon=True):
-    args = get_args()
-    tokenizer = get_tokenizer()
 
+def beam_search_and_return_on_first_stage(model,
+                                          tokens,
+                                          lengths,
+                                          beam_size,
+                                          stop_token,
+                                          num_return_gen,
+                                          length_penalty,
+                                          prevent_newline_after_colon=True,
+                                          padded_vocab_size=None,
+                                          args=None):
+    assert padded_vocab_size is not None
+    tokenizer = get_tokenizer()
     batch_size = tokens.size(0)
     assert(batch_size == 1)
     prompt_length = lengths.item()
@@ -300,7 +308,7 @@ def beam_search_and_return_on_first_stage(model, tokens, lengths, beam_size, sto
         raise ValueError("context length + tokens_to_generate too large")
 
     # forward step.
-    forward_step = ForwardStep(model, beam_size, final_sequence_length)
+    forward_step = ForwardStep(model, beam_size, final_sequence_length, padded_vocab_size, args)
 
     beam_hyp = BeamHypotheses(beam_size, length_penalty)
     best_batches = None

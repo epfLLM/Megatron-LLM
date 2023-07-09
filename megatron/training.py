@@ -98,17 +98,17 @@ def pretrain(args,
     _TRAIN_START_TIME = start_time_tensor.item()
     print_rank_0('time to initialize megatron (seconds): {:.3f}'.format(time.time() - _TRAIN_START_TIME))
     print_datetime('after megatron is initialized')
-    # timers = get_timers()
+    timers = get_timers()
 
     # Model, optimizer, and learning rate.
-    # timers('model-and-optimizer-setup', log_level=0).start(barrier=True)
+    timers('model-and-optimizer-setup', log_level=0).start(barrier=True)
     model, optimizer, opt_param_scheduler = _setup_model_and_optimizer(
         model_provider_func, model_type, args=args)
-    # timers('model-and-optimizer-setup').stop()
+    timers('model-and-optimizer-setup').stop()
     print_datetime('after model, optimizer, and learning rate scheduler are built')
 
     # Data stuff.
-    # timers('train/valid/test-data-iterators-setup', log_level=0).start(barrier=True)
+    timers('train/valid/test-data-iterators-setup', log_level=0).start(barrier=True)
     if args.virtual_pipeline_model_parallel_size is not None:
         all_data_iterators = [None] * range(len(model))
         for _ in range(len(model)):
@@ -119,16 +119,13 @@ def pretrain(args,
     else:
         all_data_iterators, do = _build_train_valid_test_data_iterators(train_valid_test_dataset_provider, args)
         train_data_iterator, valid_data_iterator, test_data_iterator = all_data_iterators
-            # timers('train/valid/test-data-iterators-setup').stop()
+    timers('train/valid/test-data-iterators-setup').stop()
     print_datetime('after dataloaders are built')
 
     # Print setup timing.
     print_rank_0('done with setup ...')
-    # timers.log(['model-and-optimizer-setup', 'train/valid/test-data-iterators-setup'], barrier=True)
+    timers.log(['model-and-optimizer-setup', 'train/valid/test-data-iterators-setup'], barrier=True)
     print_rank_0('training ...')
-    # do_train = args.do_train
-    # do_valid = args.do_valid
-    # do_test = args.do_test
     do_train, do_valid, do_test = do
 
     iteration = 0
@@ -386,7 +383,8 @@ def _setup_model_and_optimizer(model_provider_func,
     return model, optimizer, opt_param_scheduler
 
 
-def train_step(forward_step_func, data_iterator,
+def train_step(forward_step_func,
+               data_iterator,
                model, optimizer, opt_param_scheduler, args):
     """Single training step."""
     timers = get_timers()
@@ -630,7 +628,8 @@ def save_checkpoint_and_time(iteration, model, optimizer, opt_param_scheduler):
     timers.log(['save-checkpoint'])
 
 
-def _train(args, forward_step_func,
+def _train(args,
+           forward_step_func,
           model,
           optimizer,
           opt_param_scheduler,
@@ -842,7 +841,7 @@ def cyclic_iter(iter):
 
 
 def _build_train_valid_test_data_iterators(build_train_valid_test_datasets_provider: Callable,
-                                          args: argparse.Namespace):
+                                           args: argparse.Namespace):
     (train_dataloader, valid_dataloader, test_dataloader) = (None, None, None)
     print_rank_0('> building train, validation, and test datasets ...')
 
@@ -879,9 +878,9 @@ def _build_train_valid_test_data_iterators(build_train_valid_test_datasets_provi
             train_val_test_num_samples)
 
         # Build dataloders.
-        train_dataloader = build_pretraining_data_loader(train_ds, args.consumed_train_samples)
-        valid_dataloader = build_pretraining_data_loader(valid_ds, args.consumed_valid_samples)
-        test_dataloader = build_pretraining_data_loader(test_ds, 0)
+        train_dataloader = build_pretraining_data_loader(train_ds, args.consumed_train_samples, args)
+        valid_dataloader = build_pretraining_data_loader(valid_ds, args.consumed_valid_samples, args)
+        test_dataloader = build_pretraining_data_loader(test_ds, 0, args)
 
         # Flags to know if we need to do training/validation/testing.
         do_train = train_dataloader is not None and args.train_iters > 0

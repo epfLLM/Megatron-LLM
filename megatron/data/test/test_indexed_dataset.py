@@ -1,14 +1,14 @@
 # This file isn't really a formal automated test, it's just a place to
 # put some code used during development and manual testing of
 # indexed_dataset.
-
-from megatron.data import indexed_dataset
-from megatron.tokenizer import build_tokenizer
 import argparse
 import os
 import sys
 
 import torch
+
+import megatron.tokenizer
+from megatron.data import indexed_dataset
 
 script_dir = os.path.dirname(os.path.realpath(__file__))
 sys.path.append(os.path.join(script_dir, "../../../"))
@@ -16,17 +16,19 @@ sys.path.append(os.path.join(script_dir, "../../../"))
 
 def test_indexed_dataset(args):
     ds = indexed_dataset.make_dataset(args.data, args.dataset_impl)
-    tokenizer = build_tokenizer(args)
+    tokenizer = megatron.tokenizer.build_tokenizer(args)
+    count = args.count
+    del args
     print(len(ds.doc_idx))
     print(len(ds))
     print(ds.doc_idx[-1])
     if ds.supports_prefetch:
         # just prefetch the whole thing in test (so assume it is small)
         ds.prefetch(range(len(ds)))
-    if args.count > len(ds.doc_idx) - 1:
-        args.count = len(ds.doc_idx) - 1
+    if count > len(ds.doc_idx) - 1:
+        count = len(ds.doc_idx) - 1
 
-    for i in range(args.count):
+    for i in range(count):
         start = ds.doc_idx[i]
         end = ds.doc_idx[i + 1]
         ids = ds[start:end]
@@ -42,41 +44,20 @@ def test_indexed_dataset(args):
 
 def test_indexed_dataset_get(args):
     ds = indexed_dataset.make_dataset(args.data, args.dataset_impl)
-    tokenizer = build_tokenizer(args)
     size = ds.sizes[0]
     print(f"size: {size}")
     full = ds.get(0)
     print(full)
-    # print(tokenizer.detokenize(full.data.tolist()))
+
     print("---")
     end = ds.get(0, offset=size - 10)
     print(end)
-    # print(tokenizer.detokenize(end.data.tolist()))
 
     start = ds.get(0, length=10)
     print(start)
-    # print(tokenizer.detokenize(start.data.tolist()))
 
     part = ds.get(0, offset=2, length=8)
     print(part)
-    # print(tokenizer.detokenize(part.data.tolist()))
-
-# def test_albert_dataset(args):
-#     # tokenizer = FullBertTokenizer(args.vocab, do_lower_case=True)
-#     # idataset = indexed_dataset.make_dataset(args.data, args.dataset_impl)
-#     # ds = AlbertDataset(idataset, tokenizer)
-#     ds = AlbertDataset.from_paths(args.vocab, args.data, args.dataset_impl,
-#                                   args.epochs, args.max_num_samples,
-#                                   args.masked_lm_prob, args.seq_length,
-#                                   args.short_seq_prob, args.seed)
-#     truncated = 0
-#     total = 0
-#     for i, s in enumerate(ds):
-#         ids = s['text']
-#         tokens = ds.tokenizer.convert_ids_to_tokens(ids)
-#         print(tokens)
-#         if i >= args.count-1:
-#             exit()
 
 
 def main():

@@ -40,7 +40,6 @@ def build_tokenizer(args):
     # Add vocab size.
     args.padded_vocab_size = _vocab_size_with_padding(tokenizer.vocab_size,
                                                       args)
-
     return tokenizer
 
 
@@ -283,7 +282,6 @@ class _GPT2BPETokenizer(AbstractTokenizer):
         return self.eod_id
 
 
-
 class _SentencePieceTokenizer(AbstractTokenizer):
     """SentencePieceTokenizer-Megatron wrapper"""
 
@@ -446,4 +444,3 @@ class _SentencePieceTokenizer(AbstractTokenizer):
     @property
     def additional_special_tokens_ids(self):
         return [self.vocab[k] for k in self._t5_tokens]
-

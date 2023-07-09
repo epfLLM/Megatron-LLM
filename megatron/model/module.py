@@ -45,7 +45,7 @@ class MegatronModule(torch.nn.Module):
                                 'stage, but share_word_embeddings is false')
             return self.word_embeddings.weight
 
-    def initialize_word_embeddings(self, init_method_normal, args):
+    def initialize_word_embeddings(self, init_method_normal, padded_vocab_size, args):
         if not self.share_word_embeddings:
             raise Exception('initialize_word_embeddings() was called but '
                             'share_word_embeddings is false')
@@ -75,7 +75,7 @@ class MegatronModule(torch.nn.Module):
             # set word_embeddings weights to 0 here, then copy first
             # stage's weights using all_reduce below.
             self.word_embeddings = tensor_parallel.VocabParallelEmbedding(
-                args.padded_vocab_size, args.hidden_size,
+                padded_vocab_size, args.hidden_size,
                 init_method=init_method_normal(args.init_method_std),
                 params_dtype=args.params_dtype,
                 use_cpu_initialization=args.use_cpu_initialization,

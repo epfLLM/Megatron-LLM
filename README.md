@@ -376,36 +376,6 @@ python preprocess_data.py \
  The samples mapping is responsible for holding all of the required metadata needed to construct the sample from one or more indexed datasets. In REALM, the samples mapping contains the start and end sentence indices, as well as the document index (to find the correct title for a body) and a unique ID for every block.
 3. Pretrain a BERT language model using `pretrain_bert.py`, with the sequence length equal to the block size in token ids. This model should be trained on the same indexed dataset that is used to supply the blocks for the information retrieval task.
 In REALM, this is an uncased bert base model trained with the standard hyperparameters.
-4. Use `pretrain_ict.py` to train an `ICTBertModel` which uses two BERT-based encoders to encode queries and blocks to perform retrieval with.
-The script below trains the ICT model from REALM. It refrences a pretrained BERT model (step 3) in the `--bert_load` argument. The batch size used in the paper is 4096, so this would need to be run with data parallel world size 32.
-<pre>
-python pretrain_ict.py \
-    --num_layers 12 \
-    --num_attention_heads 12 \
-    --hidden_size 768 \
-    --batch_size 128 \
-    --seq_length 256 \
-    --max_position_embeddings 256 \
-    --ict_head_size 128 \
-    --train_iters 100000 \
-    --activations_checkpoint_method uniform \
-    --bert_load /path/to/pretrained_bert \
-    --load checkpoints \
-    --save checkpoints \
-    --data_path /path/to/indexed_dataset \
-    --titles_data_path /path/to/titles_indexed_dataset \
-    --vocab_file /path/to/vocab.txt \
-    --lr 0.0001 \
-    --num_workers 2 \
-    --lr_decay_style linear \
-    --weight_decay 1e-2 \
-    --clip_grad 1.0 \
-    --lr_warmup_fraction .01 \
-    --save_interval 3000 \
-    --query_in_block_prob 0.1 \
-    --fp16
-
-</pre>
 
 ### Building an Index of Block Embeddings
 After having trained an ICT model, you can now embed an entire dataset of blocks by creating a `BlockData` structure. After that has been saved, you can load it

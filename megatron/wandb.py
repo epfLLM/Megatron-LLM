@@ -24,7 +24,7 @@ class WandBConfig(object):
     # wandb specific config
     # filled from args
     #filled with kwargs
-    entity:str=field(default="EPFLLM")
+    entity:str=field(default="meditron")
     #wandb project to log to
     project:str=field(default="meditron")
     # save the code to the notebook?

@@ -504,7 +504,7 @@ def _add_logging_args(parser):
                        help='Enable logging to Weights & Biases instead of tensorboard.')
     group.add_argument('--wandb_project', type=str, default=None,
                        help='Project name for Weights & Biases.')
-    group.add_argument('--wandb_entity', type=str, default=None,
+    group.add_argument('--wandb_entity', type=str, default="meditron",
                        help='Entity/team name for Weights & Biases.')
     group.add_argument('--wandb_id',type=str,default=None,
                        help="Unique ID to identify this run, alternatively can set `WANDB_RUN_ID`.")

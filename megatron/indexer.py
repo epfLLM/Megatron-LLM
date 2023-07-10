@@ -25,17 +25,14 @@ class IndexBuilder(object):
         self.evidence_embedder_obj = None
         self.biencoder_shared_query_context_model = args.biencoder_shared_query_context_model
 
-        # need to know whether we're using a REALM checkpoint (args.load)
-        # or ICT checkpoint
-        assert not (args.load and args.ict_load)
-
         self.log_interval = args.indexer_log_interval
         self.batch_size = args.indexer_batch_size
 
         self.load_attributes(args)
         self.is_main_builder = mpu.get_data_parallel_rank() == 0
         self.num_total_builders = mpu.get_data_parallel_world_size()
-        self.iteration = self.total_processed = 0
+        self.iteration = 0
+        self.total_processed = 0
 
     def load_attributes(self, args):
         """

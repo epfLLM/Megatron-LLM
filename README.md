@@ -351,59 +351,6 @@ In `examples/pretrain_gpt3_175B.sh` we have provided an example of how to config
 
 With full global batch size of 1536 on 1024 A100 GPUs, each iteration takes around 32 seconds resulting in 138 teraFLOPs per GPU which is 44% of the theoretical peak FLOPs.
 
-
-<!--
-## REALM Pipeline
-We are working on implementing the [REALM](https://arxiv.org/pdf/2002.08909.pdf) system. The following sections (will) reflect the three stages of training it. For now it's just the ICT code.
-Loosely, they are pretraining the retriever modules, then jointly training the language model and the retriever, and then finetuning a question answering head on the language model with fixed retriever.
-
-### Inverse Cloze Task (ICT) Pretraining
-1. Have a corpus in loose JSON format with the intention of creating a collection of fixed-size blocks of text as the fundamental units of data. For a corpus like Wikipedia, this will mean multiple sentences per block but also multiple blocks per document.
-Run `tools/preprocess_data.py` to construct one or more indexed datasets with the `--split_sentences` argument to make sentences the basic unit. For the original REALM system, we construct two datasets, one with the title of every document, and another with the body.
-Refer to the following script
-<pre>
-python preprocess_data.py \
-    --input /path/to/corpus.json \
-    --json_keys text title \
-    --split_sentences \
-    --tokenizer_type BertWordPieceLowerCase \
-    --vocab_file /path/to/vocab.txt \
-    --output_prefix corpus_indexed \
-    --workers 5  # works well for 10 CPU cores. Scale up accordingly.
-</pre>
-
-2. Use a custom samples mapping function in place of `megatron/data/realm_dataset_utils.get_block_samples_mapping` if required. To do this, you will need to implement a new function in C++ inside of `megatron/data/helpers.cpp`. The samples mapping data structure is used to select the data that will constitute every training sample in advance of the training loop.
- The samples mapping is responsible for holding all of the required metadata needed to construct the sample from one or more indexed datasets. In REALM, the samples mapping contains the start and end sentence indices, as well as the document index (to find the correct title for a body) and a unique ID for every block.
-3. Pretrain a BERT language model using `pretrain_bert.py`, with the sequence length equal to the block size in token ids. This model should be trained on the same indexed dataset that is used to supply the blocks for the information retrieval task.
-In REALM, this is an uncased bert base model trained with the standard hyperparameters.
-
-### Building an Index of Block Embeddings
-After having trained an ICT model, you can now embed an entire dataset of blocks by creating a `BlockData` structure. After that has been saved, you can load it
-and wrap it with a `FaissMIPSIndex` to do fast similarity search which is key in the learned information retrieval pipeline. The initial index can be built with the following script, meant to be run in an interactive session. It can leverage multiple GPUs on multiple nodes to index large datasets much more quickly.
-
-<pre>
-python tools/create_doc_index.py \
-    --num_layers 12 \
-    --hidden_size 768 \
-    --ict_head_size 128 \
-    --num_attention_heads 12 \
-    --batch_size 128 \
-    --activations_checkpoint_method uniform \
-    --seq_length 256 \
-    --max_position_embeddings 256 \
-    --ict_load /path/to/pretrained_ict \
-    --data_path /path/to/indexed_dataset \
-    --titles_data_path /path/to/titles_indexed_dataset \
-    --block_data_path embedded_blocks.pkl \
-    --indexer_log_interval 1000 \
-    --indexer_batch_size 128 \
-    --vocab_file /path/to/vocab.txt \
-    --num_workers 2 \
-    --fp16
-</pre>
-
--->
-
 # Evaluation and Tasks
 
 We provide several command line arguments, detailed in the scripts listed below, to handle various zero-shot and fine-tuned downstream tasks. However, you can also finetune your model from a pretrained checkpoint on other corpora as desired. To do so, simply add the `--finetune` flag and adjust the input files and training parameters within the original training script. The iteration count will be reset to zero, and the optimizer and internal state will be reinitialized. If the fine-tuning is interrupted for any reason, be sure to remove the `--finetune` flag before continuing, otherwise the training will start again from the beginning.

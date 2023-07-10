@@ -18,9 +18,8 @@ import megatron
 from megatron import get_timers
 from megatron import get_tokenizer
 from megatron import print_rank_0
-
+import megatron.model
 import megatron.data.gpt_dataset
-from megatron.model import LlamaModel
 from megatron.model.enums import ModelType
 import megatron.training
 from megatron.utils import get_ltor_masks_and_position_ids
@@ -38,13 +37,15 @@ def _model_provider_unwrapped(pre_process: bool,
     parallel_output = True
     num_tokentypes = 0
     model_type_llama = ModelType.encoder_or_decoder
-    model = LlamaModel(
+    padded_vocab_size = args.padded_vocab_size
+    model = megatron.model.LlamaModel(
         num_tokentypes,
         parallel_output,
         pre_process,
         post_process,
-        args,
-        model_type_llama
+        model_type_llama,
+        padded_vocab_size,
+        args
     )
     return model
 
@@ -143,7 +144,6 @@ def add_args(parser):
                        'dataset2-path ...')
     group.add_argument('--eval_ppl', action='store_true', default=False)
     group.add_argument('--stored_params', type=dict, default=dict())
-    # group.add_argument('--padded_vocab_size', type=int, default=100)
     #
     # group.add_argument('--world_size', type=int, default=1)
     # group.add_argument('--rank', type=int, default=1)

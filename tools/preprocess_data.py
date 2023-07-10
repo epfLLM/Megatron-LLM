@@ -47,7 +47,7 @@ class Encoder(object):
 
     def initializer(self):
         # Use Encoder class as a container for global data
-        Encoder.tokenizer = megatron.tokenizer.build_tokenizer(self.args)
+        Encoder.tokenizer, padded_vocab_size = megatron.tokenizer.build_tokenizer(self.args)
         if self.args.split_sentences:
             if not nltk_available:
                 print("NLTK is not available to split sentences.")
@@ -145,10 +145,9 @@ def main(args):
         nltk.download("punkt", quiet=True)
 
     encoder = Encoder(args)
-    tokenizer = megatron.tokenizer.build_tokenizer(args)
+    tokenizer, padded_vocab_size = megatron.tokenizer.build_tokenizer(args)
     pool = multiprocessing.Pool(args.workers, initializer=encoder.initializer)
     encoded_docs = pool.imap(encoder.encode, fin, args.chunk_size)
-    #encoded_docs = map(encoder.encode, fin)
 
     level = "document"
     if args.split_sentences:

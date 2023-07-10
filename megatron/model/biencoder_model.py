@@ -247,8 +247,7 @@ class BiEncoderModel(MegatronModule):
                 self.context_model.language_model.load_state_dict(model_dict)
                 if self.query_model is not None and \
                     self.biencoder_projection_dim > 0:
-                    self.context_model.projection_enc.load_state_dict\
-                        (query_proj_state_dict)
+                    self.context_model.projection_enc.load_state_dict(query_proj_state_dict)
                 fix_query_key_value_ordering(self.context_model, checkpoint_version)
 
 
@@ -273,10 +272,10 @@ class PretrainedBertModel(MegatronModule):
         self.pre_process = pre_process
         self.post_process = post_process
         init_method = init_method_normal(args.init_method_std)
-        scaled_init_method = scaled_init_method_normal(
-            args.init_method_std, args.num_layers)
-
-        self.language_model, self._language_model_key = megatron.model.language_model.get_language_model(
+        scaled_init_method = scaled_init_method_normal(args.init_method_std, args.num_layers)
+        padded_vocab_size = args.padded_vocab_size
+        self.language_model, \
+        self._language_model_key = megatron.model.language_model.get_language_model(
             num_tokentypes=num_tokentypes,
             add_pooler=False,
             encoder_attn_mask_type=AttnMaskType.padding,
@@ -284,8 +283,9 @@ class PretrainedBertModel(MegatronModule):
             scaled_init_method=scaled_init_method,
             pre_process=self.pre_process,
             post_process=self.post_process,
-        args=args,
-        model_type=model_type)
+            model_type=model_type,
+            padded_vocab_size=padded_vocab_size,
+            args=args)
 
         if args.biencoder_projection_dim > 0:
             self.projection_enc = megatron.model.utils.get_linear_layer(args.hidden_size,

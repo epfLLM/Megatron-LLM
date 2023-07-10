@@ -131,10 +131,12 @@ class BertModel(MegatronModule):
                  parallel_output=True,
                  pre_process=True,
                  post_process=True,
-                 model_type=None):
+                 model_type=None,
+                 padded_vocab_size: int=None,
+                 args=None):
         super(BertModel, self).__init__()
-        args = get_args()
-        padded_vocab_size = args.padded_vocab_size
+        assert padded_vocab_size is not None
+        assert args is not None
 
         self.fp16_lm_cross_entropy = args.fp16_lm_cross_entropy
         self.add_binary_head = add_binary_head
@@ -153,8 +155,9 @@ class BertModel(MegatronModule):
             scaled_init_method=scaled_init_method,
             pre_process=self.pre_process,
             post_process=self.post_process,
-            args=args,
-            model_type=model_type)
+            model_type=model_type,
+            padded_vocab_size=padded_vocab_size,
+            args=args)
 
         self.initialize_word_embeddings(init_method_normal, padded_vocab_size, args)
         if self.post_process:

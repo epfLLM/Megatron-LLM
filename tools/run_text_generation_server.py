@@ -8,22 +8,19 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__),
 import torch
 
 import megatron.training
-from megatron import get_args
 from megatron import print_rank_0
 from megatron.core import mpu
 from megatron.checkpointing import load_checkpoint
 import megatron.initialize
-
+import megatron
 from megatron.model import GPTModel
 from megatron.text_generation_server import MegatronServer
-from megatron.text_generation import generate_and_post_process
-from megatron.text_generation import beam_search_and_post_process
+import megatron.text_generation
 from megatron.model import ModelType
 
 
 def model_provider(pre_process=True, post_process=True):
     """Build the model."""
-
     print_rank_0('building GPT model ...')
     model = GPTModel(num_tokentypes=0,
                      parallel_output=False,
@@ -34,7 +31,6 @@ def model_provider(pre_process=True, post_process=True):
 
 def add_text_generate_args(parser):
     group = parser.add_argument_group(title='text generation')
-
     group.add_argument("--temperature", type=float, default=1.0,
                        help='Sampling temperature.')
     group.add_argument("--top_p", type=float, default=0.0,
@@ -51,12 +47,13 @@ if __name__ == "__main__":
                         args_defaults={'tokenizer_type': 'GPT2BPETokenizer',
                                        'no_load_rng': True,
                                        'no_load_optim': True})
-    args = get_args()
+    args = megatron.get_args()
+    padded_vocab_size = args.padded_vocab_size
     if args.num_layers_per_virtual_pipeline_stage is not None:
         print("Interleaved pipeline schedule is not yet supported for text generation.")
         exit()
-    # Set up model and load checkpoint
 
+    # Set up model and load checkpoint
     model_type = ModelType.encoder_or_decoder
     model = megatron.training.get_model(model_provider, model_type, wrap_with_ddp=False, args=args)
 
@@ -74,11 +71,13 @@ if __name__ == "__main__":
         torch.distributed.broadcast(choice, 0)
         if choice[0].item() == 0:
             try:
-                generate_and_post_process(model)
+                megatron.text_generation.generate_and_post_process(model, args=args)
             except ValueError as ve:
                 pass
         elif choice[0].item() == 1:
             try:
-                beam_search_and_post_process(model)
+                megatron.text_generation.beam_search_and_post_process(model,
+                                                                      padded_vocab_size=padded_vocab_size,
+                                                                      args=args)
             except ValueError as ve:
                 pass

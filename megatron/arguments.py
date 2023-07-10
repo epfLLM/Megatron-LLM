@@ -938,8 +938,6 @@ def _add_biencoder_args(parser):
                         help='Whether to share the parameters of the query '
                         'and context models or not')
     # checkpointing
-    group.add_argument('--ict_load', type=str, default=None,
-                       help='Directory containing an ICTBertModel checkpoint')
     group.add_argument('--bert_load', type=str, default=None,
                        help='Directory containing an BertModel checkpoint '
                        '(needed to start ICT and REALM)')

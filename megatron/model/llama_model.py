@@ -37,7 +37,7 @@ def _post_language_model_processing(lm_output,
             loss = tensor_parallel.vocab_parallel_cross_entropy(output.float(), labels)
         
         # [s b] => [b, s]
-        loss = loss.transpose(0,1).contiguous()
+        loss = loss.transpose(0, 1).contiguous()
         return loss
 
 
@@ -49,15 +49,14 @@ class LlamaModel(MegatronModule):
                  parallel_output: bool,
                  pre_process: bool,
                  post_process: bool,
-                 args,
-                 model_type):
+                 model_type: megatron.model.enums.ModelType,
+                 padded_vocab_size: int,
+                 args):
         super(LlamaModel, self).__init__()
-
         self.parallel_output = parallel_output
         self.pre_process = pre_process
         self.post_process = post_process
         self.fp16_lm_cross_entropy = args.fp16_lm_cross_entropy
-
         self.language_model, self._language_model_key = megatron.model.language_model.get_language_model(
             num_tokentypes=num_tokentypes,
             add_pooler=False,
@@ -67,10 +66,9 @@ class LlamaModel(MegatronModule):
                                                          args.num_layers),
             pre_process=self.pre_process,
             post_process=self.post_process,
-            args=args,
-            model_type=model_type)
-
-        padded_vocab_size = args.padded_vocab_size
+            model_type=model_type,
+            padded_vocab_size=padded_vocab_size,
+            args=args)
         self.initialize_word_embeddings(init_method_normal, padded_vocab_size, args)
 
     def set_input_tensor(self, input_tensor):

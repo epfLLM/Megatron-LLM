@@ -28,7 +28,7 @@ class Classification(MegatronModule):
         self.pre_process = pre_process
         self.post_process = post_process
         init_method = init_method_normal(args.init_method_std)
-
+        padded_vocab_size = args.padded_vocab_size
         self.language_model, self._language_model_key = megatron.model.language_model.get_language_model(
             num_tokentypes=num_tokentypes,
             add_pooler=True,
@@ -38,8 +38,9 @@ class Classification(MegatronModule):
                                                          args.num_layers),
             pre_process=self.pre_process,
             post_process=self.post_process,
-            args=args,
-            model_type=model_type
+            model_type=model_type,
+            padded_vocab_size=padded_vocab_size,
+            args=args
         )
 
         # Multi-choice head.

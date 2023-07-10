@@ -16,7 +16,7 @@ sys.path.append(os.path.join(script_dir, "../../../"))
 
 def test_indexed_dataset(args):
     ds = indexed_dataset.make_dataset(args.data, args.dataset_impl)
-    tokenizer = megatron.tokenizer.build_tokenizer(args)
+    tokenizer, padded_vocab_size = megatron.tokenizer.build_tokenizer(args)
     count = args.count
     del args
     print(len(ds.doc_idx))

@@ -14,7 +14,8 @@ from megatron import print_rank_0
 from megatron import get_timers
 from megatron.core import tensor_parallel
 from megatron.data.dataset_utils import build_train_valid_test_datasets
-from megatron.model import BertModel, ModelType
+from megatron.model import ModelType
+import megatron.model
 
 from megatron.utils import average_losses_across_data_parallel_group
 
@@ -25,16 +26,19 @@ def model_provider(pre_process=True, post_process=True):
     print_rank_0('building BERT model ...')
 
     args = get_args()
+    padded_vocab_size = args.padded_vocab_size
     num_tokentypes = 2 if args.bert_binary_head else 0
 
     model_type_bert = ModelType.encoder_or_decoder
-    model = BertModel(
+    model = megatron.model.BertModel(
         num_tokentypes=num_tokentypes,
         add_binary_head=args.bert_binary_head,
         parallel_output=True,
         pre_process=pre_process,
         post_process=post_process,
-        model_type=model_type_bert)
+        model_type=model_type_bert,
+        padded_vocab_size=padded_vocab_size,
+        args=args)
 
     return model
 

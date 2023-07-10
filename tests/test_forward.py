@@ -11,8 +11,7 @@ import megatron.tokenizer
 from megatron.core import tensor_parallel
 import megatron.data
 import megatron.data.data_samplers
-from megatron import get_tokenizer
-from megatron.model import LlamaModel
+import megatron.model
 import megatron.model.transformer
 from megatron.model.utils import init_method_normal, scaled_init_method_normal
 from megatron.model.enums import AttnMaskType, ModelType, LayerType, AttnType, PositionEmbeddingType
@@ -140,27 +139,9 @@ def test_parallel_attention_forward():
     # pa.core_attention(query_layer, key_layer, value_layer, attention_mask)
 
 
-def _model_provider_unwrapped(pre_process: bool,
-                              post_process: bool,
-                              args):
-    # pre_process = False
-    parallel_output = True
-    num_tokentypes = 0
-    model_type_llama = ModelType.encoder_or_decoder
-    model = LlamaModel(
-        num_tokentypes,
-        parallel_output,
-        pre_process,
-        post_process,
-        args,
-        model_type_llama
-    )
-    return model
-
-
 def _get_batch(data_iterator, args):
-    """Generate a batch"""
-    tokenizer = megatron.tokenizer.build_tokenizer(args)
+    """ Generate a batch """
+    tokenizer, padded_vocab_size = megatron.tokenizer.build_tokenizer(args)
 
     # Items and their type.
     keys = ['text']
@@ -171,8 +152,6 @@ def _get_batch(data_iterator, args):
         data = next(data_iterator)
     else:
         data = None
-    print(data)
-    # data_b = tensor_parallel.broadcast_data(keys, data, datatype)
     data_b = data
     # Unpack.
     tokens_ = data_b['text'].long()
@@ -221,13 +200,15 @@ def test_model_forward():
     parallel_output = True
     num_tokentypes = 0
     model_type_llama = ModelType.encoder_or_decoder
-    model = LlamaModel(
+    padded_vocab_size = args.padded_vocab_size
+    model = megatron.model.LlamaModel(
         num_tokentypes,
         parallel_output,
         pre_process,
         post_process,
-        args,
-        model_type_llama
+        model_type_llama,
+        padded_vocab_size,
+        args
     )
     data_prefix = ['/idiap/user/kmatoba/model-parallel-trainer/my_bert_text_sentence']
     data_impl = 'mmap'

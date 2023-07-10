@@ -6,9 +6,8 @@ import threading
 from flask import Flask, request, jsonify, current_app
 from flask_restful import Resource, Api
 
-from megatron.text_generation import generate_and_post_process
-from megatron.text_generation import beam_search_and_post_process
-
+import megatron.text_generation
+import megatron
 
 GENERATE_NUM = 0
 BEAM_NUM = 1
@@ -163,7 +162,7 @@ class MegatronGenerate(Resource):
             if len(prompts) > 1:
                 return "When doing beam_search, batch size must be 1"
 
-        stop_token=50256
+        stop_token = 50256
         if "stop_token" in request.get_json():
             stop_token = request.get_json()["stop_token"]
             if not isinstance(stop_token, int):
@@ -174,7 +173,10 @@ class MegatronGenerate(Resource):
             length_penalty = request.get_json()["length_penalty"]
             if not isinstance(length_penalty, float):
                 return "length_penalty must be a float"
-        
+
+        args = megatron.get_args()
+        padded_vocab_size = args.padded_vocab_size
+
         with lock:  # Need to get lock to keep multiple threads from hitting code
             
             if not no_log:
@@ -186,25 +188,25 @@ class MegatronGenerate(Resource):
                 if beam_width is not None:
                     MegatronGenerate.send_do_beam_search()  # Tell other ranks we're doing beam_search
                     response, response_seg, response_scores = \
-                        beam_search_and_post_process(
-                        self.model,
-                        prompts=prompts,
-                        tokens_to_generate=tokens_to_generate,
-                        beam_size = beam_width,
-                        add_BOS=add_BOS,
-                        stop_token=stop_token,
-                        num_return_gen=beam_width,  # Returning whole beam
-                        length_penalty=length_penalty,
-                        prevent_newline_after_colon=prevent_newline_after_colon
-                        )
-                    
+                        megatron.text_generation.beam_search_and_post_process(self.model,
+                                                                              prompts=prompts,
+                                                                              tokens_to_generate=tokens_to_generate,
+                                                                              beam_size = beam_width,
+                                                                              add_BOS=add_BOS,
+                                                                              stop_token=stop_token,
+                                                                              num_return_gen=beam_width,  # Returning whole beam
+                                                                              length_penalty=length_penalty,
+                                                                              prevent_newline_after_colon=prevent_newline_after_colon,
+                                                                              padded_vocab_size=padded_vocab_size,
+                                                                              args=args)
+
                     return jsonify({"text": response,
                         "segments": response_seg,
                         "scores": response_scores})
                 else:
                     MegatronGenerate.send_do_generate()  # Tell other ranks we're doing generate
                     response, response_seg, response_logprobs, _ = \
-                        generate_and_post_process(
+                        megatron.text_generation.generate_and_post_process(
                         self.model,
                         prompts=prompts,
                         tokens_to_generate=tokens_to_generate,
@@ -219,7 +221,8 @@ class MegatronGenerate(Resource):
                         stop_on_double_eol=stop_on_double_eol,
                         stop_on_eol=stop_on_eol,
                         prevent_newline_after_colon=prevent_newline_after_colon,
-                        random_seed=random_seed)
+                        random_seed=random_seed,
+                        args=args)
 
                     return jsonify({"text": response,
                         "segments": response_seg,

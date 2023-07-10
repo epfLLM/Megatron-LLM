@@ -6,6 +6,8 @@ import json
 import torch
 import requests
 from nltk import word_tokenize
+
+import megatron.text_generation
 from megatron import get_args
 from megatron import print_rank_0
 from megatron import get_tokenizer
@@ -13,7 +15,6 @@ from megatron.core import mpu
 from megatron.model import GPTModel
 from megatron.training import get_model
 from megatron.checkpointing import load_checkpoint
-from megatron.text_generation import generate_and_post_process
 
 
 def call_model_api(inputs, tokens_to_generate):
@@ -261,11 +262,12 @@ def generate_samples_by_prompting_input_from_file(model):
             if input_pos % 100 == 0:
                 print_rank_0("input_pos: %d" % input_pos)
 
-            outputs = generate_and_post_process(
+            outputs = megatron.text_generation.generate_and_post_process(
                         model=model, 
                         prompts=[raw_text], 
                         tokens_to_generate=args.out_seq_length,
-                        top_k_sampling=1)
+                        top_k_sampling=1,
+            args=args)
             prompts_plus_generations = outputs[0]
             prompts_plus_generations = prompts_plus_generations[0]
 

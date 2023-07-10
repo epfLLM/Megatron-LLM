@@ -2,6 +2,5 @@
 
 
 from .api import (
-    generate,
     generate_and_post_process,
     beam_search_and_post_process)

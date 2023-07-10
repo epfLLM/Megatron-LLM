@@ -57,8 +57,9 @@ def get_language_model(num_tokentypes,
                        decoder_attn_mask_type=AttnMaskType.causal,
                        pre_process=True,
                        post_process=True,
-                       args=None,
-                       model_type=None):
+                       model_type=None,
+                       padded_vocab_size=None,
+                       args=None):
     assert args is not None
     # model_type = args.model_type
     """Build language model and return along with the key to save."""
@@ -80,8 +81,9 @@ def get_language_model(num_tokentypes,
         add_pooler=add_pooler,
         pre_process=pre_process,
         post_process=post_process,
+        model_type=model_type,
+        padded_vocab_size=padded_vocab_size,
         args=args,
-        model_type=model_type
     )
     # key used for checkpoints.
     language_model_key = 'language_model'
@@ -345,11 +347,12 @@ class TransformerLanguageModel(MegatronModule):
                  add_pooler=False,
                  pre_process=True,
                  post_process=True,
-                 args=None,
-                 model_type=None):
+                 model_type=None,
+                 padded_vocab_size=None,
+                 args=None):
         super(TransformerLanguageModel, self).__init__()
+        assert padded_vocab_size is not None
         assert args is not None
-        padded_vocab_size = args.padded_vocab_size
         self.pre_process = pre_process
         self.post_process = post_process
         self.hidden_size = args.hidden_size

@@ -141,7 +141,10 @@ class VocabParallelEmbedding(torch.nn.Module):
         perform_initialization
     """
 
-    def __init__(self, num_embeddings: int, embedding_dim: int, *,
+    def __init__(self,
+                 num_embeddings: int,
+                 embedding_dim: int,
+                 *,
                  init_method=init.xavier_normal_,
                  params_dtype: torch.dtype=torch.float32,
                  use_cpu_initialization: bool=False,
@@ -150,7 +153,7 @@ class VocabParallelEmbedding(torch.nn.Module):
         # Keep the input dimensions.
         self.num_embeddings = num_embeddings
         self.embedding_dim = embedding_dim
-        # Set the detauls for compatibility.
+        # Set the detaults for compatibility.
         self.padding_idx = None
         self.max_norm = None
         self.norm_type = 2.
@@ -158,8 +161,9 @@ class VocabParallelEmbedding(torch.nn.Module):
         self.sparse = False
         self._weight = None
         self.tensor_model_parallel_size = get_tensor_model_parallel_world_size()
-        # Divide the weight matrix along the vocaburaly dimension.
-        self.vocab_start_index, self.vocab_end_index = \
+        # Divide the weight matrix along the vocabulary dimension.
+        self.vocab_start_index, \
+        self.vocab_end_index = \
             VocabUtility.vocab_range_from_global_vocab_size(
                 self.num_embeddings, get_tensor_model_parallel_rank(),
                 self.tensor_model_parallel_size)

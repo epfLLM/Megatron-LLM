@@ -38,9 +38,9 @@ def build_tokenizer(args):
                                   'implemented.'.format(args.tokenizer_type))
 
     # Add vocab size.
-    args.padded_vocab_size = _vocab_size_with_padding(tokenizer.vocab_size,
-                                                      args)
-    return tokenizer
+    padded_vocab_size = _vocab_size_with_padding(tokenizer.vocab_size, args)
+    args.padded_vocab_size = padded_vocab_size
+    return tokenizer, padded_vocab_size
 
 
 def _vocab_size_with_padding(orig_vocab_size, args):

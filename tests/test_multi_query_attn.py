@@ -10,10 +10,11 @@ import torch.utils.checkpoint
 from torch import nn
 from torch.nn import functional as F
 from einops import rearrange
+import einops
 
 import megatron.model.positional_embeddings
 
-torch.manual_seed(111)
+torch.manual_seed(1111)
 
 
 class RotaryEmbedding(torch.nn.Module):
@@ -302,7 +303,7 @@ class Linear(nn.Linear):
 
 def reshape_for_broadcast(freqs_cis: torch.Tensor, x: torch.Tensor):
     ndim = x.ndim
-    assert 0 <= 1 < ndim
+    assert 4 == ndim
     assert freqs_cis.shape == (x.shape[0], x.shape[-1])
     shape = [d if i == 0 or i == ndim - 1 else 1 for i, d in enumerate(x.shape)]
     return freqs_cis.view(*shape)
@@ -341,6 +342,32 @@ def precompute_freqs_cis(dim: int, end: int, theta: float = 10000.0):
     return freqs_cis
 
 
+def _do_it(z: torch.Tensor,
+           num_head: int,
+           freqs_cis: torch.Tensor) -> torch.Tensor:
+    # _ = torch.einsum("ijkl,il->ijkl",
+    #     torch.view_as_complex(
+    #     rearrange(z,
+    #           "(batch num_heads) seq_len (ri half_head_dim) -> seq_len batch num_heads half_head_dim ri",
+    #           num_heads=num_head, ri=2)
+    #         .contiguous()
+    # ), freqs_cis)
+    # _ = torch.view_as_real(_)
+    # # _ = torch.view_as_real(torch.einsum("ijkl,il->ijkl", _, freqs_cis))
+    # # _ = _.transpose(-1, -2).flatten(3)
+    # _ = rearrange(_, "i j k l m -> i j k (m l)")
+
+    _ = rearrange(z,
+              "(batch num_heads) seq_len (ri half_head_dim) -> seq_len batch num_heads half_head_dim ri",
+              num_heads=num_head, ri=2)
+    _ = torch.view_as_complex(_.contiguous())
+    _ = torch.view_as_real(torch.einsum("ijkl,il->ijkl", _, freqs_cis))
+    # _ = _.transpose(-1, -2).flatten(3)
+    _ = rearrange(_, "i j k l m -> i j k (m l)")
+    _ = _.type_as(z)
+    return _
+
+
 class RotaryEmbeddingMatoba(torch.nn.Module):
     def __init__(
         self,
@@ -357,24 +384,51 @@ class RotaryEmbeddingMatoba(torch.nn.Module):
         # qk = torch.stack((q, k), 0)
         seq_length = q.shape[1]
         freqs_cis = precompute_freqs_cis(self.head_dim, seq_length, self.theta)
-        k3 = rearrange(k, "(batch num_heads) seq_len (ri half_head_dim) -> seq_len batch num_heads half_head_dim ri",
-                               num_heads=self.num_head, ri=2)
-        q3 = rearrange(q, "(batch num_heads) seq_len (ri half_head_dim) -> seq_len batch num_heads half_head_dim ri",
-                               num_heads=self.num_head, ri=2)
-        xq_ = torch.view_as_complex(q3.contiguous())
-        xk_ = torch.view_as_complex(k3.contiguous())
+        # new_method = True
+        # new_method = False
+        # if new_method:
+        #     xq_out = _do_it(q, self.num_head, freqs_cis)
+        #     xk_out = _do_it(k, self.num_head, freqs_cis)
+        # else:
 
+        k3 = rearrange(k, "(batch num_heads) seq_len (ri half_head_dim) -> seq_len batch num_heads half_head_dim ri",
+                                   num_heads=self.num_head, ri=2)
+        q3 = rearrange(q, "(batch num_heads) seq_len (ri half_head_dim) -> seq_len batch num_heads half_head_dim ri",
+                                   num_heads=self.num_head, ri=2)
+        # force_contiguous = True
+        force_contiguous = False
+        if force_contiguous:
+            xq_ = torch.view_as_complex(q3.contiguous())
+            xk_ = torch.view_as_complex(k3.contiguous())
+        else:
+            xq_ = torch.complex(q3[..., 0], q3[..., 1])
+            xk_ = torch.complex(k3[..., 0], k3[..., 1])
+
+        #     # xq_ = einops.reduce(q3, "i j k l m -> i j k l ()",
+        #     #                   lambda t, ra: torch.complex(t[..., 0],
+        #     #                                               t[..., 1]))[..., 0]
+        #     # if False:
+        #     #     gg = einops.reduce(q3, "i j k l m -> i j k l",
+        #     #                   lambda t, ra: torch.complex(t[..., 0],
+        #     #                                               t[..., 1]))
+        #     # xk_ = einops.reduce(k3, "i j k l m -> i j k l ()",
+        #     #                   lambda t, ra: torch.complex(t[..., 0],
+        #     #                                               t[..., 1]))[..., 0]
+        #     # xq_ = einops.reduce(q3, "i j k l m -> i j k l",
+        #     #                   lambda t, ra: torch.complex(t[..., 0],
+        #     #                                               t[..., 1]))
+        #     # xk_ = einops.reduce(k3, "i j k l m -> i j k l",
+        #     #                   lambda t, ra: torch.complex(t[..., 0],
+        #     #                                               t[..., 1]))
+        #     if False:
+        #         f = einops.reduce(q3, "i j k l m -> i j k l ()", lambda t, ra: torch.complex(t[..., 0], t[..., 1]))[..., 0]
+        #         torch.testing.assert_close(f, xq_)
+        # gg = torch.einsum("ijkl,il->ijkl", xq_, freqs_cis)
         xq_out_new = torch.view_as_real(torch.einsum("ijkl,il->ijkl", xq_, freqs_cis))
         xk_out_new = torch.view_as_real(torch.einsum("ijkl,il->ijkl", xk_, freqs_cis))
 
-        # xq_out = rearrange(xq_out_new, "i j k l m -> i j k (m l)").type_as(q)
-        # xk_out = rearrange(xk_out_new, "i j k l m -> i j k (m l)").type_as(k)
-        #
-        xq_out = xq_out_new.transpose(-1, -2).flatten(3).type_as(q)
-        xk_out = xk_out_new.transpose(-1, -2).flatten(3).type_as(k)
-        if False:
-            g = rearrange(xq_out_new, "i j k l m -> i j k (m l)").type_as(q)
-
+        xq_out = rearrange(xq_out_new, "i j k l m -> i j k (m l)").type_as(q)
+        xk_out = rearrange(xk_out_new, "i j k l m -> i j k (m l)").type_as(k)
         return xq_out, xk_out
 
 
@@ -450,10 +504,10 @@ class RotaryEmbedding(torch.nn.Module):
 
 
 class DummyConf:
-    n_head = 21
+    n_head = 12
     # head_dim = 64
     # head_dim = 128
-    head_dim = 256
+    head_dim = 512  # 256
     hidden_size = head_dim * n_head
     split_size = 9
     hidden_dropout = 0.0
@@ -511,8 +565,8 @@ def method4(batch_size: int,
 
 
 def benchmark_rotary_embeddings():
-    seq_length = 104
-    batch_size = 32
+    seq_length = 1024
+    batch_size = 4
 
     conf = DummyConf()
 
@@ -521,6 +575,8 @@ def benchmark_rotary_embeddings():
     k = torch.randn(nb, seq_length, conf.head_dim)
 
     methods = [method1, method2, method3]
+    # methods = [method1, method3, method2]
+    # methods = [method1, method2, method3]
     # methods = [method1, method3, method2, method4]
     # methods = list(reversed([method1, method2, method3]))
     num_methods = len(methods)
@@ -530,7 +586,7 @@ def benchmark_rotary_embeddings():
         bef = torch.cuda.Event(enable_timing=True)
         aft = torch.cuda.Event(enable_timing=True)
 
-        q_, k_ = method(batch_size, q, k)
+        q_, k_ = method(batch_size, torch.rand_like(q), torch.rand_like(k))
 
         # activities = [ProfilerActivity.CPU, ProfilerActivity.CUDA]
         activities = [ProfilerActivity.CPU, ProfilerActivity.CUDA]
@@ -556,7 +612,8 @@ def benchmark_rotary_embeddings():
 
 def benchmark_rotary_attention():
     seq_length = 344
-    batch_size = 32
+    # batch_size = 32
+    batch_size = 64
     conf = DummyConf()
 
     attention_mask = torch.ones((batch_size, seq_length), device='cpu')
@@ -574,7 +631,6 @@ def benchmark_rotary_attention():
 
     x = torch.randn((batch_size, seq_length, conf.hidden_size))
 
-    # f1 = functools.partial(attn_orig, x=x, causal_mask=causal_mask)
     f1 = functools.partial(attn_orig, x, causal_mask)
     f2 = functools.partial(attn_mato, x, causal_mask)
 
@@ -608,28 +664,27 @@ def profile_call(f: Callable):
     return y, t, prof_results
 
 
-def test_rotary_embeddings_regression():
-    seq_length = 104
-    batch_size = 32
-
-    conf = DummyConf()
-
-    nb = batch_size * conf.n_head
-    q = torch.randn(nb, seq_length, conf.head_dim)  # batch_size * self.num_heads, q_length, self.head_dim)
-    k = torch.randn(nb, seq_length, conf.head_dim)
-    hidden_size = conf.hidden_size
-    num_attention_heads = conf.n_head
-
-    freq_cis = megatron.model.positional_embeddings.precompute_freqs_cis(
-        # self.params.dim // self.params.n_heads, self.params.max_seq_len * 2 # NOTE: LLaMA version
-        hidden_size // num_attention_heads, seq_length * 2
-    )
-
-    query_layer, key_layer = megatron.model.positional_embeddings.apply_rotary_emb(q, k, freq_cis)
+# def test_rotary_embeddings_regression():
+#     seq_length = 104
+#     batch_size = 32
+#
+#     conf = DummyConf()
+#
+#     nb = batch_size * conf.n_head
+#     q = torch.randn(nb, seq_length, conf.head_dim)  # batch_size * self.num_heads, q_length, self.head_dim)
+#     k = torch.randn(nb, seq_length, conf.head_dim)
+#     hidden_size = conf.hidden_size
+#     num_attention_heads = conf.n_head
+#
+#     freq_cis = megatron.model.positional_embeddings.precompute_freqs_cis(
+#         # self.params.dim // self.params.n_heads, self.params.max_seq_len * 2 # NOTE: LLaMA version
+#         hidden_size // num_attention_heads, seq_length * 2
+#     )
+#     query_layer, key_layer = megatron.model.positional_embeddings.apply_rotary_emb(q, k, freq_cis)
 
 
 if __name__ == "__main__":
-    test_rotary_embeddings_regression()
+    # test_rotary_embeddings_regression()
     benchmark_rotary_embeddings()
 
     # benchmark_rotary_attention()

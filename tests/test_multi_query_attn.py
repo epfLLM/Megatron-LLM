@@ -12,9 +12,11 @@ from torch.nn import functional as F
 from einops import rearrange
 import einops
 
+device = torch.device("cuda")
+
 import megatron.model.positional_embeddings
 
-torch.manual_seed(1111)
+torch.manual_seed(11)
 
 
 class RotaryEmbedding(torch.nn.Module):
@@ -381,49 +383,46 @@ class RotaryEmbeddingMatoba(torch.nn.Module):
         self.theta = theta
 
     def forward(self, q: torch.Tensor, k: torch.Tensor) -> torch.Tensor:
-        # qk = torch.stack((q, k), 0)
         seq_length = q.shape[1]
-        freqs_cis = precompute_freqs_cis(self.head_dim, seq_length, self.theta)
+        head_dim = q.shape[-1]
+        freqs_cis = precompute_freqs_cis(self.head_dim, seq_length, self.theta).to(device)
         # new_method = True
         # new_method = False
         # if new_method:
         #     xq_out = _do_it(q, self.num_head, freqs_cis)
         #     xk_out = _do_it(k, self.num_head, freqs_cis)
         # else:
+        new_method = True
 
-        k3 = rearrange(k, "(batch num_heads) seq_len (ri half_head_dim) -> seq_len batch num_heads half_head_dim ri",
-                                   num_heads=self.num_head, ri=2)
-        q3 = rearrange(q, "(batch num_heads) seq_len (ri half_head_dim) -> seq_len batch num_heads half_head_dim ri",
-                                   num_heads=self.num_head, ri=2)
-        # force_contiguous = True
-        force_contiguous = False
-        if force_contiguous:
-            xq_ = torch.view_as_complex(q3.contiguous())
-            xk_ = torch.view_as_complex(k3.contiguous())
+        if new_method:
+            k4 = rearrange(k,
+                           "(batch num_heads) seq_len (ri half_head_dim) -> seq_len (batch num_heads half_head_dim) ri",
+                           num_heads=self.num_head, ri=2)
+            q4 = rearrange(q,
+                           "(batch num_heads) seq_len (ri half_head_dim) -> seq_len (batch num_heads half_head_dim) ri",
+                           num_heads=self.num_head, ri=2)
+            xq_new = rearrange(torch.view_as_complex(q4), "seq_len (batch num_heads half_head_dim) ->  seq_len batch num_heads half_head_dim",
+                          seq_len=seq_length, num_heads=self.num_head, half_head_dim = self.head_dim // 2)
+            xk_new = rearrange(torch.view_as_complex(k4),  "seq_len (batch num_heads half_head_dim) ->  seq_len batch num_heads half_head_dim",
+                          seq_len=seq_length, num_heads=self.num_head, half_head_dim = self.head_dim // 2)
+            xq_ = xq_new
+            xk_ = xk_new
         else:
+
+            k3 = rearrange(k, "(batch num_heads) seq_len (ri half_head_dim) -> seq_len batch num_heads half_head_dim ri",
+                                       num_heads=self.num_head, ri=2)
+            q3 = rearrange(q, "(batch num_heads) seq_len (ri half_head_dim) -> seq_len batch num_heads half_head_dim ri",
+                                       num_heads=self.num_head, ri=2)
             xq_ = torch.complex(q3[..., 0], q3[..., 1])
             xk_ = torch.complex(k3[..., 0], k3[..., 1])
+        
+        # torch.testing.assert_close(xk_, xk_new)
+        # torch.testing.assert_close(xq_, xq_new)
+        # k4_2 = rearrange(k4c, "seq_len (batch num_heads half_head_dim) ->  seq_len batch num_heads half_head_dim",
+        #                  seq_len=seq_length, num_heads=self.num_head, half_head_dim = self.head_dim // 2)
+        # torch.testing.assert_close(k4_2, xk_)
+        # k4_2 = torch.einsum("ik,ki->ik", k4c, freqs_cis)
 
-        #     # xq_ = einops.reduce(q3, "i j k l m -> i j k l ()",
-        #     #                   lambda t, ra: torch.complex(t[..., 0],
-        #     #                                               t[..., 1]))[..., 0]
-        #     # if False:
-        #     #     gg = einops.reduce(q3, "i j k l m -> i j k l",
-        #     #                   lambda t, ra: torch.complex(t[..., 0],
-        #     #                                               t[..., 1]))
-        #     # xk_ = einops.reduce(k3, "i j k l m -> i j k l ()",
-        #     #                   lambda t, ra: torch.complex(t[..., 0],
-        #     #                                               t[..., 1]))[..., 0]
-        #     # xq_ = einops.reduce(q3, "i j k l m -> i j k l",
-        #     #                   lambda t, ra: torch.complex(t[..., 0],
-        #     #                                               t[..., 1]))
-        #     # xk_ = einops.reduce(k3, "i j k l m -> i j k l",
-        #     #                   lambda t, ra: torch.complex(t[..., 0],
-        #     #                                               t[..., 1]))
-        #     if False:
-        #         f = einops.reduce(q3, "i j k l m -> i j k l ()", lambda t, ra: torch.complex(t[..., 0], t[..., 1]))[..., 0]
-        #         torch.testing.assert_close(f, xq_)
-        # gg = torch.einsum("ijkl,il->ijkl", xq_, freqs_cis)
         xq_out_new = torch.view_as_real(torch.einsum("ijkl,il->ijkl", xq_, freqs_cis))
         xk_out_new = torch.view_as_real(torch.einsum("ijkl,il->ijkl", xk_, freqs_cis))
 
@@ -565,16 +564,17 @@ def method4(batch_size: int,
 
 
 def benchmark_rotary_embeddings():
-    seq_length = 1024
-    batch_size = 4
-
+    # seq_length = 1024
+    # seq_length = 2048
+    seq_length = 128
+    batch_size = 8
     conf = DummyConf()
 
     nb = batch_size * conf.n_head
-    q = torch.randn(nb, seq_length, conf.head_dim)  # batch_size * self.num_heads, q_length, self.head_dim)
-    k = torch.randn(nb, seq_length, conf.head_dim)
+    q = torch.randn(nb, seq_length, conf.head_dim, device=device)  # batch_size * self.num_heads, q_length, self.head_dim)
+    k = torch.randn(nb, seq_length, conf.head_dim, device=device)
 
-    methods = [method1, method2, method3]
+    methods = [method3, method2]
     # methods = [method1, method3, method2]
     # methods = [method1, method2, method3]
     # methods = [method1, method3, method2, method4]
@@ -611,7 +611,7 @@ def benchmark_rotary_embeddings():
 
 
 def benchmark_rotary_attention():
-    seq_length = 344
+    seq_length = 1028
     # batch_size = 32
     batch_size = 64
     conf = DummyConf()

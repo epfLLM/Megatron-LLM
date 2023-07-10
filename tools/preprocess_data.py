@@ -116,6 +116,9 @@ def get_args():
                        help='Chunk size assigned to each worker process')
     group.add_argument('--log_interval', type=int, default=100,
                        help='Interval between progress updates')
+    group.add_argument('--vocab_extra_ids', type=int, default=0)
+    group.add_argument('--vocab_extra_ids_list', type=str, default=None,
+                       help='comma separated list of special vocab ids to add to the tokenizer')
     group.add_argument("--no_new_tokens", action="store_false", dest="new_tokens",
                        help=("Whether to add special tokens (e.g. CLS, MASK, etc) "
                              "in the sentenciepiece tokenizer or not"))
@@ -130,7 +133,6 @@ def get_args():
     args.rank = 0
     args.make_vocab_size_divisible_by = 128
     args.tensor_model_parallel_size = 1
-    args.vocab_extra_ids = 0
 
     return args
 

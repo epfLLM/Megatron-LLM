@@ -22,8 +22,8 @@ def hf_provider():
         )
     elif args.model_name == "llama":
         model = LlamaForCausalLM.from_pretrained(
-            'decapoda-research/llama-7b-hf', cache_dir=args.huggingface_cache,
-            trust_remote_code=True
+            f"/pure-mlo-scratch/llama/converted_HF_{args.model_size}B/",
+            cache_dir=args.huggingface_cache
         )
     else:
         raise KeyError(f"Model {args.model_name} not implemented")
@@ -38,9 +38,9 @@ def megatron_forward(model, batch):
     assert torch.all(loss_mask)
     # we need to do two forward passes to get both the logits and the loss
     logits = model(tokens, position_ids, attention_mask, labels=None)
-    losses = model(tokens, position_ids, attention_mask, labels=labels)
-    loss, _ = loss_func(loss_mask, losses)
-    return logits, loss
+    # losses = model(tokens, position_ids, attention_mask, labels=labels)
+    # loss, _ = loss_func(loss_mask, losses)
+    return logits, None
 
 
 def huggingface_forward(model, batch):
@@ -56,7 +56,8 @@ def verify_step(forward1, model1, forward2, model2, iterator):
     batch = _get_batch(iterator)
     logits1, loss1 = forward1(model1, batch)
     logits2, loss2 = forward2(model2, batch)
-    assert logits1.size() == logits2.size()
+    assert logits1.size() == logits2.size(), \
+            f"ours={logits1.size()}, true={logits2.size()}"
     assert loss1.size() == loss2.size()
     logits1 = logits1.cpu()
     logits2 = logits2.cpu()
@@ -65,7 +66,8 @@ def verify_step(forward1, model1, forward2, model2, iterator):
     abs_error = torch.max(torch.abs(logits1 - logits2))
     loss_error = torch.abs(loss1 - loss2)
     print("Max absoulute error in the logits: "
-          f"{abs_error:.3f} Abs loss error: {loss_error:.3f}")
+          f"{abs_error:.3f} Abs loss error: {loss_error:.3f} "
+          f"Our loss: {loss1:.3f}, theirs: {loss2:.3f}")
 
 
 # heavily inspired from megatron.training.pretrain
@@ -85,10 +87,10 @@ def verify(args, train_valid_test_dataset_provider,
     for module in model:
         module.eval().requires_grad_(False)
     baseline_model = baseline_provider_func()
-    print('==== Megatron Llama ====')
+    print('==== Megatron model ====')
     print(model)
     print()
-    print('==== Huggingface Llama ====')
+    print('==== Huggingface model ====')
     print(baseline_model)
     print_rank_0("Model has been setup")
     if args.virtual_pipeline_model_parallel_size is not None:
@@ -108,8 +110,7 @@ def verify(args, train_valid_test_dataset_provider,
 
     # Now we can start the verifications
     print_rank_0("Starting verifications!")
-    # for iteration in range(args.iteration, args.train_iters):
-    for iteration in range(0, 10):
+    for iteration in range(0, 1):
         print_rank_0(f"Iteration {iteration}...")
         update_num_microbatches(args.consumed_train_samples)
         args.curr_iteration = iteration
@@ -131,7 +132,7 @@ def extra_args(parser):
 if __name__ == "__main__":
     # INITIALIZATION
     print("Starting falcon-megatron vs falcon-huggingface verification")
-    initialize_megatron(extra_args, {"tokenizer_type": "FalconTokenizer"})
+    initialize_megatron(extra_args)
     args = get_args()
 
     # VERIFICATION

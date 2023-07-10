@@ -24,6 +24,17 @@ from .glu_activations import GLU_ACTIVATIONS
 from megatron.model.positional_embeddings import precompute_freqs_cis, apply_rotary_emb
 
 
+from collections import defaultdict
+TENSORS = defaultdict(list)
+
+
+def save(tensor: torch.Tensor, name: str, flush: bool = False):
+    TENSORS[name].append(tensor)
+    if flush:
+        torch.save(TENSORS, "/pure-mlo-scratch/alhernan/megatron.pt")
+
+
+
 """ We use the following notation throughout this file:
      h: hidden size
      n: number of attention heads
@@ -516,17 +527,12 @@ class ParallelAttention(MegatronModule):
         # ==================================
         if self.position_embedding_type == PositionEmbeddingType.rotary:
             # [sq, b, np, 3 * hn] --> 3 [sq, b, np, hn]
-            ql = rearrange(query_layer, "s b n h -> b n s h")
-            kl = rearrange(key_layer, "s b n h -> b n s h")
-            vl = rearrange(value_layer, "s b n h -> b n s h")
-            print("MEGA q", ql[0, :3, :3, :3])
-            print("MEGA k", kl[0, :3, :3, :3])
-            print("MEGA v", vl[0, :3, :3, :3])
+            save(query_layer, "query")
+            save(key_layer, "key")
+            save(value_layer, "value")
             query_layer, key_layer = apply_rotary_emb(query_layer, key_layer, self.freqs_cis)
-            ql = rearrange(query_layer, "s b n h -> b n s h")
-            kl = rearrange(key_layer, "s b n h -> b n s h")
-            print("MEGA q2", ql[0, :3, :3, :3])
-            print("MEGA k2", kl[0, :3, :3, :3])
+            save(query_layer, "query_post_rot")
+            save(key_layer, "key_post_rot")
 
         # ==================================
         # core attention computation
@@ -553,9 +559,9 @@ class ParallelAttention(MegatronModule):
         # Output. [sq, b, h]
         # =================
         # print(self.dense)
-        print("MEGA attn_pre_proj", context_layer[:3, 0, :3])
+        save(context_layer, "attn_pre_proj")
         output, bias = self.dense(context_layer)
-        print("MEGA attn_post_proj", output[:3, 0, :3])
+        save(output, "attn_post_proj")
         return output, bias
 
 
@@ -739,22 +745,21 @@ class ParallelTransformerLayer(MegatronModule):
             out = torch.nn.functional.dropout(x, p=prob, training=self.training)
             return residual + self.drop_path(out)
 
-        print("MEGA input", hidden_states[:3, 0, :3])
+        save(hidden_states, "input")
 
         # hidden_states: [s, b, h]
         # Layer norm at the beginning of the transformer layer.
         layernorm_output = self.input_layernorm(hidden_states)
-        print("MEGA layernorm", layernorm_output[:3, 0, :3])
+        save(layernorm_output, "layernorm")
         attention_output, attention_bias = self.self_attention(layernorm_output,
                                                                attention_mask,
                                                                inference_params=inference_params)
 
-        print("MEGA attention", attention_output[:3, 0, :3])
+        save(attention_output, "attention")
         if self.apply_residual_connection_post_layernorm:
             residual = layernorm_output
         else:
             residual = hidden_states
-        print("MEGA residual", residual[:3, 0, :3])
 
         if self.drop_path is None:
             # jit scripting for a nn.module (with dropout) is not
@@ -771,13 +776,14 @@ class ParallelTransformerLayer(MegatronModule):
             else:
                 bias_dropout_add_func = get_bias_dropout_add(self.training)
 
+        save(residual, "residual1")
         if not self.parallel_attn:
             layernorm_input = apply_dropout(attention_output, attention_bias,
                                             residual, self.hidden_dropout)
             # Layer norm post the self attention.
-            print("MEGA post_residual", layernorm_input[:3, 0, :3])
+            save(layernorm_input, "post_residual1")
             layernorm_output = self.post_attention_layernorm(layernorm_input)
-            print("MEGA post_layernorm?", layernorm_output[:3, 0, :3])
+            save(layernorm_output, "post_layernorm")
         else:
             layernorm_input = attention_output
 
@@ -795,7 +801,7 @@ class ParallelTransformerLayer(MegatronModule):
             # Layer norm post the decoder attention
             layernorm_output = self.post_inter_attention_layernorm(layernorm_input)
         mlp_output, mlp_bias = self.mlp(layernorm_output)
-        print("MEGA mlp", mlp_output[:3, 0, :3])
+        save(mlp_output, "mlp")
 
         # Second residual connection.
         if self.parallel_attn:
@@ -806,12 +812,12 @@ class ParallelTransformerLayer(MegatronModule):
             else:
                 residual = layernorm_input
 
-        print("MEGA residual", residual[:3, 0, :3])
+        save(residual, "residual2")
         output = apply_dropout(mlp_output, mlp_bias, residual, self.hidden_dropout,
                                make_viewless=True)
         if not self.parallel_attn:
             output = self.output_layernorm(output)
-        print("MEGA post_residual", output[:3, 0, :3])
+        save(output, "post_residual2")
         return output
 
 
@@ -1149,6 +1155,7 @@ class ParallelTransformer(MegatronModule):
                 encoder_output=None,
                 enc_dec_attn_mask=None,
                 inference_params=None):
+
         # hidden_states: [s, b, h]
 
         # Checks.
@@ -1225,6 +1232,10 @@ class ParallelTransformer(MegatronModule):
                             hidden_states,
                             attention_mask,
                             **forward_kwargs)
+
+                        save(hidden_states, "output", flush=index == self.num_layers - 1)
+
+
 
                 # Skip counter update for eval and activation checkpointing
                 if torch.is_grad_enabled() and self.training:

@@ -83,4 +83,7 @@ torchrun $DISTRIBUTED_ARGS verify_correctness.py \
        --model_size $SIZE \
        --use_rms_norm \
        --glu_activation swiglu \
+       --layernorm_epsilon 1e-6 \
+       --use_post_ln \
+       --no_tie_embed_logits \
        $EXTRA_ARGS

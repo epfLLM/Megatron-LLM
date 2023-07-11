@@ -31,6 +31,6 @@ def apply_rotary_emb(
     cos, sin = freqs_cis  # [seq_len, dim] both
     cos = cos[:, None, None, :]
     sin = sin[:, None, None, :]
-    xq = (xq*cos) + (rotate_half(xq)*sin)
-    xk = (xk*cos) + (rotate_half(xk)*sin)
-    return xq, xk
+    xq_out = (xq*cos) + (rotate_half(xq)*sin)
+    xk_out = (xk*cos) + (rotate_half(xk)*sin)
+    return xq.type_as(xq), xk.type_as(xk)

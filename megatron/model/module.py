@@ -38,7 +38,9 @@ class MegatronModule(torch.nn.Module):
 
     def word_embeddings_weight(self):
         if self.pre_process:
-            return self.language_model.embedding.word_embeddings.weight
+            if self.language_model.tie_embed_logits:
+                return self.language_model.embedding.word_embeddings.weight
+            return self.language_model.lm_head.weight
         else:
             if not self.share_word_embeddings:
                 raise Exception('word_embeddings_weight() called for last '

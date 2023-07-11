@@ -129,7 +129,7 @@ def _set_tensorboard_writer(args):
         """
         if args.rank == (args.world_size - 1):
             try:
-                from megatron.wandb import WandBConfig,WandbTBShim
+                from megatron.wandb_logger import WandBConfig,WandbTBShim
                 cfg=WandBConfig.from_args(args) 
                 shim=WandbTBShim(cfg)
                 print('> setting wandb ...')

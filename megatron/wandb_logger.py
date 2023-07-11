@@ -1,25 +1,26 @@
 from dataclasses import dataclass,field
-from typing import Optional
+from typing import Optional,List,Dict,Tuple
 import torch
 from typing import Union
 import wandb
 from argparse import Namespace
 from collections import defaultdict
 import os
+from warnings import warn
 
 #TODO: do we want to use the watch? https://docs.wandb.ai/ref/python/watch
 @dataclass
 class WandBConfig(object):
     # compatibility to previous logger
     # config to be logged in wandb
-    config:Optional[Namespace]=field(default_factory=None)
+    config:Optional[Namespace]=field(default_factory=lambda :None)
     # NOTE: these are ignored by wandb
     # filled from `tensorboard_log_interval`, frequency of logging
     log_interval:int=field(default=1)
     # filled from `tensorboard_queue_size`, ignored by wandb
     queue_size:int=field(default=int(1e3))
     # if set, log locally into this dir, gets filled from tensorboard_dir
-    local_dir:Option[str]=field(default=None)
+    local_dir:Optional[str]=field(default=None)
 
     # wandb specific config
     # filled from args
@@ -36,13 +37,19 @@ class WandBConfig(object):
     # long form notes and info to store
     notes:Optional[str]=field(default=None)
     # TODO: discuss how we want to do this, do we want to resume logging?
-    resume:str=field(default="must")
+    resume:str=field(default="allow")
     # TODO: can fill this from the environment variable `WANDB_RUN_ID` ?
     # globally unique id, if passed
     run_id:Optional[str]=field(default=None)
     # "magic" auto instrumentation, see https://docs.wandb.ai/ref/python/init
     magic:bool=field(default=False)
     api_key:Optional[str]=field(default=None)
+    with_tensorboard:bool=field(default=True)
+    try_catch_guard:bool=field(default=True)
+
+    @staticmethod
+    def default(project:str,run_id:str=run_id):
+        return WandBConfig(project=project,run_id=run_id)
 
     @staticmethod
     def from_args(args)->'WandBConfig':
@@ -54,9 +61,30 @@ class WandBConfig(object):
                            config=args,entity=args.wandb_entity,
                            project=args.wandb_project,
                            run_id=args.wandb_id,
-                           resumse=args.wandb_resume,
+                           resume=args.wandb_resume,
                            api_key=wargs.wandb_api_key
                            )
+
+import functools
+# dummy_named just because of bare *
+def try_catch_guard(_func=None,*,dummy_named=None,**decorator_kwargs):
+    def decorator_try_catch_guard(func):
+        @functools.wraps(func)
+        def try_catch_wrapper(*args,**kwargs):
+            s=args[0]
+            if s.cfg.try_catch_guard:
+                try:
+                    return func(*args,**kwargs)
+                except BaseException as e:
+                    warn(f"Ignoring error {e} in WandbTBShim")
+            else:
+                return func(*args,**kwargs)
+        return try_catch_wrapper
+    if _func is None:
+        return decorator_try_catch_guard
+    else:
+        return decorator_try_catch_guard(_func)
+    
 
 class WandbTBShim(object):
     """
@@ -83,21 +111,52 @@ class WandbTBShim(object):
                 )
         self._last_step_vs:{None:None}
         self._log_accum=defaultdict(dict)
+        if self.cfg.with_tensorboard:
+            try:
+                from torch.utils.tensorboard import SummaryWriter
+                print('> setting tensorboard ...')
+                self.tb_writer = SummaryWriter(
+                    log_dir=config.local_dir,
+                    max_queue=config.queue_size)
+            except ModuleNotFoundError:
+                print('WARNING: TensorBoard writing requested but is not '
+                      'available (are you using PyTorch 1.1.0 or later?), '
+                      'no TensorBoard logs will be written.', flush=True)
+        else:
+            self.tb_writer=None
+    @try_catch_guard
     def add_scalar(self,name:str,var:Union[float,int,torch.Tensor],step:int):
         vs= None if " vs " not in name else name.split(" vs ")[-1]
         if self._last_step[vs] is not None and step!=self._last_step[vs]:
             self._flush(vs)
         self._last_step[vs]=step
         self._log_accum[vs][name]=var
+        if self.tb_writer is not None:
+            self.tb_writer.add_scalar(name, var,global_step=step)
     def _flush(self,vs:Optional[str]):
         if self._log_accum[vs]:
             wandb.log(self._log_accum[vs],step=self._last_step[vs],commit=True)
         self._log_accum[vs]={}
         self._last_step[vs]=None
+    @try_catch_guard
     def flush_all(self):
         for k in list(self._log_accum.keys()):
             self._flush(k)
 
+    @try_catch_guard
     def add_text(self,name:str,value:str):
         # we log this on the creation of the wandb object, hence no need to log it here
-        pass
+        if self.tb_writer is not None:
+            self.tb_writer.add_text(name,value)
+
+def toy_test(writer):
+    for i,l in zip(range(10),range(10,20)):
+        r=10-i
+        for k in range(5):
+            writer.add_scalar(f"forward{k}",l,i)
+            writer.add_scalar(f"backward{k}",r,i)
+            writer.add_scalar(f"forward{k} vs forward",l,i)
+            writer.add_scalar(f"forward{k} vs backward",i,r)
+if __name__=="__main__":
+    writer=WandbTBShim(WandBConfig.default("wandb-toy-test",run_id="meditron-wandb-test"))
+    toy_test(writer)

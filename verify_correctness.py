@@ -24,7 +24,7 @@ def hf_provider():
         model = LlamaForCausalLM.from_pretrained(
             f"/pure-mlo-scratch/llama/converted_HF_{args.model_size}B/",
             cache_dir=args.huggingface_cache
-        )
+        ).float()
     else:
         raise KeyError(f"Model {args.model_name} not implemented")
     model = model.eval().requires_grad_(False).to(args.huggingface_device)
@@ -38,9 +38,9 @@ def megatron_forward(model, batch):
     assert torch.all(loss_mask)
     # we need to do two forward passes to get both the logits and the loss
     logits = model(tokens, position_ids, attention_mask, labels=None)
-    # losses = model(tokens, position_ids, attention_mask, labels=labels)
-    # loss, _ = loss_func(loss_mask, losses)
-    return logits, None
+    losses = model(tokens, position_ids, attention_mask, labels=labels)
+    loss, _ = loss_func(loss_mask, losses)
+    return logits, loss
 
 
 def huggingface_forward(model, batch):
@@ -58,15 +58,15 @@ def verify_step(forward1, model1, forward2, model2, iterator):
     logits2, loss2 = forward2(model2, batch)
     assert logits1.size() == logits2.size(), \
             f"ours={logits1.size()}, true={logits2.size()}"
-    assert loss1.size() == loss2.size()
     logits1 = logits1.cpu()
     logits2 = logits2.cpu()
+    abs_error = torch.max(torch.abs(logits1 - logits2))
+    print(f"Max absoulute error in the logits: {abs_error:.3f}")
+    assert loss1.size() == loss2.size()
     loss1 = loss1.cpu()
     loss2 = loss2.cpu()
-    abs_error = torch.max(torch.abs(logits1 - logits2))
     loss_error = torch.abs(loss1 - loss2)
-    print("Max absoulute error in the logits: "
-          f"{abs_error:.3f} Abs loss error: {loss_error:.3f} "
+    print(f"Abs loss error: {loss_error:.3f} "
           f"Our loss: {loss1:.3f}, theirs: {loss2:.3f}")
 
 
@@ -110,7 +110,7 @@ def verify(args, train_valid_test_dataset_provider,
 
     # Now we can start the verifications
     print_rank_0("Starting verifications!")
-    for iteration in range(0, 1):
+    for iteration in range(0, 10):
         print_rank_0(f"Iteration {iteration}...")
         update_num_microbatches(args.consumed_train_samples)
         args.curr_iteration = iteration

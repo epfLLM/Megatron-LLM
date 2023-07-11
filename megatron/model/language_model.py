@@ -387,6 +387,13 @@ class TransformerLanguageModel(MegatronModule):
                                        self.num_tokentypes)
             self._embedding_key = 'embedding'
 
+        # Classifiaction head.
+        self.tie_embed_logits = args.tie_embed_logits
+        if self.pre_process and not self.tie_embed_logits:
+            assert args.world_size == 1, "Untied embedding_logits only supported without parallelism"
+            self.lm_head = torch.nn.Linear(self.hidden_size, args.padded_vocab_size, bias=False)
+            self._lm_key = "lm_head"
+
         # Transformer.
         # Encoder (usually set to True, False if part of an encoder-decoder
         # architecture and in encoder-only stage).
@@ -559,6 +566,10 @@ class TransformerLanguageModel(MegatronModule):
                     if '_embeddings' in key:
                         state_dict_[key] = state_dict[key]
             self.embedding.load_state_dict(state_dict_, strict=strict)
+
+        # Classifiaction head.
+        if self.pre_process and not self.tie_embed_logits:
+            self.lm_head.load_state_dict(state_dict[self._lm_key], strict=strict)
 
         # Encoder.
         if self.add_encoder:

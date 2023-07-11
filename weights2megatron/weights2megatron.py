@@ -62,23 +62,14 @@ def falcon_to_megatron(weights: dict, size: int) -> dict:
 
 
 def llama_to_megatron(llama_config: dict, size: int):
-    # utility function
-    def transpose_first_dim(t: torch.Tensor, num_splits: int, n_hidden_per_head: int):
-        # see megatron/checkpointing.py
-        input_shape = t.size()
-        n_heads = llama_s2heads[size]
-        intermediate_shape = (num_splits, n_heads, n_hidden_per_head) + input_shape[1:]
-        # intermediate_shape = (n_heads, n_hidden_per_head, num_splits) + input_shape[1:]
-
-        t = t.view(*intermediate_shape)
-        t = t.transpose(0, 1).contiguous()
-        # t = t.transpose(1, 2).contiguous()
-        return t.view(*input_shape)
-
     def get_wqkv(llama_config, layer_prefix, n_heads=32):
         wq, wk, wv = llama_config[layer_prefix+'attention.wq.weight'], llama_config[layer_prefix+'attention.wk.weight'], llama_config[layer_prefix+'attention.wv.weight']
         n_hidden_per_head = wq.shape[-1] // n_heads
-    
+
+        dim = wq.shape[-1]
+        wq = wq.view(n_heads, n_hidden_per_head//2, 2, dim).transpose(1, 2).reshape(dim, dim)
+        wk = wk.view(n_heads, n_hidden_per_head//2, 2, dim).transpose(1, 2).reshape(dim, dim)
+
         wq_convert = torch.split(wq, n_hidden_per_head, dim=0)
         wk_convert = torch.split(wk, n_hidden_per_head, dim=0)
         wv_convert = torch.split(wv, n_hidden_per_head, dim=0)
@@ -88,7 +79,6 @@ def llama_to_megatron(llama_config: dict, size: int):
         for i in range(n_heads):
             w_qkv.extend([wq_convert[i], wk_convert[i], wv_convert[i]])
         out = torch.concat(w_qkv, dim=0)
-        # out = transpose_first_dim(out, 3, n_hidden_per_head)
         return out
 
     # dictionary
@@ -99,7 +89,7 @@ def llama_to_megatron(llama_config: dict, size: int):
         'attention.dense': ['attention.wo'],
         'post_attention_layernorm': ['ffn_norm'],
         'input_layernorm': ['attention_norm'],
-        'mlp.dense_h_to_4h': ['feed_forward.w1', 'feed_forward.w3'],
+        'mlp.dense_h_to_4h': ['feed_forward.w3', 'feed_forward.w1'],  # gate weights come second for us
         'mlp.dense_4h_to_h': ['feed_forward.w2'],
     }
 
@@ -109,12 +99,14 @@ def llama_to_megatron(llama_config: dict, size: int):
             'language_model': {
                 'embedding': {},
                 'transformer': {},
+                'lm_head': {}
                 },
             }
     }
     n_layers = scale2layer[f"{size}B"]
     megatron_dict['model']['language_model']['embedding']['word_embeddings.weight'] = llama_config['tok_embeddings.weight']
     megatron_dict['model']['language_model']['transformer']['final_layernorm.weight'] = llama_config['norm.weight']
+    megatron_dict['model']['language_model']['lm_head']['weight'] = llama_config['output.weight']
     for layer_idx in trange(n_layers):
         layer_prefix = f'layers.{layer_idx}.'
         for megatron_param, llama_param_list in megatron2llama.items():
@@ -177,6 +169,9 @@ def main(model: str = "falcon", size: int = 7, out: Optional[Path] = None,
                 "make_vocab_size_divisible_by": 128,
                 "glu_activation": "swiglu",
                 "padded_vocab_size": 32000,
+                "layernorm_epsilon": 1e-6,
+                "use_post_ln": True,
+                "tie_embed_logits": False,
                 "tokenizer_type": "SentencePieceTokenizer"}
     args.update({
         "tensor_model_parallel_size": 1,

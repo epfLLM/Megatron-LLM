@@ -51,8 +51,10 @@ class GPTModel(MegatronModule):
                  pre_process=True,
                  post_process=True,
                  model_type=None):
-        super(GPTModel, self).__init__()
+
         args = get_args()
+        super(GPTModel, self).__init__(share_word_embeddings=args.tie_embed_logits)
+        self.tie_embed_logits = args.tie_embed_logits
 
         self.parallel_output = parallel_output
         self.pre_process = pre_process
@@ -72,7 +74,8 @@ class GPTModel(MegatronModule):
             args=args,
             model_type=model_type)
 
-        self.initialize_word_embeddings(init_method_normal, args)
+        if self.tie_embed_logits:
+            self.initialize_word_embeddings(init_method_normal, args)
 
     def set_input_tensor(self, input_tensor):
         """See megatron.model.transformer.set_input_tensor()"""
@@ -102,7 +105,7 @@ class GPTModel(MegatronModule):
             = self.language_model.state_dict_for_save_checkpoint(
                 prefix=prefix, keep_vars=keep_vars)
         # Save word_embeddings.
-        if self.post_process and not self.pre_process:
+        if self.post_process and not self.pre_process and self.tie_embed_logits:
             state_dict_[self._word_embeddings_for_head_key] \
                 = self.word_embeddings.state_dict(prefix=prefix,
                                                   keep_vars=keep_vars)
@@ -112,7 +115,7 @@ class GPTModel(MegatronModule):
         """Customized load."""
 
         # Load word_embeddings.
-        if self.post_process and not self.pre_process:
+        if self.post_process and not self.pre_process and self.tie_embed_logits:
             self.word_embeddings.load_state_dict(
                 state_dict[self._word_embeddings_for_head_key], strict=strict)
         if self._language_model_key in state_dict:

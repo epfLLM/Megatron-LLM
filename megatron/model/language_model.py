@@ -389,7 +389,7 @@ class TransformerLanguageModel(MegatronModule):
 
         # Classifiaction head.
         self.tie_embed_logits = args.tie_embed_logits
-        if self.pre_process and not self.tie_embed_logits:
+        if self.post_process and not self.tie_embed_logits:
             assert args.tensor_model_parallel_size == 1, \
                     "Untied embedding_logits only supported without tp=1"
             self.lm_head = torch.nn.Linear(self.hidden_size, args.padded_vocab_size, bias=False)
@@ -546,6 +546,8 @@ class TransformerLanguageModel(MegatronModule):
                 state_dict_[self._pooler_key] \
                     = self.pooler.state_dict_for_save_checkpoint(prefix=prefix,
                                                                  keep_vars=keep_vars)
+            if not self.tie_embed_logits:
+                state_dict_[self._lm_key] = self.lm_head.state_dict()
         if self.add_decoder:
             state_dict_[self._decoder_key] \
                 = self.decoder.state_dict_for_save_checkpoint(prefix=prefix,
@@ -569,7 +571,7 @@ class TransformerLanguageModel(MegatronModule):
             self.embedding.load_state_dict(state_dict_, strict=strict)
 
         # Classifiaction head.
-        if self.pre_process and not self.tie_embed_logits:
+        if self.post_process and not self.tie_embed_logits:
             self.lm_head.load_state_dict(state_dict[self._lm_key], strict=strict)
 
         # Encoder.

@@ -69,7 +69,7 @@ Also important for llama: make sure to add the `--no_new_tokens` flag during tok
 
 In order to use model parallelism you need to split the previously converted weights into multiple files.
 To do this, use `tools/checkpoint_util.py`.
-See for instance `examples/parallelize_falcon.sh`.
+See for instance `examples/parallelize.sh`.
 Once the weights are splitted, make sure to use the new checkpoint directory (set in the `--save_dir` argument) and the same tensor/model paralellism levels when running the next step.
 
 **Note**: If you are using a docker image to run this step and get an error similar to `17300 Bus error (core dumped)` during this step, try increasing the shared memory size of the container (set to `--shm-size=128gb` in my experiments for falcon 40B).

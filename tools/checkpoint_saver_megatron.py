@@ -107,7 +107,8 @@ def save_checkpoint(queue, args):
                 '--save_interval', '1',
                 '--hidden_dropout', str(md.hidden_dropout),
                 '--position_embedding_type', str(md.position_embedding_type),
-                '--save', args.save_dir
+                '--save', args.save_dir,
+                '--ffn_hidden_size', str(md.ffn_hidden_size)
                 ]
     if md.use_multiquery_attn:
         sys.argv += ["--use_multiquery_attn"]
@@ -148,6 +149,9 @@ def save_checkpoint(queue, args):
         margs.model_type = ModelType.encoder_or_decoder
     elif md.model_type == 'falcon':
         from finetune_falcon import _model_provider as model_provider
+        margs.model_type = ModelType.encoder_or_decoder
+    elif md.model_type == 'llama':
+        from finetune_llama import _model_provider as model_provider
         margs.model_type = ModelType.encoder_or_decoder
     else:
         raise Exception(f'unrecognized model type: {args.model_type}')
@@ -228,10 +232,12 @@ def save_checkpoint(queue, args):
 
             # duplicated tensors
             input_layernorm_weight = msg.pop("input layernorm weight")
-            input_layernorm_bias = msg.pop("input layernorm bias")
+            if not md.use_rms_norm:
+                input_layernorm_bias = msg.pop("input layernorm bias")
             if not md.parallel_attn:
                 post_layernorm_weight = msg.pop("post layernorm weight")
-                post_layernorm_bias = msg.pop("post layernorm bias")
+                if not md.use_rms_norm:
+                    post_layernorm_bias = msg.pop("post layernorm bias")
             if md.use_bias:
                 dense_bias = msg.pop("dense bias")
                 mlp_l1_bias = msg.pop("mlp l1 bias")
@@ -250,7 +256,8 @@ def save_checkpoint(queue, args):
             for tp_rank in range(args.target_tensor_parallel_size):
                 l = models[tp_rank].language_model.encoder.layers[layer]
                 l.input_layernorm.weight.data.copy_(input_layernorm_weight)
-                l.input_layernorm.bias.data.copy_(input_layernorm_bias)
+                if not md.use_rms_norm:
+                    l.input_layernorm.bias.data.copy_(input_layernorm_bias)
                 l.self_attention.query_key_value.weight.data.copy_(qkv_weight[tp_rank])
                 l.self_attention.dense.weight.data.copy_(dense_weight[tp_rank])
                 if md.use_bias:
@@ -258,7 +265,8 @@ def save_checkpoint(queue, args):
                     l.self_attention.dense.bias.data.copy_(dense_bias)
                 if not md.parallel_attn:
                     l.post_attention_layernorm.weight.data.copy_(post_layernorm_weight)
-                    l.post_attention_layernorm.bias.data.copy_(post_layernorm_bias)
+                    if not md.use_rms_norm:
+                        l.post_attention_layernorm.bias.data.copy_(post_layernorm_bias)
                 l.mlp.dense_h_to_4h.weight.data.copy_(mlp_l0_weight[tp_rank])
                 l.mlp.dense_4h_to_h.weight.data.copy_(mlp_l1_weight[tp_rank])
                 if md.use_bias:
@@ -270,15 +278,18 @@ def save_checkpoint(queue, args):
         if post_process:
             msg = queue_get("final layernorm")
             final_layernorm_weight = msg.pop("weight")
-            final_layernorm_bias = msg.pop("bias")
+            if not md.use_rms_norm:
+                final_layernorm_bias = msg.pop("bias")
             for tp_rank in range(args.target_tensor_parallel_size):
                 models[tp_rank].language_model.encoder.final_layernorm.weight.data.copy_(final_layernorm_weight)
-                models[tp_rank].language_model.encoder.final_layernorm.bias.data.copy_(final_layernorm_bias)
+                if not md.use_rms_norm:
+                    models[tp_rank].language_model.encoder.final_layernorm.bias.data.copy_(final_layernorm_bias)
                 if pp_rank != 0:
                     # Copy word embeddings to final pipeline rank
                     models[tp_rank].word_embeddings.weight.data.copy_(out_word_embed[tp_rank])
             del final_layernorm_weight
-            del final_layernorm_bias
+            if not md.use_rms_norm:
+                del final_layernorm_bias
             check_message(msg)
 
             msg = queue_get()

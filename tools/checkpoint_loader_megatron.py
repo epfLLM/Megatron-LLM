@@ -90,6 +90,9 @@ def _load_checkpoint(queue, args):
     elif args.model_type == "falcon":
         from finetune_falcon import _model_provider as model_provider
         margs.model_type = ModelType.encoder_or_decoder
+    elif args.model_type == "llama":
+        from finetune_llama import _model_provider as model_provider
+        margs.model_type = ModelType.encoder_or_decoder
     elif args.model_type == 'BERT':
         from pretrain_bert import model_provider
         margs.model_type = ModelType.encoder_or_decoder
@@ -176,6 +179,8 @@ def _load_checkpoint(queue, args):
     md.use_flash_attn = margs.use_flash_attn
     md.hidden_dropout = margs.hidden_dropout
     md.use_bias = margs.use_bias
+    md.use_rms_norm = margs.use_rms_norm
+    md.ffn_hidden_size = margs.ffn_hidden_size
     if margs.position_embedding_type == PositionEmbeddingType.absolute:
         md.position_embedding_type = "absolute"
     elif margs.position_embedding_type == PositionEmbeddingType.rotary:
@@ -220,10 +225,12 @@ def _load_checkpoint(queue, args):
             # Get non-parallel tensors from tp_rank 0
             layer = models[0].language_model.encoder.layers[layer_num]
             message["input layernorm weight"] = layer.input_layernorm.weight.data
-            message["input layernorm bias"] = layer.input_layernorm.bias.data
+            if not margs.use_rms_norm:
+                message["input layernorm bias"] = layer.input_layernorm.bias.data
             if not margs.parallel_attn:
                 message["post layernorm weight"] = layer.post_attention_layernorm.weight.data
-                message["post layernorm bias"] = layer.post_attention_layernorm.bias.data
+                if not margs.use_rms_norm:
+                    message["post layernorm bias"] = layer.post_attention_layernorm.bias.data
             if margs.use_bias:
                 message["dense bias"] = layer.self_attention.dense.bias.data
                 message["mlp l1 bias"] = layer.mlp.dense_4h_to_h.bias.data
@@ -262,9 +269,10 @@ def _load_checkpoint(queue, args):
 
     # Send final layernorm from tp_rank 0
     message = {
-        "weight": models[0].language_model.encoder.final_layernorm.weight.data,
-        "bias": models[0].language_model.encoder.final_layernorm.bias.data
+        "weight": models[0].language_model.encoder.final_layernorm.weight.data
     }
+    if not margs.use_rms_norm:
+        message["bias"] = models[0].language_model.encoder.final_layernorm.bias.data
     queue_put("final layernorm", message)
 
     # Send BERT lm head and binary head if it exists

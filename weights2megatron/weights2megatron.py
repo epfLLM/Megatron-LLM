@@ -170,7 +170,6 @@ def main(model_name: str = "falcon", size: int = 7, out: Optional[Path] = None,
                 "glu_activation": "swiglu",
                 "padded_vocab_size": 32000,
                 "layernorm_epsilon": 1e-6,
-                "use_post_ln": True,
                 "use_rms_norm": True,
                 "tie_embed_logits": False,
                 "tokenizer_type": "SentencePieceTokenizer"}

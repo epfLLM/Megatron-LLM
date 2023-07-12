@@ -43,7 +43,6 @@ def _model_provider(pre_process: bool,
         parallel_output,
         pre_process,
         post_process,
-        args,
         model_type_llama
     )
     return model

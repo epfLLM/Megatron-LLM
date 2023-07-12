@@ -23,7 +23,7 @@ elif [[ $MODEL = llama ]]; then
 	CACHE=/pure-mlo-scratch/llama/converted_HF_${SIZE}B/
 	TOKENIZER=SentencePieceTokenizer
 	EXTRA_ARGS="--vocab_file=/pure-mlo-scratch/llama/tokenizer.model --no_new_tokens --use_rms_norm
-       	            --glu_activation swiglu --layernorm_epsilon 1e-6 --use_post_ln --no_tie_embed_logits"
+       	            --glu_activation swiglu --layernorm_epsilon 1e-6 --no_tie_embed_logits"
 else
 	echo "Model should be either llama or falcon, not $MODEL"
 	exit 1

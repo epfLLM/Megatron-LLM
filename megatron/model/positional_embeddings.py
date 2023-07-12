@@ -33,4 +33,4 @@ def apply_rotary_emb(
     sin = sin[:, None, None, :]
     xq_out = (xq*cos) + (rotate_half(xq)*sin)
     xk_out = (xk*cos) + (rotate_half(xk)*sin)
-    return xq.type_as(xq), xk.type_as(xk)
+    return xq_out.type_as(xq), xk_out.type_as(xk)

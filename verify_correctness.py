@@ -7,9 +7,7 @@ from megatron.model.enums import ModelType
 from megatron.initialize import initialize_megatron
 from megatron.training import _setup_model_and_optimizer, build_train_valid_test_data_iterators
 
-from finetune_falcon import add_args, _get_batch, loss_func, _train_valid_test_datasets_provider
-from finetune_falcon import _model_provider as falcon_provider
-from finetune_llama import _model_provider as llama_provider
+from finetune import model_provider, extra_args, get_batch, loss_func, train_valid_test_datasets_provider
 
 
 def hf_provider():
@@ -52,7 +50,7 @@ def huggingface_forward(model, batch):
 
 
 def verify_step(forward1, model1, forward2, model2, iterator):
-    batch = _get_batch(iterator)
+    batch = get_batch(iterator)
     logits1, loss1 = forward1(model1, batch)
     logits2, loss2 = forward2(model2, batch)
     assert logits1.size() == logits2.size(), \
@@ -117,13 +115,12 @@ def verify(args, train_valid_test_dataset_provider,
                     forward_baseline_func, baseline_model, train_data_iterator)
 
 
-def extra_args(parser):
-    parser = add_args(parser)
+def extra_extra_args(parser):
+    parser = extra_args(parser)
     group = parser.add_argument_group(title="huggingface")
     group.add_argument("--huggingface_cache", default=None)
     group.add_argument("--huggingface_device", default="cuda:0")
     group.add_argument("--model_size", type=int, default=7)
-    group.add_argument("--model_name", choices={"falcon", "llama"}, default="llama")
     group.add_argument("--hf_weights", help="Path to llama weights")
     return parser
 
@@ -133,12 +130,11 @@ if __name__ == "__main__":
     print("Starting megatron vs huggingface verification")
     defaults = {"micro_batch_size": 1, "use_checkpoint_args": True, "train_iters": 10,
                 "lr": 1.0}
-    initialize_megatron(extra_args, args_defaults=defaults)
+    initialize_megatron(extra_extra_args, args_defaults=defaults)
     args = get_args()
 
     # VERIFICATION
-    model_provider = falcon_provider if args.model_name == "falcon" else llama_provider
-    verify(args, _train_valid_test_datasets_provider,
+    verify(args, train_valid_test_datasets_provider,
            model_provider, megatron_forward,
            hf_provider, huggingface_forward,
            ModelType.encoder_or_decoder,)

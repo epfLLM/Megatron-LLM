@@ -29,7 +29,7 @@ To change the cache use:
 python weights2megatron.py --size=40 --out=/path/to/output/directory/ --cache-dir=/path/to/huggingface/cache/directory/
 ```
 
-See also `examples/fetch_falcon.sh`.
+See also `examples/weights2megatron.sh`.
 
 Llama weights are not so easily available, but the MLO lab has access to them so we are ok.
 In this case you also need to specify the directory specified as `--cache-dir` will be used to fetch the llama weights, for instance run:
@@ -39,32 +39,26 @@ In this case you also need to specify the directory specified as `--cache-dir` w
 **Warning**: The current code does not support model-parallelism, this is still work in progress.
 
 To verify that the current megatron code is correct, use the file `verify_correctness.py`.
-See for instance `examples/verify_llama.sh`.
+See for instance `examples/verify.sh`.
 Make sure to set the `--model_size=7 or `40` (depending on whether you test the 7B or 40B) and to use the /path/to/output/directory/ selected in the previous step as the `--load` argument.
 Example outputs at this stage are:
 ```
-...
-Iteration 0...
-Max absoulute error in the logits: 0.029 Abs loss error: 0.002
-Iteration 1...
-Max absoulute error in the logits: 0.037 Abs loss error: 0.002
+Iteration 0...                                                                
+Max absoulute error in the logits: 0.000143            
+Abs loss error: 0.001175 Our loss: 2.021, theirs: 2.020
+Iteration 1...                                                                
+Max absoulute error in the logits: 0.000139
+Abs loss error: 0.000886 Our loss: 1.813, theirs: 1.814
 Iteration 2...
-Max absoulute error in the logits: 0.067 Abs loss error: 0.001
+Max absoulute error in the logits: 0.000239
+Abs loss error: 0.000741 Our loss: 1.808, theirs: 1.809
 Iteration 3...
-Max absoulute error in the logits: 0.051 Abs loss error: 0.001
-...
-
-Iteration 0...
-Max absoulute error in the logits: 0.055
-Abs loss error: 0.001 Our loss: 1.512, theirs: 1.512
-Iteration 1...
-Max absoulute error in the logits: 0.113
-Abs loss error: 0.001 Our loss: 1.646, theirs: 1.647
-Iteration 2...
-Max absoulute error in the logits: 0.024
-Abs loss error: 0.001 Our loss: 1.643, theirs: 1.642
+Max absoulute error in the logits: 0.000146
+Abs loss error: 0.000657 Our loss: 1.756, theirs: 1.756
 ...
 ```
+
+See also: `examples/verify.sh` script.
 
 Also, make sure to remove the `--bfp16` flag to use the 32-bit model and get higher precision outputs.
 

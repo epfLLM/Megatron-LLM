@@ -80,5 +80,4 @@ def merge_llama(size: int, root_dir: Path):
                     merged_ckpt[parameter_name][:, size * i : size * (i + 1)] = parameter
                     del parameter
         del llama_config
-    print(merged_ckpt.keys())
     return merged_ckpt

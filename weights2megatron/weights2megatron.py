@@ -13,7 +13,7 @@ from merge_llama import merge_llama
 
 llama_s2layer = {7: 32, 13: 40, 30: 60, 65: 80}
 llama_s2heads = {7: 32, 13: 40, 30: 52, 65: 64}
-llama_s2dense = {7: 11008}
+llama_s2dense = {7: 11008, 13: 13824, 30: 17920, 65: 22016}  # should be (2/3)*4*d, but it isn't exaclty that
 llama_s2hidden = {7: 4096, 13: 5120, 32: 6656, 65: 8192}
 
 
@@ -118,7 +118,7 @@ def llama_to_megatron(llama_config: dict, size: int):
                 megatron_dict['model']['language_model']['transformer'][layer_prefix+megatron_param+'.weight'] = torch.concat([llama_config[layer_prefix+w+'.weight'] for w in llama_param_list], dim=0)
     return megatron_dict
 
-def main(model: str = "falcon", size: int = 7, out: Optional[Path] = None,
+def main(model_name: str = "falcon", size: int = 7, out: Optional[Path] = None,
          cache_dir: Optional[Path] = None, megatron_path: Optional[Path] = None):
     if out is None:
         out = Path(f"falcon{size}b_megatron.pt").absolute()
@@ -130,7 +130,7 @@ def main(model: str = "falcon", size: int = 7, out: Optional[Path] = None,
     from megatron.model.enums import PositionEmbeddingType
 
     # get weights from or specified directory
-    if model == "falcon":
+    if model_name == "falcon":
         print("Fetching weights from huggingface")
         model = AutoModelForCausalLM.from_pretrained(f"tiiuae/falcon-{size}b",
                                                      trust_remote_code=True,
@@ -142,7 +142,7 @@ def main(model: str = "falcon", size: int = 7, out: Optional[Path] = None,
 
 
     # convert state dict to be megatron-compatible
-    if model == "falcon":
+    if model_name == "falcon":
         megatron_weights = falcon_to_megatron(hf_weights, size)
     else:
         megatron_weights = llama_to_megatron(hf_weights, size)
@@ -150,7 +150,7 @@ def main(model: str = "falcon", size: int = 7, out: Optional[Path] = None,
 
     # set args
     dtype = megatron_weights["embedding"]["word_embeddings.weight"].dtype
-    if model == "falcon":
+    if model_name == "falcon":
         if size == 7:
             args = {"num_layers": 32, "hidden_size": 4544,
                     "num_attention_heads": 71, "num_attention_heads_kv": 1}

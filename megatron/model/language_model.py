@@ -390,7 +390,8 @@ class TransformerLanguageModel(MegatronModule):
         # Classifiaction head.
         self.tie_embed_logits = args.tie_embed_logits
         if self.pre_process and not self.tie_embed_logits:
-            assert args.world_size == 1, "Untied embedding_logits only supported without parallelism"
+            assert args.tensor_model_parallel_size == 1, \
+                    "Untied embedding_logits only supported without tp=1"
             self.lm_head = torch.nn.Linear(self.hidden_size, args.padded_vocab_size, bias=False)
             self._lm_key = "lm_head"
 

@@ -545,6 +545,8 @@ def load_args_from_checkpoint(args, load_arg='load'):
     _set_arg('use_multiquery_attn', force=True)
     _set_arg('use_rms_norm', force=True)
     _set_arg('ffn_hidden_size', force=True)
+    _set_arg('glu_activation')
+    _set_arg('tie_embed_logits', force=True)
     # bias_droput_fusion=False, bias_gelu_fusion=False, hidden_dropout=0.0, hidden_size=4544, iteration=1, max_position_embeddings=2048, num_attention_heads=71, num_attention_heads_kv=1, num_layers=32, parallel_attn=True, params_dtype=torch.float32, pipeline_model_parallel_size=1, position_embedding_type='rotary', seq_length=2048, tensor_model_parallel_size=1, tokenizer_type='FalconTokenizer', use_flash_attn=True, use_multiquery_attn=True
     if checkpoint_version < 3.0:
         _set_arg('tensor_model_parallel_size',

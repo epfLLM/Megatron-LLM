@@ -118,6 +118,12 @@ def save_checkpoint(queue, args):
         sys.argv += ["--parallel_attn"]
     if md.use_flash_attn:
         sys.argv += ["--use_flash_attn"]
+    if md.glu_activation is not None:
+        sys.argv += ["--glu_activation", str(md.glu_activation)]
+    if md.use_rms_norm:
+        sys.argv += ["--use_rms_norm"]
+    if not md.tie_embed_logits:
+        sys.argv += ["--no_tie_embed_logits"]
 
 
     if md.make_vocab_size_divisible_by is not None:

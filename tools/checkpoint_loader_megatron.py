@@ -181,6 +181,8 @@ def _load_checkpoint(queue, args):
     md.use_bias = margs.use_bias
     md.use_rms_norm = margs.use_rms_norm
     md.ffn_hidden_size = margs.ffn_hidden_size
+    md.glu_activation = margs.glu_activation
+    md.tie_embed_logits = margs.tie_embed_logits
     if margs.position_embedding_type == PositionEmbeddingType.absolute:
         md.position_embedding_type = "absolute"
     elif margs.position_embedding_type == PositionEmbeddingType.rotary:

@@ -153,11 +153,9 @@ def save_checkpoint(queue, args):
     elif md.model_type == 'BERT':
         from pretrain_bert import model_provider
         margs.model_type = ModelType.encoder_or_decoder
-    elif md.model_type == 'falcon':
-        from finetune_falcon import _model_provider as model_provider
-        margs.model_type = ModelType.encoder_or_decoder
-    elif md.model_type == 'llama':
-        from finetune_llama import _model_provider as model_provider
+    elif md.model_type in {'falcon', 'llama'}:
+        from finetune import model_provider
+        margs.model_name = args.model_type
         margs.model_type = ModelType.encoder_or_decoder
     else:
         raise Exception(f'unrecognized model type: {args.model_type}')
@@ -184,6 +182,10 @@ def save_checkpoint(queue, args):
     orig_word_embed = embeddings_msg.pop("word embeddings")
     check_message(embeddings_msg)
 
+    # Get lm_head, if available
+    if not md.tie_embed_logits:
+        lm_head = queue_get("lm_head").pop("lm_head")
+
     # Deal with padding
     if md.true_vocab_size is not None:
         # figure out what our padded vocab size is
@@ -205,32 +207,53 @@ def save_checkpoint(queue, args):
         # Same size!
         else:
             full_word_embed = orig_word_embed
+        if not md.tie_embed_logits:
+            raise NotImplementedError("true_vocab_size not implemented when not tie_embed_logits")
     else:
         print("Original vocab size not specified, leaving embedding table as-is. "
               "If you've changed the tensor parallel size this could cause problems.")
         margs.padded_vocab_size = orig_word_embed.shape[0]
         full_word_embed = orig_word_embed
+        if not md.tie_embed_logits:
+            full_lm_head = lm_head
 
     # Split into new tensor model parallel sizes
     out_word_embed = torch.chunk(full_word_embed, args.target_tensor_parallel_size, dim=0)
+    if not md.tie_embed_logits:
+        out_lm_head = torch.chunk(full_lm_head, args.target_tensor_parallel_size, dim=0)
 
     # Make models for first pipeline stage and fill in embeddings
     mpu.set_pipeline_model_parallel_rank(0)
     post_process = args.target_pipeline_parallel_size == 1
     models = _get_models(args.target_tensor_parallel_size, md.params_dtype, True, post_process)
+    models_init = models
     for tp_rank, model in enumerate(models):
         print(f"word embeddings shape {model.language_model.embedding.word_embeddings.weight.shape}")
         model.language_model.embedding.word_embeddings.weight.data.copy_(out_word_embed[tp_rank])
         if pos_embed is not None:
             model.language_model.embedding.position_embeddings.weight.data.copy_(pos_embed)
 
+    # Make models for last pipeline stage and fill in lm_head, if necessary
+    if not md.tie_embed_logits:
+        mpu.set_pipeline_model_parallel_rank(args.target_pipeline_parallel_size - 1)
+        pre_process = args.target_pipeline_parallel_size == 1
+        models = _get_models(args.target_tensor_parallel_size, md.params_dtype, pre_process, True)
+        models_final = models
+        for tp_rank, model in enumerate(models):
+            print(f"lm_head shape {model.language_model.lm_head.weight.shape}")
+            model.language_model.lm_head.weight.data.copy_(out_lm_head[tp_rank])
+
     # Transformer layers
     total_layer_num = 0
     for pp_rank in range(args.target_pipeline_parallel_size):
         # For later pipeline parallel ranks, make the new models
-        if pp_rank > 0:
-            mpu.set_pipeline_model_parallel_rank(pp_rank)
-            post_process = pp_rank == args.target_pipeline_parallel_size - 1
+        mpu.set_pipeline_model_parallel_rank(pp_rank)
+        post_process = pp_rank == args.target_pipeline_parallel_size - 1
+        if pp_rank == 0:
+            models = models_init
+        elif pp_rank == args.target_pipeline_parallel_size - 1 and md.tie_embed_logits:
+            models = models_final
+        else:
             models = _get_models(args.target_tensor_parallel_size, md.params_dtype, False, post_process)
 
         for layer in range(len(models[0].language_model.encoder.layers)):
@@ -290,7 +313,7 @@ def save_checkpoint(queue, args):
                 models[tp_rank].language_model.encoder.final_layernorm.weight.data.copy_(final_layernorm_weight)
                 if not md.use_rms_norm:
                     models[tp_rank].language_model.encoder.final_layernorm.bias.data.copy_(final_layernorm_bias)
-                if pp_rank != 0:
+                if pp_rank != 0 and md.tie_embed_logits:
                     # Copy word embeddings to final pipeline rank
                     models[tp_rank].word_embeddings.weight.data.copy_(out_word_embed[tp_rank])
             del final_layernorm_weight

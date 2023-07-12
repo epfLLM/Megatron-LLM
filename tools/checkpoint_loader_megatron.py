@@ -87,11 +87,9 @@ def _load_checkpoint(queue, args):
     if args.model_type == 'GPT':
         from pretrain_gpt import model_provider
         margs.model_type = ModelType.encoder_or_decoder
-    elif args.model_type == "falcon":
-        from finetune_falcon import _model_provider as model_provider
-        margs.model_type = ModelType.encoder_or_decoder
-    elif args.model_type == "llama":
-        from finetune_llama import _model_provider as model_provider
+    elif args.model_type in {"falcon", "llama"}:
+        from finetune import model_provider
+        margs.model_name = args.model_type
         margs.model_type = ModelType.encoder_or_decoder
     elif args.model_type == 'BERT':
         from pretrain_bert import model_provider
@@ -214,6 +212,11 @@ def _load_checkpoint(queue, args):
         message["position embeddings"] = models[0].language_model.embedding.position_embeddings.weight.data
 
     queue_put("embeddings", message)
+
+    # Send lm_head, if possible
+    if not margs.tie_embed_logits:
+        queue_put("lm_head", {"lm_head": torch.cat([models[tp_rank].language_model.lm_head.weight.data
+                                                    for tp_rank in range(tp_size)])})
 
     total_layer_num = 0
     for pp_rank in range(pp_size):

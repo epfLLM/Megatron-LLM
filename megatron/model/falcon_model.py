@@ -1,5 +1,6 @@
 """Falcon Model."""
 
+import warnings
 
 from megatron import get_args
 from .enums import PositionEmbeddingType
@@ -25,10 +26,15 @@ class FalconModel(GPTModel):
                 "FalconModel requires gelu activation (set glu_activation=None)"
         assert not args.use_bias, "Falcon does not use bias"
         assert args.parallel_attn, "Falcon does uses parallel_attn"
-        assert args.use_flash_attn, "Falcon attention is only implemented with flash attn"
-        assert not args.bias_gelu_fusion, "Falcon does not use bias_gelu_fusion"
-        assert not args.bias_dropout_fusion, "Falcon does not use bias_dropout_fusion"
-        assert args.hidden_dropout == 0.0, "Falcon does not use dropout"
+
+        if not args.use_flash_attn:
+            warnings.warn("Falcon should use flash attn")
+        if args.bias_gelu_fusion:
+            warnings.warn("Falcon should not use bias_gelu_fusion")
+        if args.bias_dropout_fusion:
+            warnings.warn("Falcon should not use bias_dropout_fusion")
+        if args.hidden_dropout > 0.0:
+            warnings.warn("Falcon should not use dropout")
         super().__init__(num_tokentypes=num_tokentypes, parallel_output=parallel_output,
                          pre_process=pre_process, post_process=post_process,
                          model_type=model_type)

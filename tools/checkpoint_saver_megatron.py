@@ -237,7 +237,10 @@ def save_checkpoint(queue, args):
     if not md.tie_embed_logits:
         mpu.set_pipeline_model_parallel_rank(args.target_pipeline_parallel_size - 1)
         pre_process = args.target_pipeline_parallel_size == 1
-        models = _get_models(args.target_tensor_parallel_size, md.params_dtype, pre_process, True)
+        if pre_process:
+            models = models_init
+        else:
+            models = _get_models(args.target_tensor_parallel_size, md.params_dtype, pre_process, True)
         models_final = models
         for tp_rank, model in enumerate(models):
             print(f"lm_head shape {model.language_model.lm_head.weight.shape}")
@@ -251,7 +254,7 @@ def save_checkpoint(queue, args):
         post_process = pp_rank == args.target_pipeline_parallel_size - 1
         if pp_rank == 0:
             models = models_init
-        elif pp_rank == args.target_pipeline_parallel_size - 1 and md.tie_embed_logits:
+        elif pp_rank == args.target_pipeline_parallel_size - 1 and not md.tie_embed_logits:
             models = models_final
         else:
             models = _get_models(args.target_tensor_parallel_size, md.params_dtype, False, post_process)

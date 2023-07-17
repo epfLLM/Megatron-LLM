@@ -125,7 +125,6 @@ def save_checkpoint(queue, args):
     if not md.tie_embed_logits:
         sys.argv += ["--no_tie_embed_logits"]
 
-
     if md.make_vocab_size_divisible_by is not None:
         sys.argv.extend(['--make_vocab_size_divisible_by', str(md.make_vocab_size_divisible_by)])
     if md.params_dtype == torch.float16:
@@ -195,6 +194,8 @@ def save_checkpoint(queue, args):
         # Cut out extra padding we don't need
         if orig_vocab_size > margs.padded_vocab_size:
             full_word_embed = orig_word_embed[0:margs.padded_vocab_size,:]
+            if not md.tie_embed_logits:
+                full_lm_head = lm_head[:margs.padded_vocab_size, :]
 
         # Expanding embedding to larger size by replicating final entry
         elif orig_vocab_size < margs.padded_vocab_size:
@@ -204,11 +205,16 @@ def save_checkpoint(queue, args):
                 orig_word_embed,
                 orig_word_embed[-1].unsqueeze(0).expand(padding_size, -1)))
 
+            if not md.tie_embed_logits:
+                full_lm_head = torch.cat([
+                    lm_head, lm_head[-1].unsqueeze(0).expand(padding_size, -1)
+                ])
+
         # Same size!
         else:
             full_word_embed = orig_word_embed
-        if not md.tie_embed_logits:
-            raise NotImplementedError("true_vocab_size not implemented when not tie_embed_logits")
+            if not md.tie_embed_logits:
+                full_lm_head = lm_head
     else:
         print("Original vocab size not specified, leaving embedding table as-is. "
               "If you've changed the tensor parallel size this could cause problems.")
@@ -243,8 +249,8 @@ def save_checkpoint(queue, args):
             models = _get_models(args.target_tensor_parallel_size, md.params_dtype, pre_process, True)
         models_final = models
         for tp_rank, model in enumerate(models):
-            print(f"lm_head shape {model.language_model.lm_head.weight.shape}")
-            model.language_model.lm_head.weight.data.copy_(out_lm_head[tp_rank])
+            print(f"lm_head shape {model.language_model.lm_head.shape}")
+            model.language_model.lm_head.data.copy_(out_lm_head[tp_rank])
 
     # Transformer layers
     total_layer_num = 0
@@ -279,7 +285,14 @@ def save_checkpoint(queue, args):
             if md.use_bias:
                 qkv_bias = torch.chunk(msg.pop("qkv bias"), args.target_tensor_parallel_size, dim=0)
             dense_weight = torch.chunk(msg.pop("dense weight"), args.target_tensor_parallel_size, dim=1)
-            mlp_l0_weight = torch.chunk(msg.pop("mlp l0 weight"), args.target_tensor_parallel_size, dim=0)
+            if md.glu_activation is None:
+                mlp_l0_weight = torch.chunk(msg.pop("mlp l0 weight"), args.target_tensor_parallel_size, dim=0)
+            else:
+                up_weight, gate_weight = torch.chunk(msg.pop("mlp l0 weight"), 2, dim=0)
+                up_weights = torch.chunk(up_weight, args.target_tensor_parallel_size, dim=0)
+                gate_weights = torch.chunk(gate_weight, args.target_tensor_parallel_size, dim=0)
+                mlp_l0_weight = [torch.cat([up_weight, gate_weight], dim=0)
+                                 for up_weight, gate_weight in zip(up_weights, gate_weights)]
             if md.use_bias:
                 mlp_l0_bias = torch.chunk(msg.pop("mlp l0 bias"), args.target_tensor_parallel_size, dim=0)
             mlp_l1_weight = torch.chunk(msg.pop("mlp l1 weight"), args.target_tensor_parallel_size, dim=1)

@@ -215,7 +215,7 @@ def _load_checkpoint(queue, args):
 
     # Send lm_head, if possible
     if not margs.tie_embed_logits:
-        queue_put("lm_head", {"lm_head": torch.cat([models[tp_rank].language_model.lm_head.weight.data
+        queue_put("lm_head", {"lm_head": torch.cat([models[tp_rank].language_model.lm_head.data
                                                     for tp_rank in range(tp_size)])})
 
     total_layer_num = 0

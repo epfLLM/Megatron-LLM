@@ -99,14 +99,14 @@ def llama_to_megatron(llama_config: dict, size: int):
             'language_model': {
                 'embedding': {},
                 'transformer': {},
-                'lm_head': {}
+                'lm_head': None
                 },
             }
     }
     n_layers = scale2layer[f"{size}B"]
     megatron_dict['model']['language_model']['embedding']['word_embeddings.weight'] = llama_config['tok_embeddings.weight']
     megatron_dict['model']['language_model']['transformer']['final_layernorm.weight'] = llama_config['norm.weight']
-    megatron_dict['model']['language_model']['lm_head']['weight'] = llama_config['output.weight']
+    megatron_dict['model']['language_model']['lm_head'] = llama_config['output.weight']
     for layer_idx in trange(n_layers):
         layer_prefix = f'layers.{layer_idx}.'
         for megatron_param, llama_param_list in megatron2llama.items():
@@ -166,7 +166,7 @@ def main(model_name: str = "falcon", size: int = 7, out: Optional[Path] = None,
                 "num_attention_heads": llama_s2heads[size],
                 "ffn_hidden_size": llama_s2dense[size],
                 "parallel_attn": False,
-                "make_vocab_size_divisible_by": 128,
+                "make_vocab_size_divisible_by": 1,
                 "glu_activation": "swiglu",
                 "padded_vocab_size": 32000,
                 "layernorm_epsilon": 1e-6,

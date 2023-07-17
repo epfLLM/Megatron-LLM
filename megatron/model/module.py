@@ -40,10 +40,10 @@ class MegatronModule(torch.nn.Module):
         if self.pre_process:
             if self.language_model.tie_embed_logits:
                 return self.language_model.embedding.word_embeddings.weight
-            return self.language_model.lm_head.weight
+            return self.language_model.lm_head
         else:
             if not self.language_model.tie_embed_logits:
-                return self.language_model.lm_head.weight
+                return self.language_model.lm_head
             if not self.share_word_embeddings:
                 raise Exception('word_embeddings_weight() called for last '
                                 'stage, but share_word_embeddings is false')

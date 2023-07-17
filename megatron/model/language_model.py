@@ -4,13 +4,16 @@
 from typing import Callable
 
 import torch
+from torch import nn
 
 import megatron
 from megatron.core import mpu, tensor_parallel
 from .module import MegatronModule
+from megatron.core.parallel_state import get_tensor_model_parallel_rank
 
 import megatron.model.transformer
 import megatron.model.utils
+from megatron.core.tensor_parallel.utils import VocabUtility
 
 from megatron.model.enums import LayerType, AttnMaskType, PositionEmbeddingType
 from megatron.model.utils import init_method_normal, scaled_init_method_normal
@@ -21,6 +24,7 @@ def parallel_lm_logits(input_,
                        parallel_output,
                        bias=None):
     """ LM logits using word embedding weights. """
+
     args = megatron.get_args()
     # Parallel logits.
     if args.async_tensor_model_parallel_allreduce or\
@@ -390,10 +394,26 @@ class TransformerLanguageModel(MegatronModule):
         # Classifiaction head.
         self.tie_embed_logits = args.tie_embed_logits
         if self.post_process and not self.tie_embed_logits:
-            assert args.tensor_model_parallel_size == 1, \
-                    "Untied embedding_logits only supported without tp=1"
-            self.lm_head = torch.nn.Linear(self.hidden_size, args.padded_vocab_size, bias=False)
+            # instantiate head
+            vocab_start_index, vocab_end_index = VocabUtility.vocab_range_from_global_vocab_size(
+                args.padded_vocab_size, get_tensor_model_parallel_rank(),
+                args.tensor_model_parallel_size
+            )
+            num_embeds = vocab_end_index - vocab_start_index
+            data = torch.empty(num_embeds, self.hidden_size, dtype=args.params_dtype,
+                               device=None if args.use_cpu_initialization else torch.cuda.current_device())
+            self.lm_head = nn.Parameter(data)
             self._lm_key = "lm_head"
+            init_method = nn.init.xavier_uniform_ if args.init_method_xavier_uniform else nn.init.xavier_normal_
+            # init weights
+            if perform_initialization:
+                if args.use_cpu_initialization:
+                    _initialize_affine_weight_cpu(self.lm_head, args.padded_vocab_size,
+                                                  num_embeds, 0, init_method,
+                                                  params_dtype=args.params_dtype)
+                else:
+                    _initialize_affine_weight_gpu(self.lm_head, init_method,
+                                                  partition_dim=0, stride=1)
 
         # Transformer.
         # Encoder (usually set to True, False if part of an encoder-decoder
@@ -547,7 +567,7 @@ class TransformerLanguageModel(MegatronModule):
                     = self.pooler.state_dict_for_save_checkpoint(prefix=prefix,
                                                                  keep_vars=keep_vars)
             if not self.tie_embed_logits:
-                state_dict_[self._lm_key] = self.lm_head.state_dict()
+                state_dict_[self._lm_key] = self.lm_head.data
         if self.add_decoder:
             state_dict_[self._decoder_key] \
                 = self.decoder.state_dict_for_save_checkpoint(prefix=prefix,
@@ -572,7 +592,7 @@ class TransformerLanguageModel(MegatronModule):
 
         # Classifiaction head.
         if self.post_process and not self.tie_embed_logits:
-            self.lm_head.load_state_dict(state_dict[self._lm_key], strict=strict)
+            self.lm_head.data.copy_(state_dict[self._lm_key])
 
         # Encoder.
         if self.add_encoder:

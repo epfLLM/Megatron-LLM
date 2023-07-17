@@ -18,6 +18,8 @@ from megatron.core.tensor_parallel.utils import VocabUtility
 from megatron.model.enums import LayerType, AttnMaskType, PositionEmbeddingType
 from megatron.model.utils import init_method_normal, scaled_init_method_normal
 
+from megatron.core.tensor_parallel.layers import _initialize_affine_weight_cpu, _initialize_affine_weight_gpu
+
 
 def parallel_lm_logits(input_,
                        word_embeddings_weight,
@@ -406,7 +408,7 @@ class TransformerLanguageModel(MegatronModule):
             self._lm_key = "lm_head"
             init_method = nn.init.xavier_uniform_ if args.init_method_xavier_uniform else nn.init.xavier_normal_
             # init weights
-            if perform_initialization:
+            if args.perform_initialization:
                 if args.use_cpu_initialization:
                     _initialize_affine_weight_cpu(self.lm_head, args.padded_vocab_size,
                                                   num_embeds, 0, init_method,

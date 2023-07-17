@@ -68,11 +68,11 @@ COMMON_ARGS="--use_flash_attn --no_bias_gelu_fusion --micro_batch_size 1
              --global_batch_size 1 --seq_length 2048 --max_position_embeddings 2048
       	     --lr 0.00015 --log_interval 1 --save_interval 500 --eval_interval 1000
        	     --eval_iters 0 --hidden_dropout 0.0 --position_embedding_type rotary
-	     --no_bias_dropout_fusion --use_checkpoint_args --train_iters 1
+	     --no_bias_dropout_fusion --use_checkpoint_args --train_iters 1000
 	     --attention_dropout 0.0"
 
 
-# print smoe args
+# print some args
 echo
 echo Settings:
 echo MODEL=$MODEL

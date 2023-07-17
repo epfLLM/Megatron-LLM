@@ -14,10 +14,19 @@ TENSOR_PARALLELISM=$3
 PIPELINE_PARALLELISM=$4
 
 
+# model-specific parameters
+if [[ $MODEL = falcon ]]; then
+	TRUE_VOCAB_SIZE=65024
+elif [[ $MODEL = llama ]]; then
+	TRUE_VOCAB_SIZE=32000
+fi
+
+
 # finally call the script
 python tools/checkpoint_util.py \
        --target_tensor_parallel_size $TENSOR_PARALLELISM \
        --target_pipeline_parallel_size $PIPELINE_PARALLELISM \
        --load_dir /pure-mlo-scratch/alhernan/megatron-data/checkpoints/${MODEL}${SIZE}b/ \
        --save_dir /pure-mlo-scratch/alhernan/megatron-data/checkpoints/${MODEL}${SIZE}b-tp$TENSOR_PARALLELISM-pp$PIPELINE_PARALLELISM/ \
-       --model_type $MODEL
+       --model_type $MODEL \
+       --true_vocab_size $TRUE_VOCAB_SIZE

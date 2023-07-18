@@ -265,7 +265,10 @@ def write_model(model_path, input_base_path, model_size,
     del model.config._name_or_path
 
     print("Saving in the Transformers format.")
-    max_num_params_per_shard = int(param_count*2 / num_output_shards) +1
+    if (param_count*2)%num_output_shards==0:
+        max_num_params_per_shard = param_count*2 // num_output_shards
+    else:
+        max_num_params_per_shard = param_count*2 // (num_output_shards-1)
     model.save_pretrained(model_path, max_shard_size=max_num_params_per_shard)
     # shutil.rmtree(tmp_model_path)
 

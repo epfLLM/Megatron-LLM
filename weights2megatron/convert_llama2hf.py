@@ -102,7 +102,8 @@ def write_json(text, path):
         json.dump(text, f)
 
 
-def write_model(model_path, input_base_path, model_size):
+def write_model(model_path, input_base_path, model_size,
+                num_output_shards=2):
     os.makedirs(model_path, exist_ok=True)
     tmp_model_path = os.path.join(model_path, "tmp")
     os.makedirs(tmp_model_path, exist_ok=True)
@@ -258,13 +259,14 @@ def write_model(model_path, input_base_path, model_size):
     del loaded
     gc.collect()
 
-    print("Loading the checkpoint in a Llama model.")
+    print("Loading the checkpoint in a Llama model...")
     model = LlamaForCausalLM.from_pretrained(tmp_model_path, torch_dtype=torch.float16, low_cpu_mem_usage=True)
     # Avoid saving this as part of the config.
     del model.config._name_or_path
 
     print("Saving in the Transformers format.")
-    model.save_pretrained(model_path)
+    max_num_params_per_shard = param_count*2 // (num_output_shards-1)
+    model.save_pretrained(model_path, max_shard_size=max_num_params_per_shard)
     # shutil.rmtree(tmp_model_path)
 
 
@@ -287,6 +289,11 @@ def main():
         choices=["7B", "13B", "30B", "65B", "tokenizer_only"],
     )
     parser.add_argument(
+        "--num_output_shards",
+        type=int,
+        default=2,
+    )
+    parser.add_argument(
         "--output_dir",
         help="Location to write HF model and tokenizer",
     )
@@ -296,6 +303,7 @@ def main():
             model_path=args.output_dir,
             input_base_path=os.path.join(args.input_dir, args.model_size),
             model_size=args.model_size,
+            num_output_shards=args.num_output_shards
         )
     spm_path = os.path.join(args.input_dir, "tokenizer.model")
     write_tokenizer(args.output_dir, spm_path)

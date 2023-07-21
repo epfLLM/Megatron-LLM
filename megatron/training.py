@@ -368,6 +368,7 @@ def _setup_model_and_optimizer(model_provider_func,
         args.iteration = load_checkpoint(model, optimizer, opt_param_scheduler)
         timers('load-checkpoint').stop(barrier=True)
         timers.log(['load-checkpoint'])
+        optimizer.reload_model_params()
     else:
         args.iteration = 0
 

@@ -239,6 +239,8 @@ def validate_args(args, defaults={}):
         assert args.encoder_seq_length is not None
         args.seq_length = args.encoder_seq_length
 
+    if not isinstance(args.position_embedding_type, PositionEmbeddingType):
+        args.position_embedding_type = PositionEmbeddingType[args.position_embedding_type]
     if args.position_embedding_type in [PositionEmbeddingType.absolute, PositionEmbeddingType.rotary]:
         assert args.max_position_embeddings is not None
         if args.seq_length is not None:

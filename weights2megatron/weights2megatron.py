@@ -48,7 +48,7 @@ def falcon_to_megatron(weights: dict, size: int) -> dict:
         # dense
         transformer[f"{prefix1}.self_attention.dense.weight"] = \
             weights[f"{prefix2}.self_attention.dense.weight"]
-        # falcon7 and falcon40 have different names in the layernorm
+        # falcon7 and falcon40 differ in the input layernorms
         if size == 7:
             transformer[f"{prefix1}.input_layernorm.weight"] = \
                 weights[f"{prefix2}.input_layernorm.weight"]
@@ -57,8 +57,12 @@ def falcon_to_megatron(weights: dict, size: int) -> dict:
         else:
             transformer[f"{prefix1}.input_layernorm.weight"] = \
                 weights[f"{prefix2}.ln_attn.weight"]
+            transformer[f"{prefix1}.mlp_layernorm.weight"] = \
+                weights[f"{prefix2}.ln_mlp.weight"]
             transformer[f"{prefix1}.input_layernorm.bias"] = \
                 weights[f"{prefix2}.ln_attn.bias"]
+            transformer[f"{prefix1}.mlp_layernorm.bias"] = \
+                weights[f"{prefix2}.ln_mlp.bias"]
     return {"embedding": embedding, "transformer": transformer}
 
 
@@ -134,12 +138,6 @@ def main(model_name: str = "falcon", size: int = 7, out: Optional[Path] = None,
     if out is None:
         out = Path(f"falcon{size}b_megatron.pt").absolute()
 
-    # imports megatron
-    sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), os.path.pardir)))
-    if megatron_path is not None:
-        sys.path.insert(0, megatron_path)
-    from megatron.model.enums import PositionEmbeddingType
-
     # get weights from or specified directory
     if model_name == "falcon":
         print("Fetching weights from huggingface")
@@ -164,7 +162,8 @@ def main(model_name: str = "falcon", size: int = 7, out: Optional[Path] = None,
     if model_name == "falcon":
         if size == 7:
             args = {"num_layers": 32, "hidden_size": 4544,
-                    "num_attention_heads": 71, "num_attention_heads_kv": 1}
+                    "num_attention_heads": 71, "num_attention_heads_kv": 1,
+                    "parallel_layernorm": True}
         else:
             args = {"num_layers": 60, "hidden_size": 8192,
                     "num_attention_heads": 128, "num_attention_heads_kv": 8}
@@ -196,10 +195,9 @@ def main(model_name: str = "falcon", size: int = 7, out: Optional[Path] = None,
         "tensor_model_parallel_size": 1,
         "pipeline_model_parallel_size": 1,
         "iteration": "release",
-        "params_dtype": dtype,
         "bias_gelu_fusion": False,
         "bias_droput_fusion": False,
-        "position_embedding_type": PositionEmbeddingType.rotary,
+        "position_embedding_type": "rotary"
     })
 
     # save converted weights in specified out

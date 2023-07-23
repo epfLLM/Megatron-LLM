@@ -620,8 +620,10 @@ class ParallelTransformerLayer(MegatronModule):
 
         # Layernorm on the input data.
         if args.use_rms_norm:
-            self.input_layernorm = RMSNorm(args.hidden_size, eps=args.layernorm_epsilon)
-            self.output_layernorm = RMSNorm(args.hidden_size, eps=args.layernorm_epsilon)
+            self.input_layernorm = RMSNorm(args.hidden_size, eps=args.layernorm_epsilon,
+                                           sequence_parallel=args.sequence_parallel)
+            self.output_layernorm = RMSNorm(args.hidden_size, eps=args.layernorm_epsilon,
+                                           sequence_parallel=args.sequence_parallel)
         else:
             self.input_layernorm = LayerNorm(args.hidden_size,
                                              eps=args.layernorm_epsilon,
@@ -663,7 +665,8 @@ class ParallelTransformerLayer(MegatronModule):
             else:
                 self.post_attention_layernorm = RMSNorm(
                     args.hidden_size,
-                    eps=args.layernorm_epsilon)
+                    eps=args.layernorm_epsilon,
+                    sequence_parallel=args.sequence_parallel)
 
         if self.layer_type == LayerType.decoder:
             self.inter_attention = ParallelAttention(
@@ -683,7 +686,8 @@ class ParallelTransformerLayer(MegatronModule):
             else:
                 self.post_inter_attention_layernorm = RMSNorm(
                     args.hidden_size,
-                    eps=args.layernorm_epsilon)
+                    eps=args.layernorm_epsilon,
+                    sequence_parallel=args.sequence_parallel)
 
         self.mlp = ParallelMLP(init_method, output_layer_init_method, args, world_size)
 
@@ -1037,7 +1041,8 @@ class ParallelTransformer(MegatronModule):
             else:
                 self.final_layernorm = RMSNorm(
                     args.hidden_size,
-                    eps=args.layernorm_epsilon)
+                    eps=args.layernorm_epsilon,
+                    sequence_parallel=args.sequence_parallel)
 
     def _get_layer(self, layer_number):
         return self.layers[layer_number]

@@ -123,10 +123,13 @@ class MixedFusedLayerNorm(torch.nn.Module):
 
 
 class RMSNorm(torch.nn.Module):
-    def __init__(self, dim: int, eps: float = 1e-6):
+    def __init__(self, dim: int, eps: float = 1e-6,
+                 sequence_parallel: bool = False):
         super().__init__()
         self.eps = eps
         self.weight = nn.Parameter(torch.ones(dim))
+
+        setattr(self.weight, 'sequence_parallel', sequence_parallel)
 
     def _norm(self, x):
         return x * torch.rsqrt(x.pow(2).mean(-1, keepdim=True) + self.eps)

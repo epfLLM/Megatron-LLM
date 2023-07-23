@@ -393,30 +393,6 @@ class TransformerLanguageModel(MegatronModule):
                                        self.num_tokentypes)
             self._embedding_key = 'embedding'
 
-        # Classifiaction head.
-        self.tie_embed_logits = args.tie_embed_logits
-        if self.post_process and not self.tie_embed_logits:
-            # instantiate head
-            vocab_start_index, vocab_end_index = VocabUtility.vocab_range_from_global_vocab_size(
-                args.padded_vocab_size, get_tensor_model_parallel_rank(),
-                args.tensor_model_parallel_size
-            )
-            num_embeds = vocab_end_index - vocab_start_index
-            data = torch.empty(num_embeds, self.hidden_size, dtype=args.params_dtype,
-                               device=None if args.use_cpu_initialization else torch.cuda.current_device())
-            self.lm_head = nn.Parameter(data)
-            self._lm_key = "lm_head"
-            init_method = nn.init.xavier_uniform_ if args.init_method_xavier_uniform else nn.init.xavier_normal_
-            # init weights
-            if args.perform_initialization:
-                if args.use_cpu_initialization:
-                    _initialize_affine_weight_cpu(self.lm_head, args.padded_vocab_size,
-                                                  num_embeds, 0, init_method,
-                                                  params_dtype=args.params_dtype)
-                else:
-                    _initialize_affine_weight_gpu(self.lm_head, init_method,
-                                                  partition_dim=0, stride=1)
-
         # Transformer.
         # Encoder (usually set to True, False if part of an encoder-decoder
         # architecture and in encoder-only stage).
@@ -455,6 +431,31 @@ class TransformerLanguageModel(MegatronModule):
             if self.add_pooler:
                 self.pooler = Pooler(self.hidden_size, self.init_method, args)
                 self._pooler_key = 'pooler'
+
+        # Classifiaction head.
+        self.tie_embed_logits = args.tie_embed_logits
+        if self.post_process and not self.tie_embed_logits:
+            # instantiate head
+            vocab_start_index, vocab_end_index = VocabUtility.vocab_range_from_global_vocab_size(
+                args.padded_vocab_size, get_tensor_model_parallel_rank(),
+                args.tensor_model_parallel_size
+            )
+            num_embeds = vocab_end_index - vocab_start_index
+            data = torch.empty(num_embeds, self.hidden_size, dtype=args.params_dtype,
+                               device=None if args.use_cpu_initialization else torch.cuda.current_device())
+            self.lm_head = nn.Parameter(data)
+            self._lm_key = "lm_head"
+            init_method = nn.init.xavier_uniform_ if args.init_method_xavier_uniform else nn.init.xavier_normal_
+            # init weights
+            if args.perform_initialization:
+                if args.use_cpu_initialization:
+                    _initialize_affine_weight_cpu(self.lm_head, args.padded_vocab_size,
+                                                  num_embeds, 0, init_method,
+                                                  params_dtype=args.params_dtype)
+                else:
+                    _initialize_affine_weight_gpu(self.lm_head, init_method,
+                                                  partition_dim=0, stride=1)
+
 
     def set_input_tensor(self, input_tensor):
         """ See megatron.model.transformer.set_input_tensor()"""

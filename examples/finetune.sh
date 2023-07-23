@@ -1,18 +1,21 @@
 #! /bin/bash
 
-# define help function
-help () {
-	echo "Usage: $0 <gpt/llama/falcon> [--size=7] [--tp=1] [--pp=4] [--gpus=4] [--micro-batch=1] [--global-batch=1] [--help]"
-}
-
 
 # default arguments
 SIZE=7
-TP=1
-PP=4
-GPUS_PER_NODE=4
+TP=8
+PP=1
+GPUS_PER_NODE=8
 MICRO_BATCH=1
-GLOBAL_BATCH=1
+GLOBAL_BATCH=12
+HELP_STR="[--size=$SIZE] [--tp=$TP] [--pp=$PP] [--gpus=$GPUS_PER_NODE] \
+[--micro-batch=$MICRO_BATCH] [--global-batch=$GLOBAL_BATCH] [--help]"
+
+
+# define help function
+help () {
+	echo "Usage: $0 <gpt/llama/llama2/falcon> $HELP_STR"
+}
 
 
 # parse arguments, three modes
@@ -44,6 +47,7 @@ done
 # set args
 N_NODES=1
 RANK=0
+LR="3e-4"
 CHECKPOINT_PATH=/pure-mlo-scratch/alhernan/megatron-data/checkpoints/${MODEL}-${SIZE}b-tp$TP-pp$PP
 TENSORBOARD_PATH=/scratch/alhernan/megatron-data/tensorboards/${MODEL}-${SIZE}b-tp$TP-pp$PP
 DISTRIBUTED_ARGS="--nproc_per_node $GPUS_PER_NODE --nnodes $N_NODES --node_rank
@@ -62,9 +66,12 @@ elif [[ $MODEL = llama ]] || [[ $MODEL = llama2 ]]; then
 	if [[ $MODEL == llama ]]; then
 		SEQ_LEN=2048
 		EXTRA_ARGS="$EXTRA_ARGS --layernorm_epsilon 1e-6"
-	else
+	else  # llama 2
 		SEQ_LEN=4096
 		EXTRA_ARGS="$EXTRA_ARGS --layernorm_epsilon 1e-5"
+		if (( $SIZE > 13 )); then  # llama 2, 34B and 70B
+			LR="1.5e-4"
+		fi
 	fi
 elif [[ $MODEL = gpt ]]; then
 	DATA_PATH=/scratch/wikitext-megatron/wikitext-train_text_document
@@ -78,12 +85,12 @@ else
 fi
 COMMON_ARGS="--use_flash_attn --no_bias_gelu_fusion
 	     --seq_length $SEQ_LEN --max_position_embeddings $SEQ_LEN
-             --log_interval 100 --save_interval 1000 --eval_interval 1000
+             --log_interval 10 --save_interval 10000 --eval_interval 10000
              --eval_iters 100 --hidden_dropout 0.0 --position_embedding_type rotary
 	     --no_bias_dropout_fusion --use_checkpoint_args --train_iters 10000
 	     --attention_dropout 0.0 --adam_beta1 0.9 --adam_beta2 0.95 --adam_eps 1e-5
-	     --lr_decay_style cosine --lr_warmup_iters 2000 --lr 1e-5 --min_lr 1e-6
-	     --weight_decay 0.1 --sequence_parallel --recompute_granularity selective"  # TODO: is lr fine?
+	     --lr_decay_style cosine --lr_warmup_iters 2000 --lr $LR --min_lr 1e-6
+	     --weight_decay 0.1 --sequence_parallel --recompute_granularity selective"
 
 # print some args
 echo

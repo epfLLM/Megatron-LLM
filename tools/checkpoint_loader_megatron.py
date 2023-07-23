@@ -87,7 +87,7 @@ def _load_checkpoint(queue, args):
     if args.model_type == 'GPT':
         from pretrain_gpt import model_provider
         margs.model_type = ModelType.encoder_or_decoder
-    elif args.model_type in {"falcon", "llama"}:
+    elif args.model_type in {"falcon", "llama", "llama2"}:
         from finetune import model_provider
         margs.model_name = args.model_type
         margs.model_type = ModelType.encoder_or_decoder

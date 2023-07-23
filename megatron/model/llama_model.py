@@ -13,14 +13,20 @@ class LlamaModel(GPTModel):
                  parallel_output: bool = True,
                  pre_process: bool = True,
                  post_process: bool = True,
-                 model_type=None):
+                 model_type=None,
+                 version: int = 2):
 
         args = get_args()
 
         # mandatory arguments
+        assert version in {1, 2}, f"Unknown llama version {version}"
         assert args.position_embedding_type == PositionEmbeddingType.rotary, \
             f"Llama uses rotary embedding, not {args.position_embedding_type}"
-        assert not args.use_multiquery_attn, "Llama does not use multiquery attn"
+        if version == 1:
+            assert not args.use_multiquery_attn, "Llama-v1 does not use multiquery attn"
+        elif args.use_multiquery_attn:
+            warnings.warn("Llama-v2 does not normally use multiquery attention, are you "
+                          "running 34B or 70B?")
         assert not args.use_post_ln, "Llama does not use post_ln"
         assert args.glu_activation == "swiglu", "Llama works with swiglu activation"
         assert not args.use_bias, "Llama does not use bias"

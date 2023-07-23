@@ -36,7 +36,7 @@ COMMON_ARGS="--hidden_dropout 0.0 --attention_dropout 0.0 --no_bias_dropout_fusi
 DISTRIBUTED_ARGS="--nproc_per_node 1 --nnodes 1 --node_rank 0 --master_addr localhost --master_port 8000"
 torchrun $DISTRIBUTED_ARGS verify_correctness.py \
 	--model_name $MODEL \
-       --load /pure-mlo-scratch/alhernan/megatron-data/checkpoints/${MODEL}${SIZE}b/ \
+       --load /pure-mlo-scratch/alhernan/megatron-data/checkpoints/${MODEL}-${SIZE}b/ \
        --data_path $DATA_PATH \
        --huggingface_cache $CACHE \
        --huggingface_device "cuda:1" \

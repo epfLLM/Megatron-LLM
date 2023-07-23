@@ -20,11 +20,14 @@ def model_provider(pre_process: bool = True, post_process: bool = True):
     print_rank_0("Building model ...")
 
     args = get_args()
-    match args.model_name:
-        case "gpt":    cls = GPTModel
-        case "falcon": cls = FalconModel
-        case "llama":  cls = LlamaModel
-        case other:    raise KeyError(f"Unkown model {other}")
+    if args.model_name == "gpt": 
+        cls = GPTModel
+    elif args.model_name == "falcon":
+        cls = FalconModel
+    elif args.model_name in {"llama", "llama2"}:
+        cls = partial(LlamaModel, version=1 if args.model_name == "llama" else 2)
+    else:
+        raise KeyError(f"Unkown model {other}")
 
     if isinstance(args.model_type, ModelType):
         model_type = args.model_type
@@ -126,7 +129,8 @@ def train_valid_test_datasets_provider(train_val_test_num_samples):
 def extra_args(parser):
     """Text generation arguments."""
     group = parser.add_argument_group(title='validation set')
-    group.add_argument("--model_name", choices={"gpt", "llama", "falcon"}, default="gpt")
+    group.add_argument("--model_name", choices={"gpt", "llama", "falcon", "llama2"},
+                       default="gpt")
     group.add_argument("--model_type", choices={"encoder_or_decoder", "encoder_and_decoder"},
                        default="encoder_or_decoder")
     group.add_argument("--log_learning_rate_to_tensorboard", type=bool, default=True)

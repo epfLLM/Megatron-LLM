@@ -11,10 +11,11 @@ from transformers import AutoModelForCausalLM
 from merge_llama import merge_llama
 
 
-llama_s2layer = {7: 32, 13: 40, 30: 60, 65: 80}
-llama_s2heads = {7: 32, 13: 40, 30: 52, 65: 64}
-llama_s2dense = {7: 11008, 13: 13824, 30: 17920, 65: 22016}  # should be (2/3)*4*d, but it isn't exaclty that
-llama_s2hidden = {7: 4096, 13: 5120, 32: 6656, 65: 8192}
+llama_s2layer = {7: 32, 13: 40, 30: 60, 65: 80, 70: 80}
+llama_s2heads = {7: 32, 13: 40, 30: 52, 65: 64, 70: 64}
+llama_s2dense = {7: 11008, 13: 13824, 30: 17920, 65: 22016,
+                 70: 28672}  # should be (2/3)*4*d, but it isn't exaclty that
+llama_s2hidden = {7: 4096, 13: 5120, 32: 6656, 65: 8192, 70: 8192}
 
 
 def falcon_to_megatron(weights: dict, size: int) -> dict:
@@ -61,23 +62,32 @@ def falcon_to_megatron(weights: dict, size: int) -> dict:
     return {"embedding": embedding, "transformer": transformer}
 
 
-def llama_to_megatron(llama_config: dict, size: int):
+def llama_to_megatron(llama_config: dict, size: int, version: int = 1):
     def get_wqkv(llama_config, layer_prefix, n_heads=32):
         wq, wk, wv = llama_config[layer_prefix+'attention.wq.weight'], llama_config[layer_prefix+'attention.wk.weight'], llama_config[layer_prefix+'attention.wv.weight']
         n_hidden_per_head = wq.shape[-1] // n_heads
+        if version == 1 or size <= 13:
+            n_kv_heads = n_heads
+        else:
+            n_kv_heads = 8
 
         dim = wq.shape[-1]
         wq = wq.view(n_heads, n_hidden_per_head//2, 2, dim).transpose(1, 2).reshape(dim, dim)
-        wk = wk.view(n_heads, n_hidden_per_head//2, 2, dim).transpose(1, 2).reshape(dim, dim)
+        wk = wk.view(n_kv_heads, n_hidden_per_head//2, 2, dim).transpose(1, 2).reshape(n_kv_heads*n_hidden_per_head, dim)
 
         wq_convert = torch.split(wq, n_hidden_per_head, dim=0)
         wk_convert = torch.split(wk, n_hidden_per_head, dim=0)
         wv_convert = torch.split(wv, n_hidden_per_head, dim=0)
-        assert len(wq_convert)==n_heads
+        assert len(wq_convert) == n_heads
+        assert len(wk_convert) == n_kv_heads
+        assert len(wv_convert) == n_kv_heads
+
     
         w_qkv = []
-        for i in range(n_heads):
-            w_qkv.extend([wq_convert[i], wk_convert[i], wv_convert[i]])
+        n_qs_per_kv = n_heads//n_kv_heads
+        for i in range(n_kv_heads):
+            w_qkv += [wq_convert[i*n_qs_per_kv + j] for j in range(n_qs_per_kv)]
+            w_qkv += [wk_convert[i], wv_convert[i]]
         out = torch.concat(w_qkv, dim=0)
         return out
 
@@ -118,6 +128,7 @@ def llama_to_megatron(llama_config: dict, size: int):
                 megatron_dict['model']['language_model']['transformer'][layer_prefix+megatron_param+'.weight'] = torch.concat([llama_config[layer_prefix+w+'.weight'] for w in llama_param_list], dim=0)
     return megatron_dict
 
+
 def main(model_name: str = "falcon", size: int = 7, out: Optional[Path] = None,
          cache_dir: Optional[Path] = None, megatron_path: Optional[Path] = None):
     if out is None:
@@ -140,12 +151,12 @@ def main(model_name: str = "falcon", size: int = 7, out: Optional[Path] = None,
         print("Getting llama...")
         hf_weights = merge_llama(size, cache_dir)
 
-
     # convert state dict to be megatron-compatible
     if model_name == "falcon":
         megatron_weights = falcon_to_megatron(hf_weights, size)
     else:
-        megatron_weights = llama_to_megatron(hf_weights, size)
+        megatron_weights = llama_to_megatron(hf_weights, size,
+                                             version=1 if model_name == "llama" else 2)
         megatron_weights = megatron_weights["model"]["language_model"]
 
     # set args
@@ -159,7 +170,8 @@ def main(model_name: str = "falcon", size: int = 7, out: Optional[Path] = None,
                     "num_attention_heads": 128, "num_attention_heads_kv": 8}
         args.update({"tokenizer_type": "FalconTokenizer", "use_flash_attn": True,
                      "hidden_dropout": 0.0, "use_multiquery_attn": True,
-                     "parallel_attn": True})
+                     "parallel_attn": True, "max_position_embeddings": 2048,
+                     "seq_length": 2048})
     else:
         args = {"num_layers": llama_s2layer[size],
                 "hidden_size": llama_s2hidden[size],
@@ -173,13 +185,17 @@ def main(model_name: str = "falcon", size: int = 7, out: Optional[Path] = None,
                 "use_rms_norm": True,
                 "tie_embed_logits": False,
                 "tokenizer_type": "SentencePieceTokenizer"}
+        if model_name == "llama":
+            args.update({"max_position_embeddings": 2048, "seq_length": 2048})
+        else:
+            args.update({"max_position_embeddings": 4096, "seq_length": 4096})
+            if size >= 34:
+                args.update({"use_multiquery_attn": True, "num_attention_heads_kv": 8})
     args.update({
         "tensor_model_parallel_size": 1,
         "pipeline_model_parallel_size": 1,
         "iteration": "release",
         "params_dtype": dtype,
-        "seq_length": 2048,
-        "max_position_embeddings": 2048,
         "bias_gelu_fusion": False,
         "bias_droput_fusion": False,
         "position_embedding_type": PositionEmbeddingType.rotary,
@@ -199,8 +215,8 @@ def main(model_name: str = "falcon", size: int = 7, out: Optional[Path] = None,
 if __name__ == "__main__":
     parser = ArgumentParser(description="Convert Huggingface falcon weights to "
                                         "megatron-compatible weights")
-    parser.add_argument("model", choices={"falcon", "llama"})
-    parser.add_argument("--size", default=7, choices={7, 13, 30, 40, 65}, type=int,
+    parser.add_argument("model", choices={"falcon", "llama", "llama2"})
+    parser.add_argument("--size", default=7, choices={7, 13, 30, 34, 40, 65, 70}, type=int,
                         help="The size of the model")
     parser.add_argument("--out", type=Path,
                         help="Directory to store the megatron weights (as checkpoint)")
@@ -215,7 +231,9 @@ if __name__ == "__main__":
     # small arg verification
     if args.model == "falcon":
         assert args.size in {7, 40}
-    else:
+    elif args.model == "llama":
         assert args.size in {7, 13, 30, 65}
+    else:
+        assert args.size in {7, 13, 70}
 
     main(args.model, args.size, args.out, args.cache_dir, args.megatron_path)

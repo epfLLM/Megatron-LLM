@@ -705,7 +705,12 @@ class ParallelTransformerLayer(MegatronModule):
                 enc_dec_attn_mask=None,
                 inference_params=None):
 
-        def apply_dropout(x, bias, residual, prob, make_viewless=False):
+        ##
+        # PRELIMINARIES - utilities to compute residual + dropout
+        ##
+
+        # function to compute residual + dropout(x + bias)
+        def add_dropout(x, bias, residual, prob, make_viewless=False):
             # Jit compiled function creates 'view' tensor. This tensor
             # potentially gets saved in the MPU checkpoint function context,
             # which rejects view tensors. While making a viewless tensor here
@@ -730,18 +735,7 @@ class ParallelTransformerLayer(MegatronModule):
             out = torch.nn.functional.dropout(x, p=prob, training=self.training)
             return residual + self.drop_path(out)
 
-        # hidden_states: [s, b, h]
-        # Layer norm at the beginning of the transformer layer.
-        layernorm_output = self.input_layernorm(hidden_states)
-        attention_output, attention_bias = self.self_attention(layernorm_output,
-                                                               attention_mask,
-                                                               inference_params=inference_params)
-
-        if self.apply_residual_connection_post_layernorm:
-            residual = layernorm_output
-        else:
-            residual = hidden_states
-
+        # determine the dropout_add_func to use in the add_dropout function
         if self.drop_path is None:
             # jit scripting for a nn.module (with dropout) is not
             # triggerring the fusion kernel. For now, we use two
@@ -757,13 +751,34 @@ class ParallelTransformerLayer(MegatronModule):
             else:
                 bias_dropout_add_func = get_bias_dropout_add(self.training)
 
-        if not self.parallel_attn:
-            layernorm_input = apply_dropout(attention_output, attention_bias,
-                                            residual, self.hidden_dropout)
-            # Layer norm post the self attention.
-            layernorm_output = self.post_attention_layernorm(layernorm_input)
+        ##
+        # Transformer computation begins now.
+        ##
+
+        # hidden_states: [s, b, h]
+        # Layer norm at the beginning of the transformer layer.
+        layernorm_output = self.input_layernorm(hidden_states)
+        # Get attention.
+        attention_output, attention_bias = self.self_attention(layernorm_output,
+                                                               attention_mask,
+                                                               inference_params=inference_params)
+
+        # Determines the value of the next residual connection.
+        # if not parallel_attn: used after the post_attention_layernorm,
+        # else: used just before returning the output.
+        if self.apply_residual_connection_post_layernorm:
+            residual = layernorm_output
         else:
+            residual = hidden_states
+
+        if self.parallel_attn:
+            # used only if layer is decoder and not residual_post_layernorm
+            # which seems a bit strange, but it's kept just in case for now
             layernorm_input = attention_output
+        else:
+            layernorm_input = add_dropout(attention_output, attention_bias,
+                                         residual, self.hidden_dropout)
+            layernorm_output = self.post_attention_layernorm(layernorm_input)
 
         if self.layer_type == LayerType.decoder:
             attention_output, attention_bias = self.inter_attention(layernorm_output,
@@ -774,25 +789,29 @@ class ParallelTransformerLayer(MegatronModule):
             else:
                 residual = layernorm_input
 
-            layernorm_input = apply_dropout(attention_output, attention_bias,
-                                            residual, self.hidden_dropout)
+            layernorm_input = add_dropout(attention_output, attention_bias,
+                                          residual, self.hidden_dropout)
             # Layer norm post the decoder attention
             layernorm_output = self.post_inter_attention_layernorm(layernorm_input)
+        # Compute MLP.
+        # At this point, layernorm_output is:
+        # if layer is decoder: the post_inter_attention_layernorm output,
+        # elif not parallel_attn: the post_attention_layernorm output,
+        # else: the input_layernorm tensor.
         mlp_output, mlp_bias = self.mlp(layernorm_output)
 
         # Second residual connection.
         if self.parallel_attn:
             mlp_output = mlp_output + attention_output
+        elif self.apply_residual_connection_post_layernorm:
+            residual = layernorm_output
         else:
-            if self.apply_residual_connection_post_layernorm:
-                residual = layernorm_output
-            else:
-                residual = layernorm_input
+            residual = layernorm_input
+        output = add_dropout(mlp_output, mlp_bias, residual, self.hidden_dropout,
+                             make_viewless=True)
 
-        output = apply_dropout(mlp_output, mlp_bias, residual, self.hidden_dropout,
-                               make_viewless=True)
-        if not self.parallel_attn:
-            output = self.output_layernorm(output)
+        # Apply final layernorm, return.
+        output = self.output_layernorm(output)
         return output
 
 

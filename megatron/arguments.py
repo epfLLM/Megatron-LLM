@@ -450,7 +450,7 @@ def _add_network_size_args(parser):
                        help='Define position embedding type ("absolute" | "rotary"). "absolute" by default.')
     # Added mainly for Falcon
     group.add_argument("--parallel_attn", action="store_true",
-                       help="Whether to use parallel attn (set flag to ignore dropout and post_attn norm)")
+                       help="Whether to use parallel mlp and attn computation with a single layernorm")
     # Added mainly for Llama
     group.add_argument("--no_tie_embed_logits", action="store_false", dest="tie_embed_logits",
                        help=("If set, the weights of the word embedding and lm_head "

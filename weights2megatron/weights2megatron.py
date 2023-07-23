@@ -181,14 +181,15 @@ def main(model_name: str = "falcon", size: int = 7, out: Optional[Path] = None,
                 "make_vocab_size_divisible_by": 1,
                 "glu_activation": "swiglu",
                 "padded_vocab_size": 32000,
-                "layernorm_epsilon": 1e-6,
                 "use_rms_norm": True,
                 "tie_embed_logits": False,
                 "tokenizer_type": "SentencePieceTokenizer"}
         if model_name == "llama":
-            args.update({"max_position_embeddings": 2048, "seq_length": 2048})
-        else:
-            args.update({"max_position_embeddings": 4096, "seq_length": 4096})
+            args.update({"max_position_embeddings": 2048, "seq_length": 2048,
+                         "layernorm_epsilon": 1e-6})
+        else:  # llama2
+            args.update({"max_position_embeddings": 4096, "seq_length": 4096,
+                         "layernorm_epsilon": 1e-5})
             if size >= 34:
                 args.update({"use_multiquery_attn": True, "num_attention_heads_kv": 8})
     args.update({

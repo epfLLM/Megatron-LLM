@@ -54,16 +54,18 @@ if [[ $MODEL = falcon ]]; then
 	EXTRA_ARGS="--use_multiquery_attn --parallel_attn"
 	SEQ_LEN=2048
 elif [[ $MODEL = llama ]] || [[ $MODEL = llama2 ]]; then
-	if [[ $MODEL == llama ]]; then
-		SEQ_LEN=2048
-	else
-		SEQ_LEN=4096
-	fi
 	DATA_PATH=/pure-mlo-scratch/alhernan/data/wikitext-llama-32000/wiki-train_text_document
 	TOKENIZER=SentencePieceTokenizer
 	EXTRA_ARGS="--vocab_file=/pure-mlo-scratch/llama/tokenizer.model --use_rms_norm
-       	            --glu_activation swiglu --layernorm_epsilon 1e-6 --no_tie_embed_logits
+	            --glu_activation swiglu --no_tie_embed_logits
 		    --no_new_tokens"
+	if [[ $MODEL == llama ]]; then
+		SEQ_LEN=2048
+		EXTRA_ARGS="$EXTRA_ARGS --layernorm_epsilon 1e-6"
+	else
+		SEQ_LEN=4096
+		EXTRA_ARGS="$EXTRA_ARGS --layernorm_epsilon 1e-5"
+	fi
 elif [[ $MODEL = gpt ]]; then
 	DATA_PATH=/scratch/wikitext-megatron/wikitext-train_text_document
 	TOKENIZER=FalconTokenizer

@@ -1,5 +1,12 @@
+import json
+import warnings
+from pathlib import Path
+
 import torch
+import llama
+from torch import nn
 from transformers import AutoModelForCausalLM, LlamaForCausalLM
+from fairscale.nn.model_parallel.initialize import initialize_model_parallel
 
 import megatron
 from megatron import get_args, print_rank_0, update_num_microbatches
@@ -8,6 +15,31 @@ from megatron.initialize import initialize_megatron
 from megatron.training import _setup_model_and_optimizer, build_train_valid_test_data_iterators
 
 from finetune import model_provider, extra_args, get_batch, loss_func, train_valid_test_datasets_provider
+
+
+class Llama2Wrapper(nn.Module):
+    def __init__(self, cache_dir):
+        super().__init__()
+        initialize_model_parallel(1)
+        cache_dir = Path(cache_dir)
+        checkpoints = sorted(cache_dir.glob("*.pth"))
+        assert len(checkpoints) == 1, "Currently, only llama2 unsharded models implemented"
+        with open(cache_dir/"params.json", "r") as f:
+            params = json.loads(f.read())
+            params["vocab_size"] = 32000
+
+        self.model = llama.Transformer(llama.ModelArgs(
+            max_seq_len=4096, max_batch_size=1, **params
+        ))
+        self.model.load_state_dict(torch.load(checkpoints[0]), strict=False)
+
+    def forward(self, input_ids, position_ids=None, attention_mask=None,
+                labels=None):
+        if labels is not None:
+            warnings.warn("Llama2 does not compute loss")
+        logits = self.model(input_ids, 0)
+        loss = torch.tensor(0.0).to(logits.device, logits.dtype)
+        return {"logits": logits, "loss": loss}
 
 
 def hf_provider():
@@ -19,14 +51,13 @@ def hf_provider():
             trust_remote_code=True
         )
     elif args.model_name == "llama":
-        model = LlamaForCausalLM.from_pretrained(
-            args.huggingface_cache
-        ).float()
+        model = LlamaForCausalLM.from_pretrained(args.huggingface_cache).float()
+    elif args.model_name == "llama2":
+        model = Llama2Wrapper(args.huggingface_cache).float()
     else:
         raise KeyError(f"Model {args.model_name} not implemented")
     model = model.eval().requires_grad_(False).to(args.huggingface_device)
     return model
-
 
 
 def megatron_forward(model, batch):
@@ -44,8 +75,7 @@ def huggingface_forward(model, batch):
     args = get_args()
     batch = [tensor.to(args.huggingface_device) for tensor in batch]
     tokens, labels, loss_mask, attention_mask, position_ids = batch
-    output = model(input_ids=tokens, position_ids=position_ids, labels=tokens,
-                   output_hidden_states=True)
+    output = model(input_ids=tokens, position_ids=position_ids, labels=tokens)
     return output["logits"], output["loss"]
 
 

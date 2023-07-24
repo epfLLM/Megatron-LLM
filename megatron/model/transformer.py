@@ -617,6 +617,7 @@ class ParallelTransformerLayer(MegatronModule):
         self.apply_residual_connection_post_layernorm = args.apply_residual_connection_post_layernorm
         self.bf16 = args.bf16
         self.fp32_residual_connection = args.fp32_residual_connection
+        self.parallel_layernorm = args.parallel_layernorm
 
         # Layernorm on the input data.
         if args.use_rms_norm:
@@ -624,6 +625,9 @@ class ParallelTransformerLayer(MegatronModule):
                                            sequence_parallel=args.sequence_parallel)
             self.output_layernorm = RMSNorm(args.hidden_size, eps=args.layernorm_epsilon,
                                            sequence_parallel=args.sequence_parallel)
+            if self.parallel_layernorm:
+                self.mlp_layernorm = RMSNorm(args.hidden_size, eps=args.layernorm_epsilon,
+                                             sequence_parallel=args.sequence_parallel)
         else:
             self.input_layernorm = LayerNorm(args.hidden_size,
                                              eps=args.layernorm_epsilon,
@@ -633,6 +637,11 @@ class ParallelTransformerLayer(MegatronModule):
                                              eps=args.layernorm_epsilon,
                                              no_persist_layer_norm=args.no_persist_layer_norm,
                                              sequence_parallel=args.sequence_parallel)
+            if self.parallel_layernorm:
+                self.mlp_layernorm = LayerNorm(args.hidden_size,
+                                               eps=args.layernorm_epsilon,
+                                               no_persist_layer_norm=args.no_persist_layer_norm,
+                                               sequence_parallel=args.sequence_parallel)
         self.use_post_ln = args.use_post_ln
         if args.use_post_ln:
             self.input_layernorm = torch.nn.Identity()
@@ -771,6 +780,10 @@ class ParallelTransformerLayer(MegatronModule):
         else:
             residual = hidden_states
 
+        # dedicated mlp layernorm module
+        if self.parallel_layernorm:
+            layernorm_output = self.mlp_layernorm(hidden_states)
+
         if self.parallel_attn:
             # used only if layer is decoder and not residual_post_layernorm
             # which seems a bit strange, but it's kept just in case for now
@@ -796,8 +809,9 @@ class ParallelTransformerLayer(MegatronModule):
         # Compute MLP.
         # At this point, layernorm_output is:
         # if layer is decoder: the post_inter_attention_layernorm output,
-        # elif not parallel_attn: the post_attention_layernorm output,
-        # else: the input_layernorm tensor.
+        # elif parallel_layernorm: the mlp_layernorm output,
+        # elif parallel_attention: the input_layernorm tensor.
+        # else: the post_attention_layernorm output,
         mlp_output, mlp_bias = self.mlp(layernorm_output)
 
         # Second residual connection.

@@ -313,6 +313,10 @@ def validate_args(args, defaults={}):
             'recompute method is not yet supported for ' \
             'selective recomputing granularity'
 
+    # Parallel attention.
+    if not args.parallel_attn:
+        assert not args.parallel_layernorm, "parallel_layernorm only implemented with parallel_attention"
+
     # disable sequence parallelism when tp=1
     # to avoid change in numerics when
     # sequence_parallelism is enabled.
@@ -453,6 +457,8 @@ def _add_network_size_args(parser):
     # Added mainly for Falcon
     group.add_argument("--parallel_attn", action="store_true",
                        help="Whether to use parallel mlp and attn computation with a single layernorm")
+    group.add_argument("--parallel_layernorm", action="store_true",
+                       help="Whether to use a dedicated layernorm for the mlp in the attention")
     # Added mainly for Llama
     group.add_argument("--no_tie_embed_logits", action="store_false", dest="tie_embed_logits",
                        help=("If set, the weights of the word embedding and lm_head "

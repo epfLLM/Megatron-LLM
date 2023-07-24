@@ -116,6 +116,8 @@ def save_checkpoint(queue, args):
         sys.argv += ["--num_attention_heads_kv", str(md.num_attention_heads_kv)]
     if md.parallel_attn:
         sys.argv += ["--parallel_attn"]
+    if md.parallel_layernorm:
+        sys.argv += ["--parallel_layernorm"]
     if md.use_flash_attn:
         sys.argv += ["--use_flash_attn"]
     if md.glu_activation is not None:
@@ -270,8 +272,12 @@ def save_checkpoint(queue, args):
 
             # duplicated tensors
             input_layernorm_weight = msg.pop("input layernorm weight")
+            if md.parallel_layernorm:
+                mlp_layernorm_weight = msg.pop("mlp layernorm weight")
             if not md.use_rms_norm:
                 input_layernorm_bias = msg.pop("input layernorm bias")
+                if md.parallel_layernorm:
+                    mlp_layernorm_bias = msg.pop("mlp layernorm bias")
             if not md.parallel_attn:
                 post_layernorm_weight = msg.pop("post layernorm weight")
                 if not md.use_rms_norm:
@@ -301,8 +307,12 @@ def save_checkpoint(queue, args):
             for tp_rank in range(args.target_tensor_parallel_size):
                 l = models[tp_rank].language_model.encoder.layers[layer]
                 l.input_layernorm.weight.data.copy_(input_layernorm_weight)
+                if md.parallel_layernorm:
+                    l.mlp_layernorm.weight.data.copy_(mlp_layernorm_weight)
                 if not md.use_rms_norm:
                     l.input_layernorm.bias.data.copy_(input_layernorm_bias)
+                    if md.parallel_layernorm:
+                        l.mlp_layernorm.bias.data.copy_(mlp_layernorm_bias)
                 l.self_attention.query_key_value.weight.data.copy_(qkv_weight[tp_rank])
                 l.self_attention.dense.weight.data.copy_(dense_weight[tp_rank])
                 if md.use_bias:

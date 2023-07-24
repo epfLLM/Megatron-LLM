@@ -174,6 +174,7 @@ def _load_checkpoint(queue, args):
     md.use_multiquery_attn = margs.use_multiquery_attn
     md.num_attention_heads_kv = margs.num_attention_heads_kv
     md.parallel_attn = margs.parallel_attn
+    md.parallel_layernorm = margs.parallel_layernorm
     md.use_flash_attn = margs.use_flash_attn
     md.hidden_dropout = margs.hidden_dropout
     md.use_bias = margs.use_bias
@@ -230,8 +231,12 @@ def _load_checkpoint(queue, args):
             # Get non-parallel tensors from tp_rank 0
             layer = models[0].language_model.encoder.layers[layer_num]
             message["input layernorm weight"] = layer.input_layernorm.weight.data
+            if margs.parallel_layernorm:
+                message["mlp layernorm weight"] = layer.mlp_layernorm.weight.data
             if not margs.use_rms_norm:
                 message["input layernorm bias"] = layer.input_layernorm.bias.data
+                if margs.parallel_layernorm:
+                    message["mlp layernorm bias"] = layer.mlp_layernorm.bias.data
             if not margs.parallel_attn:
                 message["post layernorm weight"] = layer.post_attention_layernorm.weight.data
                 if not margs.use_rms_norm:

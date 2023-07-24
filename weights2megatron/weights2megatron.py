@@ -162,11 +162,11 @@ def main(model_name: str = "falcon", size: int = 7, out: Optional[Path] = None,
     if model_name == "falcon":
         if size == 7:
             args = {"num_layers": 32, "hidden_size": 4544,
-                    "num_attention_heads": 71, "num_attention_heads_kv": 1,
-                    "parallel_layernorm": True}
+                    "num_attention_heads": 71, "num_attention_heads_kv": 1}
         else:
             args = {"num_layers": 60, "hidden_size": 8192,
-                    "num_attention_heads": 128, "num_attention_heads_kv": 8}
+                    "num_attention_heads": 128, "num_attention_heads_kv": 8,
+                    "parallel_layernorm": True}
         args.update({"tokenizer_type": "FalconTokenizer", "use_flash_attn": True,
                      "hidden_dropout": 0.0, "use_multiquery_attn": True,
                      "parallel_attn": True, "max_position_embeddings": 2048,

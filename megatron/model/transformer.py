@@ -6,7 +6,8 @@ from contextlib import nullcontext
 from typing import Callable
 
 import torch
-import torch.nn.functional as F
+import flash_attn
+from torch.nn import functional as F
 from einops import rearrange
 
 from megatron import core, get_num_microbatches
@@ -364,7 +365,7 @@ class ParallelAttention(MegatronModule):
         self.checkpoint_core_attention = args.recompute_granularity == 'selective'
 
         if self.use_flash_attn:
-            self.core_attention_flash = F.scaled_dot_product_attention
+            self.core_attention_flash = flash_attn.flash_attn_func
 
         # Output.
         self.dense = megatron.core.tensor_parallel.RowParallelLinear(
@@ -529,14 +530,14 @@ class ParallelAttention(MegatronModule):
                 context_layer = self.core_attention(
                     query_layer, key_layer, value_layer, attention_mask)
         else:
-            q, k, v = [rearrange(x, "s b n h -> b n s h").contiguous()
+            q, k, v = [rearrange(x, "s b n h -> b s n h").contiguous()
                        for x in (query_layer, key_layer, value_layer)]
             if not self.sequence_parallel:
                 with megatron.core.tensor_parallel.get_cuda_rng_tracker().fork():
-                    context_layer = self.core_attention_flash(q, k, v, is_causal=True)
+                    context_layer = self.core_attention_flash(q, k, v, causal=True)
             else:
-                context_layer = self.core_attention_flash(q, k, v, is_causal=True)
-            context_layer = rearrange(context_layer, 'b n s h -> s b (n h)').contiguous()
+                context_layer = self.core_attention_flash(q, k, v, causal=True)
+            context_layer = rearrange(context_layer, 'b s n h -> s b (n h)').contiguous()
 
         # =================
         # Output. [sq, b, h]

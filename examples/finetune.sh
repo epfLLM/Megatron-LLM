@@ -8,8 +8,12 @@ PP=1
 GPUS_PER_NODE=8
 MICRO_BATCH=1
 GLOBAL_BATCH=12
-HELP_STR="[--size=$SIZE] [--tp=$TP] [--pp=$PP] [--gpus=$GPUS_PER_NODE] \
-[--micro-batch=$MICRO_BATCH] [--global-batch=$GLOBAL_BATCH] [--help]"
+RANK=0
+N_NODES=1
+ADDR=localhost
+HELP_STR="[--rank=$RANK] [--size=$SIZE] [--tp=$TP] [--pp=$PP] [--gpus=$GPUS_PER_NODE] \
+[--micro-batch=$MICRO_BATCH] [--global-batch=$GLOBAL_BATCH] [--nodes=$N_NODES] \
+[--addr=$ADDR] [--help]"
 
 
 # define help function
@@ -39,26 +43,27 @@ while [[ $# -gt 0 ]]; do
 		--gpus) GPUS_PER_NODE="$2"; shift; shift;;
 		--micro-batch) MICRO_BATCH="$2"; shift; shift;;
 		--global-batch) GLOBAL_BATCH="$2"; shift; shift;;
-		*) echo unknown argument; help; exit 1;;
+		--rank) RANK=$2; shift; shift;;
+		--nodes) N_NODES=$2; shift; shift;;
+		--addr) ADDR=$2; shift; shift;;
+		*) echo unknown argument $1; help; exit 1;;
 	esac
 done
 
 
 # set args
-N_NODES=1
-RANK=0
 LR="3e-4"
 CHECKPOINT_PATH=/pure-mlo-scratch/alhernan/megatron-data/checkpoints/${MODEL}-${SIZE}b-tp$TP-pp$PP
 TENSORBOARD_PATH=/scratch/alhernan/megatron-data/tensorboards/${MODEL}-${SIZE}b-tp$TP-pp$PP
 DISTRIBUTED_ARGS="--nproc_per_node $GPUS_PER_NODE --nnodes $N_NODES --node_rank
-                  $RANK --master_addr localhost --master_port 6000"
+                  $RANK --master_addr $ADDR --master_port 6001"
 if [[ $MODEL = falcon ]]; then
 	DATA_PATH=/pure-mlo-scratch/pagliard/data/wikitext-falcon/wiki-train_text_document
 	TOKENIZER=FalconTokenizer
 	EXTRA_ARGS="--use_multiquery_attn --parallel_attn"
 	SEQ_LEN=2048
 elif [[ $MODEL = llama ]] || [[ $MODEL = llama2 ]]; then
-	DATA_PATH=/pure-mlo-scratch/alhernan/data/wikitext-llama-32000/wiki-train_text_document
+	DATA_PATH=/pure-mlo-scratch/alhernan/data/wikitext-$MODEL-32000/wiki-train_text_document
 	TOKENIZER=SentencePieceTokenizer
 	EXTRA_ARGS="--vocab_file=/pure-mlo-scratch/llama/tokenizer.model --use_rms_norm
 	            --glu_activation swiglu --no_tie_embed_logits
@@ -85,7 +90,7 @@ else
 fi
 COMMON_ARGS="--use_flash_attn --no_bias_gelu_fusion
 	     --seq_length $SEQ_LEN --max_position_embeddings $SEQ_LEN
-             --log_interval 10 --save_interval 10000 --eval_interval 10000
+             --log_interval 1 --save_interval 10000 --eval_interval 10000
              --eval_iters 100 --hidden_dropout 0.0 --position_embedding_type rotary
 	     --no_bias_dropout_fusion --use_checkpoint_args --train_iters 10000
 	     --attention_dropout 0.0 --adam_beta1 0.9 --adam_beta2 0.95 --adam_eps 1e-5
@@ -95,10 +100,16 @@ COMMON_ARGS="--use_flash_attn --no_bias_gelu_fusion
 # print some args
 echo
 echo Settings:
+echo RANK=$RANK
+echo ADDR=$ADDR
+echo N_NODES=$N_NODES
+echo DATA_PATH=$DATA_PATH
 echo CHECKPOINT_PATH=$CHECKPOINT_PATH
 echo MODEL=$MODEL
 echo TP=$TP
 echo PP=$PP
+echo MICRO_BATCH=$MICRO_BATCH
+echo GLOBAL_BATCH=$GLOBAL_BATCH
 echo
 
 

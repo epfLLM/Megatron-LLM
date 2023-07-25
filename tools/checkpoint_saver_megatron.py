@@ -110,8 +110,6 @@ def save_checkpoint(queue, args):
                 '--save', args.save_dir,
                 '--ffn_hidden_size', str(md.ffn_hidden_size)
                 ]
-    if md.use_multiquery_attn:
-        sys.argv += ["--use_multiquery_attn"]
     if md.num_attention_heads_kv is not None:
         sys.argv += ["--num_attention_heads_kv", str(md.num_attention_heads_kv)]
     if md.parallel_attn:

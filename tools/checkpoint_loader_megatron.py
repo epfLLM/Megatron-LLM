@@ -54,6 +54,9 @@ def _load_checkpoint(queue, args):
                 '--load', args.load_dir
                 ]
 
+    if args.bf16:
+        sys.argv += ["--bf16"]
+
     margs = megatron.arguments.parse_args()
     margs = load_args_from_checkpoint(margs)
 
@@ -164,14 +167,12 @@ def _load_checkpoint(queue, args):
     md.max_position_embeddings = margs.max_position_embeddings
     md.tokenizer_type = margs.tokenizer_type
     md.iteration = margs.iteration
-    md.params_dtype = margs.params_dtype
     if args.model_type == "BERT":
         md.bert_binary_head = margs.bert_binary_head
     md.previous_tensor_parallel_size = margs.tensor_model_parallel_size
     md.previous_pipeline_parallel_size = margs.pipeline_model_parallel_size
     md.true_vocab_size = true_vocab_size
     md.make_vocab_size_divisible_by = margs.make_vocab_size_divisible_by
-    md.use_multiquery_attn = margs.use_multiquery_attn
     md.num_attention_heads_kv = margs.num_attention_heads_kv
     md.parallel_attn = margs.parallel_attn
     md.parallel_layernorm = margs.parallel_layernorm
@@ -182,6 +183,7 @@ def _load_checkpoint(queue, args):
     md.ffn_hidden_size = margs.ffn_hidden_size
     md.glu_activation = margs.glu_activation
     md.tie_embed_logits = margs.tie_embed_logits
+    md.params_dtype = margs.params_dtype
     if margs.position_embedding_type == PositionEmbeddingType.absolute:
         md.position_embedding_type = "absolute"
     elif margs.position_embedding_type == PositionEmbeddingType.rotary:

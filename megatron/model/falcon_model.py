@@ -17,7 +17,6 @@ class FalconModel(GPTModel):
         args = get_args()
         assert args.position_embedding_type == PositionEmbeddingType.rotary, \
             f"Falcon uses rotary embedding, not {args.position_embedding_type}"
-        assert args.use_multiquery_attn, "Falcon uses multiquery attn"
         assert isinstance(args.num_attention_heads_kv, int), \
             "Falcon needs a not None num_attention_heads_kv parameter"
         assert not args.use_post_ln, \

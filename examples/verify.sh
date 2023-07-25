@@ -48,5 +48,6 @@ torchrun $DISTRIBUTED_ARGS verify_correctness.py \
        --huggingface_device "cuda:1" \
        --tokenizer_type $TOKENIZER \
        --model_size $SIZE \
+       --bf16 \
        $COMMON_ARGS \
        $EXTRA_ARGS

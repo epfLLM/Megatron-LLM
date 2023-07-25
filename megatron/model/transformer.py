@@ -301,8 +301,7 @@ class ParallelAttention(MegatronModule):
         self.params_dtype = args.params_dtype
         self.sequence_parallel = args.sequence_parallel
         self.use_flash_attn = args.use_flash_attn
-        self.use_multiquery_attn = args.use_multiquery_attn 
-        self.num_attention_heads_kv = args.num_attention_heads_kv # used when use_multiquery_attn == True 
+        self.num_attention_heads_kv = args.num_attention_heads_kv
         self.num_attention_heads = args.num_attention_heads
         self.seq_length = args.seq_length
         if self.use_flash_attn:
@@ -310,17 +309,10 @@ class ParallelAttention(MegatronModule):
                                                           'self-attention for now')
             assert self.attn_mask_type == AttnMaskType.causal, ('FlashAttention code path only '
                                                                 'supports causal mask for now')
-        if self.use_multiquery_attn:
-            assert attention_type == AttnType.self_attn, ('Multi-query Attention code path only supports '
-                                                          'self-attention for now')
 
         projection_size = args.kv_channels * args.num_attention_heads
 
-        if self.use_multiquery_attn:
-            # then we need to project to num_attention_heads for the query and num_attention_heads_kv for keys and values
-            qkv_projection_size = args.kv_channels * args.num_attention_heads + 2 * args.kv_channels * args.num_attention_heads_kv
-        else:
-            qkv_projection_size = 3 * args.kv_channels * args.num_attention_heads
+        qkv_projection_size = args.kv_channels * args.num_attention_heads + 2 * args.kv_channels * args.num_attention_heads_kv
 
         # Per attention head and per partition values.
         self.hidden_size_per_attention_head = core.utils.divide(
@@ -448,29 +440,17 @@ class ParallelAttention(MegatronModule):
             mixed_x_layer, _ = self.query_key_value(hidden_states)
 
             # [sq, b, (np * 3 * hn)] --> [sq, b, np, 3 * hn]
-            new_tensor_shape = mixed_x_layer.size()[:-1] + \
-                (self.num_attention_heads_per_partition,
-                3 * self.hidden_size_per_attention_head)
-
-            if self.use_multiquery_attn:
-                # if we use multi query, we simply expand smaller keys and values tensors to have the usual shapes and then
-                # feed those tensor to the standard attention/flash attention
-                sq, b, _, _ = new_tensor_shape
-                qkv = mixed_x_layer.view(sq, b, -1, self.num_attention_heads // self.num_attention_heads_kv + 2, self.hidden_size_per_attention_head)
-                query_layer = qkv[:, :, :, :-2]
-                key_layer = qkv[:, :, :, [-2]]
-                value_layer = qkv[:, :, :, [-1]]
-                key_layer = torch.broadcast_to(key_layer, query_layer.shape)
-                value_layer = torch.broadcast_to(value_layer, query_layer.shape)
-                query_layer, key_layer, value_layer = [rearrange(x, "seq_len batch group num_heads head_dim -> seq_len batch (group num_heads) head_dim",
-                                     head_dim=self.hidden_size_per_attention_head,) for x in [query_layer, key_layer, value_layer]]
-            else:
-                mixed_x_layer = mixed_x_layer.view(*new_tensor_shape)
-
-                # [sq, b, np, 3 * hn] --> 3 [sq, b, np, hn]
-                (query_layer,
-                key_layer,
-                value_layer) = megatron.core.tensor_parallel.split_tensor_along_last_dim(mixed_x_layer, 3)
+            sq, b = mixed_x_layer.shape[:2]
+            # , we simply expand smaller keys and values tensors to have the usual shapes and then
+            # feed those tensor to the standard attention/flash attention
+            qkv = mixed_x_layer.view(sq, b, -1, self.num_attention_heads // self.num_attention_heads_kv + 2, self.hidden_size_per_attention_head)
+            query_layer = qkv[:, :, :, :-2]
+            key_layer = qkv[:, :, :, [-2]]
+            value_layer = qkv[:, :, :, [-1]]
+            key_layer = torch.broadcast_to(key_layer, query_layer.shape)
+            value_layer = torch.broadcast_to(value_layer, query_layer.shape)
+            query_layer, key_layer, value_layer = [rearrange(x, "seq_len batch group num_heads head_dim -> seq_len batch (group num_heads) head_dim",
+                                                             head_dim=self.hidden_size_per_attention_head,) for x in [query_layer, key_layer, value_layer]]
         else:
             # Attention heads [sk, b, h] --> [sk, b, (np * 2 * hn)]
             mixed_kv_layer, _ = self.key_value(encoder_output)

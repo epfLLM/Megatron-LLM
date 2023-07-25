@@ -388,7 +388,7 @@ def fix_query_key_value_ordering(model, checkpoint_version):
             if name.endswith(('.query_key_value.weight', '.query_key_value.bias')):
                 # multiquery attn does not require transposition
                 args = get_args()
-                if args.use_multiquery_attn:
+                if args.num_attention_heads_kv != args.num_attention_heads:
                     continue
                 if checkpoint_version == 0:
                     fixed_param = _transpose_first_dim(param.data, 3, True, model)
@@ -543,7 +543,6 @@ def load_args_from_checkpoint(args, load_arg='load'):
     _set_arg('parallel_attn', force=True)
     _set_arg('parallel_layernorm', force=True)
     _set_arg('use_flash_attn')
-    _set_arg('use_multiquery_attn', force=True)
     _set_arg('use_rms_norm', force=True)
     _set_arg('ffn_hidden_size')
     _set_arg('glu_activation')

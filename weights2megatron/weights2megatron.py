@@ -168,7 +168,7 @@ def main(model_name: str = "falcon", size: int = 7, out: Optional[Path] = None,
                     "num_attention_heads": 128, "num_attention_heads_kv": 8,
                     "parallel_layernorm": True}
         args.update({"tokenizer_type": "FalconTokenizer", "use_flash_attn": True,
-                     "hidden_dropout": 0.0, "use_multiquery_attn": True,
+                     "hidden_dropout": 0.0,
                      "parallel_attn": True, "max_position_embeddings": 2048,
                      "seq_length": 2048})
     else:
@@ -190,7 +190,7 @@ def main(model_name: str = "falcon", size: int = 7, out: Optional[Path] = None,
             args.update({"max_position_embeddings": 4096, "seq_length": 4096,
                          "layernorm_epsilon": 1e-5})
             if size >= 34:
-                args.update({"use_multiquery_attn": True, "num_attention_heads_kv": 8})
+                args.update({"num_attention_heads_kv": 8})
     args.update({
         "tensor_model_parallel_size": 1,
         "pipeline_model_parallel_size": 1,

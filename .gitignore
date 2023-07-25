@@ -9,5 +9,6 @@ apex/*
 checkpoints/*
 
 **.swp
+**.swo
 dist/
 megatron/data/helpers

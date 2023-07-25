@@ -8,3 +8,7 @@ apex/*
 .idea/*
 checkpoints/*
 hidden/*
+
+**.swp
+dist/
+megatron/data/helpers

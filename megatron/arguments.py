@@ -239,7 +239,9 @@ def validate_args(args, defaults={}):
         assert args.encoder_seq_length is not None
         args.seq_length = args.encoder_seq_length
 
-    if args.position_embedding_type == PositionEmbeddingType.absolute:
+    if not isinstance(args.position_embedding_type, PositionEmbeddingType):
+        args.position_embedding_type = PositionEmbeddingType[args.position_embedding_type]
+    if args.position_embedding_type in [PositionEmbeddingType.absolute, PositionEmbeddingType.rotary]:
         assert args.max_position_embeddings is not None
         if args.seq_length is not None:
             assert args.max_position_embeddings >= args.seq_length
@@ -310,6 +312,10 @@ def validate_args(args, defaults={}):
         assert args.recompute_method is None, \
             'recompute method is not yet supported for ' \
             'selective recomputing granularity'
+
+    # Parallel attention.
+    if not args.parallel_attn:
+        assert not args.parallel_layernorm, "parallel_layernorm only implemented with parallel_attention"
 
     # disable sequence parallelism when tp=1
     # to avoid change in numerics when
@@ -407,6 +413,9 @@ def _add_network_size_args(parser):
                        'This is set to 4*hidden_size if not provided')
     group.add_argument('--num_attention_heads', type=int, default=None,
                        help='Number of transformer attention heads.')
+    group.add_argument('--num_attention_heads_kv', type=int, default=None,
+                       help='Number of transformer attention heads for the keys and values. ' 
+                       'Used only when `use_multiquery_attn` is set to True.')
     group.add_argument('--kv_channels', type=int, default=None,
                        help='Projection weights dimension in multi-head '
                        'attention. This is set to '
@@ -445,6 +454,15 @@ def _add_network_size_args(parser):
                        choices=list(PositionEmbeddingType),
                        default=PositionEmbeddingType.absolute,
                        help='Define position embedding type ("absolute" | "rotary"). "absolute" by default.')
+    # Added mainly for Falcon
+    group.add_argument("--parallel_attn", action="store_true",
+                       help="Whether to use parallel mlp and attn computation with a single layernorm")
+    group.add_argument("--parallel_layernorm", action="store_true",
+                       help="Whether to use a dedicated layernorm for the mlp in the attention")
+    # Added mainly for Llama
+    group.add_argument("--no_tie_embed_logits", action="store_false", dest="tie_embed_logits",
+                       help=("If set, the weights of the word embedding and lm_head "
+                             "are not tied"))
     return parser
 
 
@@ -635,6 +653,8 @@ def _add_training_args(parser):
     group.add_argument('--use_flash_attn', action='store_true',
                        help='use FlashAttention implementation of attention. '
                        'https://arxiv.org/abs/2205.14135')
+    group.add_argument('--use_multiquery_attn', action='store_true',
+                       help='use Multi-query attention.')
     group.add_argument('--optimizer', type=str, default='adam',
                        choices=['adam', 'sgd'],
                        help='Optimizer function')
@@ -886,6 +906,8 @@ def _add_data_args(parser):
     group.add_argument('--vocab_extra_ids', type=int, default=0,
                        help='Number of additional vocabulary tokens. '
                             'They are used for span masking in the T5 model')
+    group.add_argument('--vocab_extra_ids_list', type=str, default=None,
+                       help='comma separated list of special vocab ids to add to the tokenizer')
     group.add_argument('--seq_length', type=int, default=None,
                        help='Maximum sequence length to process.')
     group.add_argument('--encoder_seq_length', type=int, default=None,
@@ -912,10 +934,14 @@ def _add_data_args(parser):
                        choices=['BertWordPieceLowerCase',
                                 'BertWordPieceCase',
                                 'GPT2BPETokenizer',
-                                'SentencePieceTokenizer'],
+                                'SentencePieceTokenizer',
+                                'FalconTokenizer'],
                        help='What type of tokenizer to use.')
     group.add_argument('--tokenizer_model', type=str, default=None,
                        help='Sentencepiece tokenizer model.')
+    group.add_argument("--no_new_tokens", action="store_false", dest="new_tokens",
+                       help=("Do not add special tokens (e.g. CLS, MASK, etc) "
+                             "in the sentenciepiece tokenizer"))
     group.add_argument('--data_impl', type=str, default='infer',
                        choices=['lazy', 'cached', 'mmap', 'infer'],
                        help='Implementation of indexed datasets.')

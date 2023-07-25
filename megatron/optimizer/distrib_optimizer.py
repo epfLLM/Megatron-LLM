@@ -491,7 +491,7 @@ class DistributedOptimizer(MixedPrecisionOptimizer):
         ranks.
 
         Additionally, return references to the entire buffers, for use
-        in _reduce_scatter_base and _all_gather_base.
+        in reduce_scatter_tensor and _all_gather_base.
         """
 
         data_parallel_world_size = mpu.get_data_parallel_world_size()
@@ -560,7 +560,7 @@ class DistributedOptimizer(MixedPrecisionOptimizer):
         for index, (model_index, dtype, gbuf, gbuf_views) \
             in enumerate(gbuf_view_items):
 
-            torch.distributed._reduce_scatter_base(
+            torch.distributed.reduce_scatter_tensor(
                 gbuf_views[data_parallel_rank],
                 gbuf,
                 group = data_parallel_group,

@@ -6,7 +6,8 @@ from contextlib import nullcontext
 from typing import Callable
 
 import torch
-import torch.nn.functional as F
+import flash_attn
+from torch.nn import functional as F
 from einops import rearrange
 
 from megatron import core, get_num_microbatches
@@ -23,11 +24,6 @@ from megatron.model.utils import attention_mask_func, erf_gelu
 from .glu_activations import GLU_ACTIVATIONS
 from megatron.model.positional_embeddings import precompute_freqs_cis, apply_rotary_emb
 
-
-try:
-    from flash_attn.flash_attn_interface import flash_attn_unpadded_func
-except ImportError:
-    flash_attn_unpadded_func = None
 
 """ We use the following notation throughout this file:
      h: hidden size
@@ -104,6 +100,7 @@ class ParallelMLP(MegatronModule):
             async_tensor_model_parallel_allreduce=args.async_tensor_model_parallel_allreduce,
             **_args_to_kwargs(args),
             world_size=world_size)
+        self.use_bias = args.use_bias
 
         self.bias_gelu_fusion = args.bias_gelu_fusion
 
@@ -130,11 +127,14 @@ class ParallelMLP(MegatronModule):
         intermediate_parallel, bias_parallel = self.dense_h_to_4h(hidden_states)
 
         if self.bias_gelu_fusion:
-             intermediate_parallel = \
-                     bias_gelu_impl(intermediate_parallel, bias_parallel)
-        else:
+            intermediate_parallel = \
+                bias_gelu_impl(intermediate_parallel, bias_parallel)
+        elif self.use_bias:
             intermediate_parallel = \
                 self.activation_func(intermediate_parallel + bias_parallel)
+        else:
+            intermediate_parallel = \
+                self.activation_func(intermediate_parallel)
 
         # [s, b, h]
         output, output_bias = self.dense_4h_to_h(intermediate_parallel)
@@ -277,47 +277,6 @@ class CoreAttention(MegatronModule):
         return context_layer
 
 
-class FlashSelfAttention(torch.nn.Module):
-    """Implement the scaled dot product attention with softmax.
-    Arguments
-    ---------
-        softmax_scale: The temperature to use for the softmax attention.
-                      (default: 1/sqrt(d_keys) where d_keys is computed at
-                      runtime)
-        attention_dropout: The dropout rate to apply to the attention
-                           (default: 0.0)
-    """
-    def __init__(self, causal=False, softmax_scale=None, attention_dropout=0.0,
-                 device=None, dtype=None):
-        super().__init__()
-        assert flash_attn_unpadded_func is not None, ('Please install FlashAttention first, '
-                                                      'e.g., with pip install flash-attn')
-        self.causal = causal
-        self.softmax_scale = softmax_scale
-        self.dropout_p = attention_dropout
-
-    def forward(self, q, k, v):
-        """Implements the multihead softmax attention.
-        Arguments
-        ---------
-            q, k, v: The tensor containing the query, key, and value. (B, S, H, D)
-        """
-        assert q.dtype in [torch.float16, torch.bfloat16]
-        assert q.is_cuda
-        batch_size, seqlen = q.shape[0], q.shape[1]
-        q, k, v = [rearrange(x, 'b s ... -> (b s) ...') for x in [q, k, v]]
-        max_s = seqlen
-        cu_seqlens = torch.arange(0, (batch_size + 1) * seqlen, step=seqlen, dtype=torch.int32,
-                                  device=q.device)
-        output = flash_attn_unpadded_func(
-            q, k, v, cu_seqlens, cu_seqlens, max_s, max_s,
-            self.dropout_p if self.training else 0.0,
-            softmax_scale=self.softmax_scale, causal=self.causal
-        )
-        output = rearrange(output, '(b s) ... -> b s ...', b=batch_size)
-        return output
-
-
 class ParallelAttention(MegatronModule):
     """Parallel self-attention layer abstract class.
 
@@ -342,16 +301,26 @@ class ParallelAttention(MegatronModule):
         self.params_dtype = args.params_dtype
         self.sequence_parallel = args.sequence_parallel
         self.use_flash_attn = args.use_flash_attn
+        self.use_multiquery_attn = args.use_multiquery_attn 
+        self.num_attention_heads_kv = args.num_attention_heads_kv # used when use_multiquery_attn == True 
+        self.num_attention_heads = args.num_attention_heads
+        self.seq_length = args.seq_length
         if self.use_flash_attn:
-            if flash_attn_unpadded_func is None:
-                raise ImportError('FlashAttention is not installed, please install with '
-                                  'pip install flash-attn')
             assert attention_type == AttnType.self_attn, ('FlashAttention code path only supports '
                                                           'self-attention for now')
             assert self.attn_mask_type == AttnMaskType.causal, ('FlashAttention code path only '
                                                                 'supports causal mask for now')
+        if self.use_multiquery_attn:
+            assert attention_type == AttnType.self_attn, ('Multi-query Attention code path only supports '
+                                                          'self-attention for now')
 
         projection_size = args.kv_channels * args.num_attention_heads
+
+        if self.use_multiquery_attn:
+            # then we need to project to num_attention_heads for the query and num_attention_heads_kv for keys and values
+            qkv_projection_size = args.kv_channels * args.num_attention_heads + 2 * args.kv_channels * args.num_attention_heads_kv
+        else:
+            qkv_projection_size = 3 * args.kv_channels * args.num_attention_heads
 
         # Per attention head and per partition values.
         self.hidden_size_per_attention_head = core.utils.divide(
@@ -363,7 +332,7 @@ class ParallelAttention(MegatronModule):
         if attention_type == AttnType.self_attn:
             self.query_key_value = megatron.core.tensor_parallel.ColumnParallelLinear(
                 args.hidden_size,
-                3 * projection_size,
+                qkv_projection_size,
                 bias=args.use_bias,
                 gather_output=False,
                 init_method=init_method,
@@ -396,8 +365,7 @@ class ParallelAttention(MegatronModule):
         self.checkpoint_core_attention = args.recompute_granularity == 'selective'
 
         if self.use_flash_attn:
-            self.core_attention_flash = FlashSelfAttention(
-                causal=True, attention_dropout=args.attention_dropout)
+            self.core_attention_flash = flash_attn.flash_attn_func
 
         # Output.
         self.dense = megatron.core.tensor_parallel.RowParallelLinear(
@@ -414,7 +382,7 @@ class ParallelAttention(MegatronModule):
         if self.position_embedding_type == PositionEmbeddingType.rotary:
             self.freqs_cis = precompute_freqs_cis(
                 # self.params.dim // self.params.n_heads, self.params.max_seq_len * 2 # NOTE: LLaMA version
-                args.hidden_size // args.num_attention_heads, self.seq_length * 2
+                args.hidden_size // args.num_attention_heads, self.seq_length # * 2
             )
 
     def _checkpointed_attention_forward(self,
@@ -482,13 +450,27 @@ class ParallelAttention(MegatronModule):
             # [sq, b, (np * 3 * hn)] --> [sq, b, np, 3 * hn]
             new_tensor_shape = mixed_x_layer.size()[:-1] + \
                 (self.num_attention_heads_per_partition,
-                 3 * self.hidden_size_per_attention_head)
-            mixed_x_layer = mixed_x_layer.view(*new_tensor_shape)
+                3 * self.hidden_size_per_attention_head)
 
-            # [sq, b, np, 3 * hn] --> 3 [sq, b, np, hn]
-            (query_layer,
-             key_layer,
-             value_layer) = megatron.core.tensor_parallel.split_tensor_along_last_dim(mixed_x_layer, 3)
+            if self.use_multiquery_attn:
+                # if we use multi query, we simply expand smaller keys and values tensors to have the usual shapes and then
+                # feed those tensor to the standard attention/flash attention
+                sq, b, _, _ = new_tensor_shape
+                qkv = mixed_x_layer.view(sq, b, -1, self.num_attention_heads // self.num_attention_heads_kv + 2, self.hidden_size_per_attention_head)
+                query_layer = qkv[:, :, :, :-2]
+                key_layer = qkv[:, :, :, [-2]]
+                value_layer = qkv[:, :, :, [-1]]
+                key_layer = torch.broadcast_to(key_layer, query_layer.shape)
+                value_layer = torch.broadcast_to(value_layer, query_layer.shape)
+                query_layer, key_layer, value_layer = [rearrange(x, "seq_len batch group num_heads head_dim -> seq_len batch (group num_heads) head_dim",
+                                     head_dim=self.hidden_size_per_attention_head,) for x in [query_layer, key_layer, value_layer]]
+            else:
+                mixed_x_layer = mixed_x_layer.view(*new_tensor_shape)
+
+                # [sq, b, np, 3 * hn] --> 3 [sq, b, np, hn]
+                (query_layer,
+                key_layer,
+                value_layer) = megatron.core.tensor_parallel.split_tensor_along_last_dim(mixed_x_layer, 3)
         else:
             # Attention heads [sk, b, h] --> [sk, b, (np * 2 * hn)]
             mixed_kv_layer, _ = self.key_value(encoder_output)
@@ -534,7 +516,7 @@ class ParallelAttention(MegatronModule):
         # Rotary embeddings
         # ==================================
         if self.position_embedding_type == PositionEmbeddingType.rotary:
-            query_layer, key_layer = apply_rotary_emb(query_layer, key_layer, self.freq_cis)
+            query_layer, key_layer = apply_rotary_emb(query_layer, key_layer, self.freqs_cis)
 
         # ==================================
         # core attention computation
@@ -548,14 +530,14 @@ class ParallelAttention(MegatronModule):
                 context_layer = self.core_attention(
                     query_layer, key_layer, value_layer, attention_mask)
         else:
-            q, k, v = [rearrange(x, 's b ... -> b s ...').contiguous()
+            q, k, v = [rearrange(x, "s b n h -> b s n h").contiguous()
                        for x in (query_layer, key_layer, value_layer)]
             if not self.sequence_parallel:
                 with megatron.core.tensor_parallel.get_cuda_rng_tracker().fork():
-                    context_layer = self.core_attention_flash(q, k, v)
+                    context_layer = self.core_attention_flash(q, k, v, causal=True)
             else:
-                context_layer = self.core_attention_flash(q, k, v)
-            context_layer = rearrange(context_layer, 'b s h d -> s b (h d)').contiguous()
+                context_layer = self.core_attention_flash(q, k, v, causal=True)
+            context_layer = rearrange(context_layer, 'b s n h -> s b (n h)').contiguous()
 
         # =================
         # Output. [sq, b, h]
@@ -563,6 +545,12 @@ class ParallelAttention(MegatronModule):
         # print(self.dense)
         output, bias = self.dense(context_layer)
         return output, bias
+
+
+def dropout_add(x, residual, prob, training):
+    out = torch.nn.functional.dropout(x, p=prob, training=training)
+    out = residual + out
+    return out
 
 
 def bias_dropout_add(x, bias, residual, prob, training):
@@ -576,6 +564,20 @@ def get_bias_dropout_add(training):
     def _bias_dropout_add(x, bias, residual, prob):
         return bias_dropout_add(x, bias, residual, prob, training)
     return _bias_dropout_add
+
+
+
+def dropout_add(x, residual, prob, training):
+    out = torch.nn.functional.dropout(x, p=prob, training=training)
+    out = residual + out
+    return out
+
+
+def get_dropout_add(training):
+    def _dropout_add(x, residual, prob):
+        return dropout_add(x, residual, prob, training)
+    return _dropout_add
+
 
 
 @torch.jit.script
@@ -616,11 +618,17 @@ class ParallelTransformerLayer(MegatronModule):
         self.apply_residual_connection_post_layernorm = args.apply_residual_connection_post_layernorm
         self.bf16 = args.bf16
         self.fp32_residual_connection = args.fp32_residual_connection
+        self.parallel_layernorm = args.parallel_layernorm
 
         # Layernorm on the input data.
         if args.use_rms_norm:
-            self.input_layernorm = RMSNorm(args.hidden_size, eps=args.layernorm_epsilon)
-            self.output_layernorm = RMSNorm(args.hidden_size, eps=args.layernorm_epsilon)
+            self.input_layernorm = RMSNorm(args.hidden_size, eps=args.layernorm_epsilon,
+                                           sequence_parallel=args.sequence_parallel)
+            self.output_layernorm = RMSNorm(args.hidden_size, eps=args.layernorm_epsilon,
+                                           sequence_parallel=args.sequence_parallel)
+            if self.parallel_layernorm:
+                self.mlp_layernorm = RMSNorm(args.hidden_size, eps=args.layernorm_epsilon,
+                                             sequence_parallel=args.sequence_parallel)
         else:
             self.input_layernorm = LayerNorm(args.hidden_size,
                                              eps=args.layernorm_epsilon,
@@ -630,6 +638,11 @@ class ParallelTransformerLayer(MegatronModule):
                                              eps=args.layernorm_epsilon,
                                              no_persist_layer_norm=args.no_persist_layer_norm,
                                              sequence_parallel=args.sequence_parallel)
+            if self.parallel_layernorm:
+                self.mlp_layernorm = LayerNorm(args.hidden_size,
+                                               eps=args.layernorm_epsilon,
+                                               no_persist_layer_norm=args.no_persist_layer_norm,
+                                               sequence_parallel=args.sequence_parallel)
         self.use_post_ln = args.use_post_ln
         if args.use_post_ln:
             self.input_layernorm = torch.nn.Identity()
@@ -648,18 +661,22 @@ class ParallelTransformerLayer(MegatronModule):
         self.hidden_dropout = args.hidden_dropout
         self.bias_dropout_fusion = args.bias_dropout_fusion
         self.drop_path = DropPath(drop_path_rate) if drop_path_rate > 0.0 else None
+        self.parallel_attn = args.parallel_attn
+        self.use_bias = args.use_bias
 
         # Layernorm on the attention output
-        if not args.use_rms_norm:
-            self.post_attention_layernorm = LayerNorm(
-                args.hidden_size,
-                eps=args.layernorm_epsilon,
-                no_persist_layer_norm=args.no_persist_layer_norm,
-                sequence_parallel=args.sequence_parallel)
-        else:
-            self.post_attention_layernorm = RMSNorm(
-                args.hidden_size,
-                eps=args.layernorm_epsilon)
+        if not args.parallel_attn:
+            if not args.use_rms_norm:
+                self.post_attention_layernorm = LayerNorm(
+                    args.hidden_size,
+                    eps=args.layernorm_epsilon,
+                    no_persist_layer_norm=args.no_persist_layer_norm,
+                    sequence_parallel=args.sequence_parallel)
+            else:
+                self.post_attention_layernorm = RMSNorm(
+                    args.hidden_size,
+                    eps=args.layernorm_epsilon,
+                    sequence_parallel=args.sequence_parallel)
 
         if self.layer_type == LayerType.decoder:
             self.inter_attention = ParallelAttention(
@@ -679,7 +696,8 @@ class ParallelTransformerLayer(MegatronModule):
             else:
                 self.post_inter_attention_layernorm = RMSNorm(
                     args.hidden_size,
-                    eps=args.layernorm_epsilon)
+                    eps=args.layernorm_epsilon,
+                    sequence_parallel=args.sequence_parallel)
 
         self.mlp = ParallelMLP(init_method, output_layer_init_method, args, world_size)
 
@@ -696,27 +714,46 @@ class ParallelTransformerLayer(MegatronModule):
                 encoder_output=None,
                 enc_dec_attn_mask=None,
                 inference_params=None):
-        # hidden_states: [s, b, h]
-        # print(hidden_states)
-        # print(attention_mask)
-        # print(inference_params)
-        # Layer norm at the beginning of the transformer layer.
-        layernorm_output = self.input_layernorm(hidden_states)
-        attention_output, attention_bias = self.self_attention(layernorm_output,
-                                                               attention_mask,
-                                                               inference_params=inference_params)
-        # print(self.apply_residual_connection_post_layernorm)
-        if self.apply_residual_connection_post_layernorm:
-            residual = layernorm_output
-        else:
-            residual = hidden_states
 
+        ##
+        # PRELIMINARIES - utilities to compute residual + dropout
+        ##
+
+        # function to compute residual + dropout(x + bias)
+        def add_dropout(x, bias, residual, prob, make_viewless=False):
+            # Jit compiled function creates 'view' tensor. This tensor
+            # potentially gets saved in the MPU checkpoint function context,
+            # which rejects view tensors. While making a viewless tensor here
+            # won't result in memory savings (like the data loader, or
+            # p2p_communication), it serves to document the origin of this
+            # 'view' tensor.
+            if self.use_bias:
+                bias = bias.expand_as(residual)
+                if self.drop_path is None:
+                    with self.bias_dropout_add_exec_handler():
+                        output = bias_dropout_add_func(x, bias, residual, prob)
+                    if make_viewless:
+                        return core.utils.make_viewless_tensor(inp = output,
+                                                               requires_grad = output.requires_grad,
+                                                               keep_graph = True)
+                    return output
+                out = torch.nn.functional.dropout(x + bias, p=prob, training=self.training)
+                return residual + self.drop_path(out)
+            elif self.drop_path is None:
+                with self.bias_dropout_add_exec_handler():
+                    return dropout_add_func(x, residual, prob)
+            out = torch.nn.functional.dropout(x, p=prob, training=self.training)
+            return residual + self.drop_path(out)
+
+        # determine the dropout_add_func to use in the add_dropout function
         if self.drop_path is None:
             # jit scripting for a nn.module (with dropout) is not
             # triggerring the fusion kernel. For now, we use two
             # different nn.functional routines to account for varying
             # dropout semantics during training and inference phases.
-            if self.bias_dropout_fusion:
+            if not self.use_bias:
+                dropout_add_func = get_dropout_add(self.training)
+            elif self.bias_dropout_fusion:
                 if self.training:
                     bias_dropout_add_func = bias_dropout_add_fused_train
                 else:
@@ -724,20 +761,38 @@ class ParallelTransformerLayer(MegatronModule):
             else:
                 bias_dropout_add_func = get_bias_dropout_add(self.training)
 
-            with self.bias_dropout_add_exec_handler():
-                layernorm_input = bias_dropout_add_func(
-                    attention_output,
-                    attention_bias.expand_as(residual),
-                    residual,
-                    self.hidden_dropout)
-        else:
-            out = torch.nn.functional.dropout(attention_output + attention_bias,
-                                              p=self.hidden_dropout,
-                                              training=self.training)
-            layernorm_input = residual + self.drop_path(out)
+        ##
+        # Transformer computation begins now.
+        ##
 
-        # Layer norm post the self attention.
-        layernorm_output = self.post_attention_layernorm(layernorm_input)
+        # hidden_states: [s, b, h]
+        # Layer norm at the beginning of the transformer layer.
+        layernorm_output = self.input_layernorm(hidden_states)
+        # Get attention.
+        attention_output, attention_bias = self.self_attention(layernorm_output,
+                                                               attention_mask,
+                                                               inference_params=inference_params)
+
+        # Determines the value of the next residual connection.
+        # if not parallel_attn: used after the post_attention_layernorm,
+        # else: used just before returning the output.
+        if self.apply_residual_connection_post_layernorm:
+            residual = layernorm_output
+        else:
+            residual = hidden_states
+
+        # dedicated mlp layernorm module
+        if self.parallel_layernorm:
+            layernorm_output = self.mlp_layernorm(hidden_states)
+
+        if self.parallel_attn:
+            # used only if layer is decoder and not residual_post_layernorm
+            # which seems a bit strange, but it's kept just in case for now
+            layernorm_input = attention_output
+        else:
+            layernorm_input = add_dropout(attention_output, attention_bias,
+                                         residual, self.hidden_dropout)
+            layernorm_output = self.post_attention_layernorm(layernorm_input)
 
         if self.layer_type == LayerType.decoder:
             attention_output, attention_bias = self.inter_attention(layernorm_output,
@@ -748,45 +803,29 @@ class ParallelTransformerLayer(MegatronModule):
             else:
                 residual = layernorm_input
 
-            with self.bias_dropout_add_exec_handler():
-                layernorm_input = bias_dropout_add_func(
-                    attention_output,
-                    attention_bias.expand_as(residual),
-                    residual,
-                    self.hidden_dropout)
-
+            layernorm_input = add_dropout(attention_output, attention_bias,
+                                          residual, self.hidden_dropout)
             # Layer norm post the decoder attention
             layernorm_output = self.post_inter_attention_layernorm(layernorm_input)
+        # Compute MLP.
+        # At this point, layernorm_output is:
+        # if layer is decoder: the post_inter_attention_layernorm output,
+        # elif parallel_layernorm: the mlp_layernorm output,
+        # elif parallel_attention: the input_layernorm tensor.
+        # else: the post_attention_layernorm output,
         mlp_output, mlp_bias = self.mlp(layernorm_output)
 
         # Second residual connection.
-        if self.apply_residual_connection_post_layernorm:
+        if self.parallel_attn:
+            mlp_output = mlp_output + attention_output
+        elif self.apply_residual_connection_post_layernorm:
             residual = layernorm_output
         else:
             residual = layernorm_input
+        output = add_dropout(mlp_output, mlp_bias, residual, self.hidden_dropout,
+                             make_viewless=True)
 
-        if self.drop_path is None:
-            with self.bias_dropout_add_exec_handler():
-                output = bias_dropout_add_func(
-                    mlp_output,
-                    mlp_bias.expand_as(residual),
-                    residual,
-                    self.hidden_dropout)
-
-            # Jit compiled function creates 'view' tensor. This tensor
-            # potentially gets saved in the MPU checkpoint function context,
-            # which rejects view tensors. While making a viewless tensor here
-            # won't result in memory savings (like the data loader, or
-            # p2p_communication), it serves to document the origin of this
-            # 'view' tensor.
-            output = core.utils.make_viewless_tensor(inp = output,
-                                                     requires_grad = output.requires_grad,
-                                                     keep_graph = True)
-        else:
-            out = torch.nn.functional.dropout(mlp_output + mlp_bias,
-                                              p=self.hidden_dropout,
-                                              training=self.training)
-            output = residual + self.drop_path(out)
+        # Apply final layernorm, return.
         output = self.output_layernorm(output)
         return output
 
@@ -1024,6 +1063,7 @@ class ParallelTransformer(MegatronModule):
             self.layers = torch.nn.ModuleList(
                 [build_layer(i + 1 + offset) for i in range(self.num_layers)])
 
+        self.use_post_ln = args.use_post_ln
         if self.post_process:
             # Final layer norm before output.
             if not args.use_rms_norm:
@@ -1035,7 +1075,8 @@ class ParallelTransformer(MegatronModule):
             else:
                 self.final_layernorm = RMSNorm(
                     args.hidden_size,
-                    eps=args.layernorm_epsilon)
+                    eps=args.layernorm_epsilon,
+                    sequence_parallel=args.sequence_parallel)
 
     def _get_layer(self, layer_number):
         return self.layers[layer_number]
@@ -1124,6 +1165,7 @@ class ParallelTransformer(MegatronModule):
                 encoder_output=None,
                 enc_dec_attn_mask=None,
                 inference_params=None):
+
         # hidden_states: [s, b, h]
 
         # Checks.
@@ -1209,5 +1251,4 @@ class ParallelTransformer(MegatronModule):
         # not done for the "post_ln" convention https://sh-tsang.medium.com/review-pre-ln-transformer-on-layer-normalization-in-the-transformer-architecture-b6c91a89e9ab
         if self.post_process and (not self.use_post_ln):
             hidden_states = self.final_layernorm(hidden_states)
-
         return hidden_states

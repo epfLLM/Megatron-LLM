@@ -18,7 +18,7 @@ PIPELINE_PARALLELISM=$4
 if [[ $MODEL = falcon ]]; then
 	TRUE_VOCAB_SIZE=65024
 elif [[ $MODEL = llama ]] || [[ $MODEL = llama2 ]]; then
-	TRUE_VOCAB_SIZE=32000
+	TRUE_VOCAB_SIZE=32017  # 17 new tokens
 fi
 
 

@@ -56,18 +56,18 @@ LR="3e-4"
 CHECKPOINT_PATH=/pure-mlo-scratch/alhernan/megatron-data/checkpoints/${MODEL}-${SIZE}b-tp$TP-pp$PP
 TENSORBOARD_PATH=/scratch/alhernan/megatron-data/tensorboards/${MODEL}-${SIZE}b-tp$TP-pp$PP
 DISTRIBUTED_ARGS="--nproc_per_node $GPUS_PER_NODE --nnodes $N_NODES --node_rank
-                  $RANK --master_addr $ADDR --master_port 6001"
+                  $RANK --master_addr $ADDR --master_port 6000"
 if [[ $MODEL = falcon ]]; then
 	DATA_PATH=/pure-mlo-scratch/pagliard/data/wikitext-falcon/wiki-train_text_document
 	TOKENIZER=FalconTokenizer
 	EXTRA_ARGS="--use_multiquery_attn --parallel_attn"
 	SEQ_LEN=2048
 elif [[ $MODEL = llama ]] || [[ $MODEL = llama2 ]]; then
-	DATA_PATH=/pure-mlo-scratch/alhernan/data/wikitext-$MODEL-32000/wiki-train_text_document
+	DATA_PATH=/pure-mlo-scratch/trial-runs/test/pubmed-all-llama_text_document
 	TOKENIZER=SentencePieceTokenizer
-	EXTRA_ARGS="--vocab_file=/pure-mlo-scratch/llama/tokenizer.model --use_rms_norm
+	EXTRA_ARGS='--vocab_file=/pure-mlo-scratch/llama/tokenizer.model --use_rms_norm
 	            --glu_activation swiglu --no_tie_embed_logits
-		    --no_new_tokens"
+		    --vocab_extra_ids_list "[bib_ref],[/bib_ref],[fig_ref],[/fig_ref],[bib],[/bib],[fig],[/fig],[table],[/table],[formula],[/formula]"'
 	if [[ $MODEL == llama ]]; then
 		SEQ_LEN=2048
 		EXTRA_ARGS="$EXTRA_ARGS --layernorm_epsilon 1e-6"
@@ -90,8 +90,8 @@ else
 fi
 COMMON_ARGS="--use_flash_attn --no_bias_gelu_fusion
 	     --seq_length $SEQ_LEN --max_position_embeddings $SEQ_LEN
-             --log_interval 1 --save_interval 10000 --eval_interval 10000
-             --eval_iters 100 --hidden_dropout 0.0 --position_embedding_type rotary
+             --log_interval 1 --save_interval 50 --eval_interval 50
+             --eval_iters 10 --hidden_dropout 0.0 --position_embedding_type rotary
 	     --no_bias_dropout_fusion --use_checkpoint_args --train_iters 10000
 	     --attention_dropout 0.0 --adam_beta1 0.9 --adam_beta2 0.95 --adam_eps 1e-5
 	     --lr_decay_style cosine --lr_warmup_iters 2000 --lr $LR --min_lr 1e-6
@@ -114,7 +114,7 @@ echo
 
 
 # finally, call finetune.py
-CUDA_DEVICE_MAX_CONNECTIONS=1 torchrun $DISTRIBUTED_ARGS finetune.py \
+CUDA_DEVICE_MAX_CONNECTIONS=1 OMP_NUM_THREADS=16 torchrun $DISTRIBUTED_ARGS finetune.py \
        --tensor_model_parallel_size $TP \
        --pipeline_model_parallel_size $PP  \
        --load $CHECKPOINT_PATH \

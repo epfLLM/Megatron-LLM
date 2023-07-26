@@ -11,9 +11,10 @@ GLOBAL_BATCH=12
 RANK=0
 N_NODES=1
 ADDR=localhost
+WANDB=0
 HELP_STR="[--rank=$RANK] [--size=$SIZE] [--tp=$TP] [--pp=$PP] [--gpus=$GPUS_PER_NODE] \
 [--micro-batch=$MICRO_BATCH] [--global-batch=$GLOBAL_BATCH] [--nodes=$N_NODES] \
-[--addr=$ADDR] [--help]"
+[--addr=$ADDR] [--wandb] [--help]"
 
 
 # define help function
@@ -46,6 +47,7 @@ while [[ $# -gt 0 ]]; do
 		--rank) RANK=$2; shift; shift;;
 		--nodes) N_NODES=$2; shift; shift;;
 		--addr) ADDR=$2; shift; shift;;
+		--wandb) WANDB=1; shift;;
 		*) echo unknown argument $1; help; exit 1;;
 	esac
 done
@@ -54,7 +56,7 @@ done
 # set args
 LR="3e-4"
 CHECKPOINT_PATH=/pure-mlo-scratch/alhernan/megatron-data/checkpoints/${MODEL}-${SIZE}b-tp$TP-pp$PP
-TENSORBOARD_PATH=/scratch/alhernan/megatron-data/tensorboards/${MODEL}-${SIZE}b-tp$TP-pp$PP
+TENSORBOARD_PATH=$CHECKPOINT_PATH-trained/logging
 DISTRIBUTED_ARGS="--nproc_per_node $GPUS_PER_NODE --nnodes $N_NODES --node_rank
                   $RANK --master_addr $ADDR --master_port 6000"
 if [[ $MODEL = falcon ]]; then
@@ -96,6 +98,10 @@ COMMON_ARGS="--use_flash_attn --no_bias_gelu_fusion
 	     --attention_dropout 0.0 --adam_beta1 0.9 --adam_beta2 0.95 --adam_eps 1e-5
 	     --lr_decay_style cosine --lr_warmup_iters 2000 --lr $LR --min_lr 1e-6
 	     --weight_decay 0.1 --sequence_parallel --recompute_granularity selective"
+
+if [[ $WANDB = 1 ]]; then
+	COMMON_ARGS="$COMMON_ARGS --wandb_logger"
+fi
 
 # print some args
 echo

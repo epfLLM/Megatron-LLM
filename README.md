@@ -7,6 +7,7 @@ Added key features include:
 - 3-way parallelism: tensor parallel, pipeline parallel and data parallel training (inherited from Megatron)
 - grouped-query attention (GQA) and multi-query attention (MQA)
 - Rotary Position Embeddings (RoPE)
+- RMS layer norm
 - FlashAttention 2
 - BF16 / FP16 training
 - Support for special tokens & tokenizers

@@ -247,15 +247,21 @@ def save_checkpoint(iteration, model, optimizer, opt_param_scheduler):
     # Only rank zero of the data parallel writes to the disk.
     model = unwrap_model(model)
 
-    print_rank_0('saving checkpoint at iteration {:7d} to {}'.format(
-        iteration, args.save))
+    release = iteration == "release"
+    if release:
+        print_rank_0('saving checkpoint marked as release to {}'.format(
+            iteration, args.save))
+    else:
+        print_rank_0('saving checkpoint at iteration {:7d} to {}'.format(
+            iteration, args.save))
 
     # Collect rng state across data parallel ranks.
     rng_state = get_rng_state()
 
     # Checkpoint file names.
     model_checkpoint_name, optim_checkpoint_name = \
-        get_checkpoint_names(args.save, iteration, args.use_distributed_optimizer)
+        get_checkpoint_names(args.save, iteration, args.use_distributed_optimizer,
+                             release=release)
 
     # Collect args, model, RNG.
     model_state_dict = {}
@@ -313,8 +319,12 @@ def save_checkpoint(iteration, model, optimizer, opt_param_scheduler):
     if torch.distributed.is_initialized():
         torch.distributed.barrier()
 
-    print_rank_0('  successfully saved checkpoint at iteration {:7d} to {}'.format(
-        iteration, args.save))
+    if release:
+        print_rank_0('  successfully saved checkpoint marked as release to {}'.format(
+            iteration, args.save))
+    else:
+        print_rank_0('  successfully saved checkpoint at iteration {:7d} to {}'.format(
+            iteration, args.save))
 
     # And update the latest iteration
     if not torch.distributed.is_initialized() or torch.distributed.get_rank() == 0:
@@ -376,6 +386,10 @@ def fix_query_key_value_ordering(model, checkpoint_version):
             model = model[0]
         for name, param in model.named_parameters():
             if name.endswith(('.query_key_value.weight', '.query_key_value.bias')):
+                # multiquery attn does not require transposition
+                args = get_args()
+                if args.num_attention_heads_kv != args.num_attention_heads:
+                    continue
                 if checkpoint_version == 0:
                     fixed_param = _transpose_first_dim(param.data, 3, True, model)
                 elif checkpoint_version == 1.0:
@@ -519,7 +533,21 @@ def load_args_from_checkpoint(args, load_arg='load'):
     _set_arg('kv_channels')
     _set_arg('max_position_embeddings')
     _set_arg('tokenizer_type')
-    _set_arg('padded_vocab_size')
+    _set_arg('padded_vocab_size', force=True)
+
+    _set_arg('position_embedding_type', force=True)
+    _set_arg('num_attention_heads_kv')
+    _set_arg('bias_droput_fusion')
+    _set_arg('bias_gelu_fusion')
+    _set_arg('hidden_dropout')
+    _set_arg('parallel_attn', force=True)
+    _set_arg('parallel_layernorm', force=True)
+    _set_arg('use_flash_attn')
+    _set_arg('use_rms_norm', force=True)
+    _set_arg('ffn_hidden_size')
+    _set_arg('glu_activation')
+    _set_arg('tie_embed_logits', force=True)
+    _set_arg('make_vocab_size_divisible_by', force=True)
     if checkpoint_version < 3.0:
         _set_arg('tensor_model_parallel_size',
                  'model_parallel_size')

@@ -109,7 +109,7 @@ def main():
                                      allow_abbrev=False, conflict_handler='resolve')
 
     parser.add_argument('--model_type', type=str, required=True,
-                        choices=['GPT', 'BERT'],
+                        choices=['GPT', 'BERT', 'falcon', 'llama', 'llama2'],
                         help='Type of the model')
     parser.add_argument('--loader', type=str, default='megatron',
                         help='Module name to load checkpoint, should be on python path')
@@ -124,6 +124,7 @@ def main():
     parser.add_argument('--no_checking', action='store_false',
                         help='Do not perform checking on the name and ordering of weights',
                         dest='checking')
+    parser.add_argument('--bf16', action='store_true', help='force bfloat16 weights')
 
     known_args, _ = parser.parse_known_args()
     loader = load_plugin('loader', known_args.loader)

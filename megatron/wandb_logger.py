@@ -55,15 +55,16 @@ class WandBConfig(object):
     def from_args(args)->'WandBConfig':
         assert args.rank==args.world_size-1, f"Only supposed to launch on rank {args.rank+1}, but got {args.rank}"
         # following the megatron setup for now, could also do groups instead: https://docs.wandb.ai/guides/track/log/distributed-training
-        return WandBConfig(local_dir=args.local_dir,
-                           queue_size=args.queue_size,
+        return WandBConfig(local_dir=args.tensorboard_dir,
+                           queue_size=args.tensorboard_queue_size,
                            log_interval=args.log_interval,
                            config=args,entity=args.wandb_entity,
                            project=args.wandb_project,
                            run_id=args.wandb_id,
                            resume=args.wandb_resume,
-                           api_key=wargs.wandb_api_key
-                           )
+                           api_key=args.wandb_api_key,
+                           try_catch_guard=False,
+                           with_tensorboard=True)
 
 import functools
 # dummy_named just because of bare *
@@ -109,8 +110,8 @@ class WandbTBShim(object):
                    resume=config.resume,
                    id=config.run_id
                 )
-        self._last_step_vs:{None:None}
-        self._log_accum=defaultdict(dict)
+        self._last_step = None
+        self._log_accum = {}
         if self.cfg.with_tensorboard:
             try:
                 from torch.utils.tensorboard import SummaryWriter
@@ -124,24 +125,33 @@ class WandbTBShim(object):
                       'no TensorBoard logs will be written.', flush=True)
         else:
             self.tb_writer=None
+
     @try_catch_guard
-    def add_scalar(self,name:str,var:Union[float,int,torch.Tensor],step:int):
-        vs= None if " vs " not in name else name.split(" vs ")[-1]
-        if self._last_step[vs] is not None and step!=self._last_step[vs]:
-            self._flush(vs)
-        self._last_step[vs]=step
-        self._log_accum[vs][name]=var
+    def add_scalar(self, name: str, var: float | int | torch.Tensor, step: int):
+        if isinstance(var, torch.Tensor):
+            var = var.item()
         if self.tb_writer is not None:
-            self.tb_writer.add_scalar(name, var,global_step=step)
-    def _flush(self,vs:Optional[str]):
-        if self._log_accum[vs]:
-            wandb.log(self._log_accum[vs],step=self._last_step[vs],commit=True)
-        self._log_accum[vs]={}
-        self._last_step[vs]=None
+            self.tb_writer.add_scalar(name, var, global_step=step)
+        if " vs " in name:
+            # wandb does not allow logging to previous steps and the ' vs '
+            # scalars are usually a lot of steps forward compared to the rest
+            # of the scalars (as they count per sample, not per batch) so we
+            # just ignore them and rely on tensorboard to log them
+            warn(f"Ignoring wandb log for {name}")
+            return
+
+        if self._last_step is not None and step > self._last_step:
+            self.flush_all()
+
+        self._last_step = step
+        self._log_accum[name] = var
+
     @try_catch_guard
     def flush_all(self):
-        for k in list(self._log_accum.keys()):
-            self._flush(k)
+        if len(self._log_accum) > 0:
+            wandb.log(self._log_accum, step=self._last_step, commit=True)
+        self._log_accum = {}
+        self._last_step = None
 
     @try_catch_guard
     def add_text(self,name:str,value:str):

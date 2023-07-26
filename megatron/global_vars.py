@@ -85,7 +85,7 @@ def set_global_variables(args):
     _set_args(args)
 
     _build_num_microbatches_calculator(args)
-    if args.vocab_file:
+    if args.vocab_file or args.tokenizer_type in ["FalconTokenizer", "LlamaTokenizer", "GPT2BPETokenizer"]:
         _ = _build_tokenizer(args)
     _set_tensorboard_writer(args)
     _set_adlr_autoresume(args)

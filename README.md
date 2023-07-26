@@ -11,6 +11,7 @@ Added key features include:
 - FlashAttention 2
 - BF16 / FP16 training
 - Support for special tokens & tokenizers
+- WandB integration
 
 If you use this software please cite it:
 <pre>

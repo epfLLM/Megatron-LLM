@@ -2,7 +2,7 @@ This library enables pre-training and fine-tuning of large language models (LLMs
 Our repository is a modification of the [original Megatron-LM codebase](https://github.com/NVIDIA/Megatron-LM) by Nvidia.
 
 Added key features include:
-- Llama, Llama 2 and Falcon support
+- [Llama](https://arxiv.org/abs/2302.13971), [Llama 2](https://arxiv.org/abs/2307.09288) and [Falcon](https://huggingface.co/tiiuae) support
 - support training of large models (70B Llama2, 65B Llama1 and 40B Falcon) on commodity hardware on multiple nodes
 - 3-way parallelism: tensor parallel, pipeline parallel and data parallel training (inherited from Megatron)
 - grouped-query attention (GQA) and multi-query attention (MQA)

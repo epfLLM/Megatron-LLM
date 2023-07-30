@@ -13,13 +13,11 @@ Added key features include:
 - Support for special tokens & tokenizers
 - WandB integration
 
-It is used in our related ["meditron"](https://github.com/epfLLM/meditron) LLM for the medical domain. 
-
 # Setup
 
-Because of heavy use of [Apex](https://github.com/NVIDIA/apex), this codebase is NVIDIA-only.
+Because of heavy use of [Apex](https://github.com/NVIDIA/apex), this codebase is currently for Nvidia GPUs only.
 
-Like megatron, we recommend [the NGC container](https://catalog.ngc.nvidia.com/orgs/nvidia/containers/pytorch). Instructions for obtaining and running this is at the link above.
+Like [Megatron](https://github.com/NVIDIA/Megatron-LM), we recommend [the NGC container](https://catalog.ngc.nvidia.com/orgs/nvidia/containers/pytorch). Instructions for obtaining and running this is at the link above.
 
 A C++ compiler and the ninja build system may also be necessary.
 

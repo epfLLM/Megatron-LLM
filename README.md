@@ -6,12 +6,32 @@ Added key features include:
 - support training of large models (70B Llama2, 65B Llama1 and 40B Falcon) on commodity hardware on multiple nodes
 - 3-way parallelism: tensor parallel, pipeline parallel and data parallel training (inherited from Megatron)
 - grouped-query attention (GQA) and multi-query attention (MQA)
-- Rotary Position Embeddings (RoPE)
+- Rotary Position Embeddings (RoPE) [was added independently by the Megatron project subsequent to us]
 - RMS layer norm
 - FlashAttention 2
 - BF16 / FP16 training
 - Support for special tokens & tokenizers
 - WandB integration
+
+It is used in our related ["meditron"](https://github.com/epfLLM/meditron) LLM for the medical domain. 
+
+# Setup
+
+Because of heavy use of [Apex](https://github.com/NVIDIA/apex), this codebase is NVIDIA-only.
+
+Like megatron, we recommend [the NGC container](https://catalog.ngc.nvidia.com/orgs/nvidia/containers/pytorch). Instructions for obtaining and running this is at the link above.
+
+A C++ compiler and the ninja build system may also be necessary.
+
+We additionally add a dependency on [HuggingFace Transfomers](https://pypi.org/project/transformers/). `einops` is also required. 
+
+PyTorch>=2.0.0 is required for flash attention.
+
+A recommended entrypoint is `examples/finetune.sh`.
+Information on preparing data is at `tokenize-utils/README.md`.
+
+
+# Citation
 
 If you use this software please cite it:
 <pre>

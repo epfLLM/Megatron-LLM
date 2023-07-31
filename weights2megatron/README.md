@@ -21,26 +21,29 @@ The main file to do the weight conversion is `weights2megatron/weights2megatron.
 When converting falcon weights, this file fetches the weights directly from the [huggingface implementation](https://huggingface.co/tiiuae/falcon-40b), so no additional files are required to run the script.
 To extract, the 40B model for instance, run:
 ```
-python weights2megatron.py --size=40 --out=/path/to/output/directory/
+python weights2megatron.py falcon --size=40 --out=/path/to/output/directory/
 ```
 This uses huggingface default cache directory to store the original weights.
 To change the cache use:
 ```
-python weights2megatron.py --size=40 --out=/path/to/output/directory/ --cache-dir=/path/to/huggingface/cache/directory/
+python weights2megatron.py falcon --size=40 --out=/path/to/output/directory/ --cache-dir=/path/to/huggingface/cache/directory/
 ```
 
 See also `examples/weights2megatron.sh`.
 
-Llama weights are not so easily available, but the MLO lab has access to them so we are ok.
+Llama weights are not so easily available, you need to [request them from meta](https://ai.meta.com/llama/).
 In this case you also need to specify the directory specified as `--cache-dir` will be used to fetch the llama weights, for instance run:
+
+```
+python weights2megatron.py llama2 --size=7 --out=/path/to/output/directory/ --cache-dir=/path/to/meta/llama-2-7b/
+```
 
 ## Correctness verification
 
-**Warning**: The current code does not support model-parallelism, this is still work in progress.
 
 To verify that the current megatron code is correct, use the file `verify_correctness.py`.
 See for instance `examples/verify.sh`.
-Make sure to set the `--model_size=7 or `40` (depending on whether you test the 7B or 40B) and to use the /path/to/output/directory/ selected in the previous step as the `--load` argument.
+Make sure to set the `--model_size=7` or `40` (depending on whether you test the 7B or 40B) and to use the /path/to/output/directory/ selected in the previous step as the `--load` argument.
 Example outputs at this stage are:
 ```
 Iteration 0...                                                                
@@ -61,9 +64,14 @@ Abs loss error: 0.000657 Our loss: 1.756, theirs: 1.756
 See also: `examples/verify.sh` script.
 
 Also, make sure to remove the `--bfp16` flag to use the 32-bit model and get higher precision outputs.
+However, if you use flash attention 2.0 running a 16 bit model is necessary as 32-float is not supported.
 
-In order to verify llama make sure to convert the raw weights to huggingface, documentation of this step still in progress...
+In order to verify llama make sure to convert the raw weights to huggingface.
+See `convert_llama2hf.sh` and `convert_llama2hf.py` for more information.
+Note that this step does not appy to llama2 as we use the official implementation to test it.
 Also important for llama: make sure to add the `--no_new_tokens` flag during tokenizing (the `preprocess_data.py` script) and also during verification (the `verify_correctness.py` script).
+
+**Note**: The current validation code does not support model-parallelism, to empirically test sharded models run `finetune.py` and verify that the loss makes sense.
 
 ## Checkpoint splitter
 
@@ -76,12 +84,21 @@ Once the weights are splitted, make sure to use the new checkpoint directory (se
 
 ## Training
 
-Use the `finetune_falcon.py`.
-See for instance `examples/finetune_falcon.sh`.
+Use the `finetune.py`.
+See for instance `examples/finetune.sh`.
 Don't forget to set the tensor and pipeline paralellism levels to the numbers set in the previous step.
 The loss should decrease across iterations.
 
-**Important**:
-- We are experiencing unusually high loss in falcon even when loading from a validated checkpoint.
-  We are working to fix this...
-- If you get an `ImportError: cannot import name 'helpers' from 'megatron.data'`, try running `cd megatron/data; make; cd ../../` to compile the `helpers` module.
+In order to use multi-node training using `examples/finetune.sh`, set the variables `--rank, --addr`.
+For instance, to train a llama2-7b with `pp=1, dp=4, pp=4` on two nodes with 8xGPUs each, use:
+```
+# on node1
+bash examples/finetune.sh llama2 --rank 0 --tp 4 --pp 1 --nodes 2 --addr host_address --size 7
+
+# on node2
+bash examples/finetune.sh llama2 --rank 1 --tp 4 --pp 1 --nodes 2 --addr host_address --size 7
+```
+
+Make sure to edit the paths in the script to match your local files.
+
+**Important**: If you get an `ImportError: cannot import name 'helpers' from 'megatron.data'`, try running `cd megatron/data; make; cd ../../` to compile the `helpers` module.

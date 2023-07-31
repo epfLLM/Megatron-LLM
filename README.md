@@ -1,3 +1,10 @@
+
+<div align="center">
+  <img src="imgs/llama-falcon.png"  width="500">
+</div>
+
+# Megatron-LLM
+
 This library enables pre-training and fine-tuning of large language models (LLMs) at scale.
 Our repository is a modification of the [original Megatron-LM codebase](https://github.com/NVIDIA/Megatron-LM) by Nvidia.
 

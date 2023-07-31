@@ -14,11 +14,11 @@ SIZE=$2
 
 # determine cache directory (either raw llama or huggingface cache)
 if [[ $MODEL = falcon ]]; then
-	CACHE=/pure-mlo-scratch/alhernan/huggingface_cache/
+	CACHE=/home/ubuntu/falcon
 elif [[ $MODEL = llama ]]; then
-	CACHE=/pure-mlo-scratch/llama/${SIZE}B/
+	CACHE=/home/ubuntu/llama/${SIZE}B/
 elif [[ $MODEL = llama2 ]]; then
-	CACHE=/pure-mlo-scratch/alhernan/llama2/llama-2-${SIZE}b/
+	CACHE=/home/ubuntu/llama2/Llama-2-${SIZE}b/
 else
 	echo "Model should be either llama or falcon, not $MODEL"
 	exit 1
@@ -26,8 +26,9 @@ fi
 
 
 # finally call the script
+mkdir /home/ubuntu/megatron-data
 python weights2megatron/weights2megatron.py \
 	$MODEL \
 	--size=$SIZE \
-	--out=/pure-mlo-scratch/alhernan/megatron-data/checkpoints/${MODEL}-${SIZE}b/ \
+	--out=/home/ubuntu/megatron-data/${MODEL}-${SIZE}b/ \
 	--cache-dir=$CACHE

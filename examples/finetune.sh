@@ -3,11 +3,11 @@
 
 # default arguments
 SIZE=7
-TP=8
-PP=1
-GPUS_PER_NODE=8
+TP=1
+PP=2
+GPUS_PER_NODE=4
 MICRO_BATCH=1
-GLOBAL_BATCH=12
+GLOBAL_BATCH=1
 RANK=0
 N_NODES=1
 ADDR=localhost
@@ -55,19 +55,19 @@ done
 
 # set args
 LR="3e-4"
-CHECKPOINT_PATH=/pure-mlo-scratch/alhernan/megatron-data/checkpoints/${MODEL}-${SIZE}b-tp$TP-pp$PP
+CHECKPOINT_PATH=/home/ubuntu/megatron-data/checkpoints/${MODEL}-${SIZE}b-tp$TP-pp$PP
 TENSORBOARD_PATH=$CHECKPOINT_PATH-trained/logging
 DISTRIBUTED_ARGS="--nproc_per_node $GPUS_PER_NODE --nnodes $N_NODES --node_rank
                   $RANK --master_addr $ADDR --master_port 6000"
 if [[ $MODEL = falcon ]]; then
-	DATA_PATH=/pure-mlo-scratch/pagliard/data/wikitext-falcon/wiki-train_text_document
+	DATA_PATH=/home/ubuntu/megatron-data/oa-top1/oa-top1-train_text_document
 	TOKENIZER=FalconTokenizer
 	EXTRA_ARGS="--parallel_attn"
 	SEQ_LEN=2048
 elif [[ $MODEL = llama ]] || [[ $MODEL = llama2 ]]; then
-	DATA_PATH=/pure-mlo-scratch/trial-runs/test/pubmed-all-llama_text_document
+	DATA_PATH=/home/ubuntu/megatron-data/oa-top1/oa-top1-train_text_document
 	TOKENIZER=SentencePieceTokenizer
-	EXTRA_ARGS='--vocab_file=/pure-mlo-scratch/llama/tokenizer.model --use_rms_norm
+	EXTRA_ARGS='--vocab_file=/home/ubuntu/megatron-data/llama/tokenizer.model --use_rms_norm
 	            --glu_activation swiglu --no_tie_embed_logits
 		    --vocab_extra_ids_list "[bib_ref],[/bib_ref],[fig_ref],[/fig_ref],[bib],[/bib],[fig],[/fig],[table],[/table],[formula],[/formula]"'
 	if [[ $MODEL == llama ]]; then
@@ -81,7 +81,7 @@ elif [[ $MODEL = llama ]] || [[ $MODEL = llama2 ]]; then
 		fi
 	fi
 elif [[ $MODEL = gpt ]]; then
-	DATA_PATH=/scratch/wikitext-megatron/wikitext-train_text_document
+	DATA_PATH=/home/ubuntu/megatron-data/oa-top1/oa-top1-train_text_document
 	TOKENIZER=FalconTokenizer
 	EXTRA_ARGS="--num_layers 4 --hidden_size 512 --num_attention_heads 8"
 	SEQ_LEN=2048
@@ -91,13 +91,22 @@ else
 	exit 1
 fi
 COMMON_ARGS="--use_flash_attn --no_bias_gelu_fusion
-	     --seq_length $SEQ_LEN --max_position_embeddings $SEQ_LEN
+	     --seq_length 512 --max_position_embeddings $SEQ_LEN
              --log_interval 1 --save_interval 50 --eval_interval 50
              --eval_iters 10 --hidden_dropout 0.0 --position_embedding_type rotary
 	     --no_bias_dropout_fusion --use_checkpoint_args --train_iters 10000
 	     --attention_dropout 0.0 --adam_beta1 0.9 --adam_beta2 0.95 --adam_eps 1e-5
 	     --lr_decay_style cosine --lr_warmup_iters 2000 --lr $LR --min_lr 1e-6
 	     --weight_decay 0.1 --sequence_parallel --recompute_granularity selective"
+
+# COMMON_ARGS="--use_flash_attn --no_bias_gelu_fusion
+# 	     --seq_length $SEQ_LEN --max_position_embeddings $SEQ_LEN
+#              --log_interval 1 --save_interval 50 --eval_interval 50
+#              --eval_iters 10 --hidden_dropout 0.0 --position_embedding_type rotary
+# 	     --no_bias_dropout_fusion --use_checkpoint_args --train_iters 10000
+# 	     --attention_dropout 0.0 --adam_beta1 0.9 --adam_beta2 0.95 --adam_eps 1e-5
+# 	     --lr_decay_style cosine --lr_warmup_iters 2000 --lr $LR --min_lr 1e-6
+# 	     --weight_decay 0.1 --sequence_parallel --recompute_granularity selective"
 
 if [[ $WANDB = 1 ]]; then
 	COMMON_ARGS="$COMMON_ARGS --wandb_logger"

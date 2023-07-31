@@ -2,7 +2,7 @@
 
 # assert correct usage
 if [[ $# -ne 4 ]]; then
-	echo "Usage: $0 <llama/falcon> <7,13,30,40,65> <tp> <pp>"
+	echo "Usage: $0 <llama/llama2/falcon> <7,13,30,40,65> <tp> <pp>"
 	exit 1
 fi
 
@@ -30,8 +30,8 @@ fi
 python tools/checkpoint_util.py \
        --target_tensor_parallel_size $TENSOR_PARALLELISM \
        --target_pipeline_parallel_size $PIPELINE_PARALLELISM \
-       --load_dir /pure-mlo-scratch/alhernan/megatron-data/checkpoints/${MODEL}-${SIZE}b/ \
-       --save_dir /pure-mlo-scratch/alhernan/megatron-data/checkpoints/${MODEL}-${SIZE}b-tp$TENSOR_PARALLELISM-pp$PIPELINE_PARALLELISM/ \
+       --load_dir /home/ubuntu/megatron-data/checkpoints/${MODEL}-${SIZE}b/ \
+       --save_dir /home/ubuntu/megatron-data/checkpoints/${MODEL}-${SIZE}b-tp$TENSOR_PARALLELISM-pp$PIPELINE_PARALLELISM/ \
        --model_type $MODEL \
        --true_vocab_size $TRUE_VOCAB_SIZE \
        $EXTRA_ARGS

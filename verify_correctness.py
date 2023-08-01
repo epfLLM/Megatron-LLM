@@ -87,8 +87,9 @@ def verify_step(forward1, model1, forward2, model2, iterator):
             f"ours={logits1.size()}, true={logits2.size()}"
     logits1 = logits1.cpu()
     logits2 = logits2.cpu()
-    abs_error = torch.max(torch.abs(logits1 - logits2))
-    print(f"Max absoulute error in the logits: {abs_error:.6f}")
+    abs_error = torch.abs(logits1 - logits2)
+    print("Max absoulute error in the logits:",
+          f"max={torch.max(abs_error):.6f}, avg={torch.mean(abs_error):.6f}")
     assert loss1.size() == loss2.size()
     loss1 = loss1.cpu()
     loss2 = loss2.cpu()

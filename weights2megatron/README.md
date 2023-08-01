@@ -34,6 +34,12 @@ See also `examples/weights2megatron.sh`.
 Llama weights are not so easily available, but the MLO lab has access to them so we are ok.
 In this case you also need to specify the directory specified as `--cache-dir` will be used to fetch the llama weights, for instance run:
 
+**IMPORTANT**: If you are using megatron converted weights produced in the commit [264a745](https://github.com/epfLLM/old-Megatron-LM/commit/264a745b045912c2972a44aa8883a03b9ffe7c98) or earlier, you will need to update your weights.
+Use:
+```
+python weights2megatron/permute_qkv.py --input-dir=/path/to/old/checkpoint/ --output-dir=/path/to/new/checkpoint/
+```
+
 ## Correctness verification
 
 **Warning**: The current code does not support model-parallelism, this is still work in progress.

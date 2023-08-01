@@ -62,7 +62,7 @@ DISTRIBUTED_ARGS="--nproc_per_node $GPUS_PER_NODE --nnodes $N_NODES --node_rank
 if [[ $MODEL = falcon ]]; then
 	DATA_PATH=/pure-mlo-scratch/pagliard/data/wikitext-falcon/wiki-train_text_document
 	TOKENIZER=FalconTokenizer
-	EXTRA_ARGS="--use_multiquery_attn --parallel_attn"
+	EXTRA_ARGS="--parallel_attn"
 	SEQ_LEN=2048
 elif [[ $MODEL = llama ]] || [[ $MODEL = llama2 ]]; then
 	DATA_PATH=/pure-mlo-scratch/trial-runs/test/pubmed-all-llama_text_document

@@ -2,6 +2,7 @@
 
 """General utilities."""
 
+import os
 import sys
 
 import torch
@@ -212,3 +213,16 @@ def print_rank_last(message):
             print(message, flush=True)
     else:
         print(message, flush=True)
+
+
+def is_last_local_rank():
+    return get_args().local_rank == (int(os.environ["LOCAL_WORLD_SIZE"]) - 1)
+
+
+def print_all_nodes(*args, **kwargs):
+    """If distributed is initialized, print on the last rank in all nodes."""
+    if torch.distributed.is_initialized():
+        if is_last_local_rank():
+            print(*args, **kwargs)
+    else:
+        print(*args, **kwargs)

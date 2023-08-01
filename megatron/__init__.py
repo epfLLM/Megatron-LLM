@@ -12,5 +12,6 @@ from .global_vars import get_adlr_autoresume
 from .global_vars import get_timers
 
 from .utils import (print_rank_0,
+                    print_all_nodes,
                     is_last_rank,
                     print_rank_last)

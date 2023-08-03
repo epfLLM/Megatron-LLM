@@ -1,0 +1,22 @@
+defaults:
+  rng_seed: 42
+  cache_dir: .cache
+  use_system_prefix: false
+  datasets_extra: [] # For config options to add additional datasets, since yaml doesn't let us extend arrays
+  eval_size:
+  tokenizer_type: "SentencePieceTokenizer"
+  vocab_extra_ids_list: "<|im_start|>,<|im_end|>"
+  dataset_impl: "mmap"
+
+
+llama_oasst_top1:
+  vocab_file: "/home/ubuntu/megatron-data/llama2-7b/tokenizer.model"
+  datasets:
+    - oasst_export:
+        lang: "bg,ca,cs,da,de,en,es,fr,hr,hu,it,nl,pl,pt,ro,ru,sl,sr,sv,uk"
+        #hf_dataset_name: OpenAssistant/oasst1
+        input_file_path: 2023-07-23_oasst_ready.tar.gz
+        top_k: 1
+        val_split: 0.05
+  output_dir: "output/llama_oasst_top1_2023-07-23"
+  filename_prefix: "oasst_top1"

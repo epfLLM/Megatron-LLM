@@ -33,9 +33,14 @@ See also `examples/weights2megatron.sh`.
 
 Llama weights are not so easily available, you need to [request them from meta](https://ai.meta.com/llama/).
 In this case you also need to specify the directory specified as `--cache-dir` will be used to fetch the llama weights, for instance run:
-
 ```
 python weights2megatron.py llama2 --size=7 --out=/path/to/output/directory/ --cache-dir=/path/to/meta/llama-2-7b/
+```
+
+**IMPORTANT**: If you are using megatron converted weights produced in the commit [332cf3c](https://github.com/epfLLM/Megatron-LLM/commit/332cf3cdb9b08a7dc26cb2764496378b58088012) or earlier, you will need to update your weights.
+Use:
+```
+python weights2megatron/permute_qkv.py --input-dir=/path/to/old/checkpoint/ --output-dir=/path/to/new/checkpoint/
 ```
 
 ## Correctness verification

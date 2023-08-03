@@ -8,6 +8,7 @@ import torch
 from tqdm.auto import trange
 from transformers import AutoModelForCausalLM
 
+from permute_qkv import permute_qkv
 from merge_llama import merge_llama
 
 
@@ -44,7 +45,7 @@ def falcon_to_megatron(weights: dict, size: int) -> dict:
             weights[f"{prefix2}.mlp.dense_4h_to_h.weight"]
         # qkv weights
         transformer[f"{prefix1}.attention.query_key_value.weight"] = \
-            weights[f"{prefix2}.self_attention.query_key_value.weight"]
+            permute_qkv(weights[f"{prefix2}.self_attention.query_key_value.weight"])
         # dense
         transformer[f"{prefix1}.self_attention.dense.weight"] = \
             weights[f"{prefix2}.self_attention.dense.weight"]
@@ -93,6 +94,7 @@ def llama_to_megatron(llama_config: dict, size: int, version: int = 1):
             w_qkv += [wq_convert[i*n_qs_per_kv + j] for j in range(n_qs_per_kv)]
             w_qkv += [wk_convert[i], wv_convert[i]]
         out = torch.concat(w_qkv, dim=0)
+        out = permute_qkv(out, dim, n_heads, n_kv_heads)
         return out
 
     # dictionary

@@ -105,7 +105,7 @@ def convert_wqkv(llama_mega, layer_idx=0, n_heads=32):
 
 def convert_ffn(llama_mega, layer_idx=0, n_dense=11008):
     mega_ffn = llama_mega['transformer'][f'layers.{layer_idx}.mlp.dense_h_to_4h.weight']
-    ffn_w1, ffn_w3 = mega_ffn.split(n_dense, dim=0)
+    ffn_w3, ffn_w1 = mega_ffn.split(n_dense, dim=0)
     return ffn_w1, ffn_w3
 
 def write_model(model_path, 

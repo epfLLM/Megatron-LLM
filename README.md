@@ -55,6 +55,6 @@ If you use this software please cite it:
                   Martin Jaggi},
   title        = {epfLLM Megatron-LM},
   year         = 2023,
-  url          = {https://github.com/epfLLM/Megatron-LM}
+  url          = {https://github.com/epfLLM/Megatron-LLM}
 }
 </pre>

@@ -1,0 +1,11 @@
+
+   megatron.core
+   megatron.data
+   megatron.fp16_deprecated
+   megatron.fused_kernels
+   megatron.model
+   megatron.mpu
+   megatron.optimizer
+   megatron.static
+   megatron.text_generation
+   megatron.tokenizer

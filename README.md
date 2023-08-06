@@ -1,6 +1,6 @@
 
 <div align="center">
-  <img src="imgs/llama-falcon.png"  width="500">
+  <img src="docs/imgs/llama-falcon.png"  width="500">
 </div>
 
 # Megatron-LLM

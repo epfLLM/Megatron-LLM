@@ -67,7 +67,7 @@ if [[ $MODEL = falcon ]]; then
 	EXTRA_ARGS="--parallel_attn"
 	SEQ_LEN=2048
 elif [[ $MODEL = llama ]] || [[ $MODEL = llama2 ]]; then
-	DATA_PATH=/root/koepf/data/llama_oasst_top1_2023-07-23/oasst_top1-train-text
+	DATA_PATH=/root/koepf/data/llama_oasst_top1_2023-07-23/oasst_top1-train
 	TOKENIZER=SentencePieceTokenizer
 	EXTRA_ARGS='--vocab_file=/root/koepf/llama2/Llama-2-7b/tokenizer.model --use_rms_norm
 	            --glu_activation swiglu --no_tie_embed_logits
@@ -111,7 +111,7 @@ COMMON_ARGS="--use_flash_attn --no_bias_gelu_fusion
 # 	     --weight_decay 0.1 --sequence_parallel --recompute_granularity selective"
 
 if [[ $WANDB = 1 ]]; then
-	COMMON_ARGS="$COMMON_ARGS --wandb_logger --wandb_project epfl-mt-sft --wandb_entity open-assistant --wandb_id run5"
+	COMMON_ARGS="$COMMON_ARGS --wandb_logger --wandb_project epfl-mt-sft --wandb_entity open-assistant --wandb_id run7"
 fi
 
 # print some args

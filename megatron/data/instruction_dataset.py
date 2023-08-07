@@ -2,7 +2,6 @@ import time
 from typing import Optional
 
 import numpy as np
-import torch
 from torch.utils.data import Dataset
 
 from megatron.utils import print_rank_0
@@ -19,16 +18,19 @@ class InstructionDataset(Dataset):
         self,
         name: str,
         sample_indices: np.ndarray,
-        indexed_dataset: Dataset,
+        indexed_datasets: dict[str, Dataset],
         seq_length: int,
     ):
+        self.indexed_text = indexed_datasets["text"]
+        self.indexed_role = indexed_datasets["role"]
+
         # validate indices
         assert np.min(sample_indices) >= 0
-        assert np.max(sample_indices) < len(indexed_dataset)
+        assert np.max(sample_indices) < len(self.indexed_text)
+        assert len(self.indexed_text) == len(self.indexed_role)
 
         self.name = name
         self.sample_indices = sample_indices
-        self.indexed_dataset = indexed_dataset
         self.seq_length = seq_length
 
     def __len__(self) -> int:
@@ -37,26 +39,37 @@ class InstructionDataset(Dataset):
     def __getitem__(self, idx) -> dict:
         # Get the shuffled index.
         idx = self.sample_indices[idx]
-        sample = self.indexed_dataset.get(idx)
-        return {"text": np.array(sample, dtype=np.int64)}
+        text = self.indexed_text.get(idx)
+        role = self.indexed_role.get(idx)
+        return {
+            "text": text.astype(np.int64),
+            "role": role.astype(np.int64),
+        }
 
 
-def get_indexed_dataset_(data_prefix, data_impl: str, skip_warmup: bool) -> Dataset:
+def get_indexed_datasets_(
+    data_prefix, data_impl: str, skip_warmup: bool
+) -> dict[str, Dataset]:
     print_rank_0(" > building dataset index ...")
 
     start_time = time.time()
-    indexed_dataset = megatron.data.indexed_dataset.make_dataset(
-        data_prefix,
+    indexed_text = megatron.data.indexed_dataset.make_dataset(
+        data_prefix + "-text",
         data_impl,
         skip_warmup,
     )
-    assert indexed_dataset is not None
+    indexed_role = megatron.data.indexed_dataset.make_dataset(
+        data_prefix + "-role",
+        data_impl,
+        skip_warmup,
+    )
+    assert indexed_text is not None
     print_rank_0(
         " > finished creating indexed dataset in {:4f} seconds".format(
             time.time() - start_time
         )
     )
-    num_docs = len(indexed_dataset)
+    num_docs = len(indexed_text)
     print_rank_0("    number of documents: {}".format(num_docs))
 
     indices = np.arange(
@@ -65,20 +78,20 @@ def get_indexed_dataset_(data_prefix, data_impl: str, skip_warmup: bool) -> Data
         step=1,
         dtype=np.int32,
     )
-    n_tokens = np.sum(indexed_dataset.sizes[indices])
+    n_tokens = np.sum(indexed_text.sizes[indices])
 
     print_rank_0("    number of tokens: {}".format(n_tokens))
-    return indexed_dataset
+    return {"text": indexed_text, "role": indexed_role}
 
 
 def _sample_dataset(
     np_rng: np.random.RandomState,
     document_indices: np.ndarray,
-    indexed_dataset: Dataset,
+    indexed_datasets: dict[str, Dataset],
     name: str,
     num_samples: int,
     seq_length: int,
-) -> Dataset | None:
+) -> InstructionDataset | None:
     """Compute randomized index of samples for all epochs (num_samples)"""
     assert num_samples > 0
 
@@ -93,7 +106,7 @@ def _sample_dataset(
     dataset = InstructionDataset(
         name,
         sample_indices,
-        indexed_dataset,
+        indexed_datasets,
         seq_length,
     )
     return dataset
@@ -107,16 +120,16 @@ def _build_dataset_kernel(
     seq_length: int,
     seed: int,
     skip_warmup: bool,
-):
+) -> InstructionDataset:
     """
     Build dataset. This method is called when individual
     train, valid, test datasets are provided
     """
 
     # Indexed dataset.
-    indexed_dataset = get_indexed_dataset_(data_prefix, data_impl, skip_warmup)
+    indexed_datasets = get_indexed_datasets_(data_prefix, data_impl, skip_warmup)
 
-    total_num_of_documents = indexed_dataset.sizes.shape[0]
+    total_num_of_documents = len(indexed_datasets["text"])
 
     print_rank_0("    {}:".format(dataset_name))
     print_rank_0(
@@ -127,7 +140,7 @@ def _build_dataset_kernel(
     documents = np.arange(start=0, stop=total_num_of_documents, step=1, dtype=np.int32)
     np_rng = np.random.RandomState(seed=seed)
     dataset = _sample_dataset(
-        np_rng, documents, indexed_dataset, dataset_name, num_samples, seq_length
+        np_rng, documents, indexed_datasets, dataset_name, num_samples, seq_length
     )
 
     return dataset
@@ -191,9 +204,9 @@ def _build_train_valid_test_datasets(
     """Build train, valid, and test datasets."""
 
     # Indexed dataset.
-    indexed_dataset = get_indexed_dataset_(data_prefix, data_impl, skip_warmup)
+    indexed_datasets = get_indexed_datasets_(data_prefix, data_impl, skip_warmup)
 
-    total_num_of_documents = len(indexed_dataset)
+    total_num_of_documents = len(indexed_datasets["text"])
     splits = get_train_valid_test_split_(splits_string, total_num_of_documents)
 
     # Print stats about the splits.
@@ -226,7 +239,7 @@ def _build_train_valid_test_datasets(
         return _sample_dataset(
             np_rng,
             split_subset,
-            indexed_dataset,
+            indexed_datasets,
             name,
             num_samples,
             seq_length,

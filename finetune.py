@@ -88,9 +88,7 @@ def get_batch_old(data_iterator):
     return tokens, labels, loss_mask, attention_mask, position_ids
 
 
-def get_masks_and_position_ids(
-    data, attention_mask, loss_mask
-):
+def get_attention_mask_and_position_ids(data, attention_mask):
     """Build masks and position id for left to right model."""
 
     # Extract batch size and sequence length.
@@ -98,20 +96,23 @@ def get_masks_and_position_ids(
 
     # Attention mask (lower triangular).
     att_mask_batch = micro_batch_size
-    attention_mask = attention_mask.unsqueeze(-1).expand(micro_batch_size, seq_length, seq_length).to(data.device)
-    attention_mask = torch.tril(attention_mask).view(att_mask_batch, 1, seq_length, seq_length)
+    attention_mask = (
+        attention_mask.unsqueeze(-1)
+        .expand(micro_batch_size, seq_length, seq_length)
+        .to(data.device)
+    )
+    attention_mask = torch.tril(attention_mask).view(
+        att_mask_batch, 1, seq_length, seq_length
+    )
 
     # Convert attention mask to binary, True entries will masked
     attention_mask = attention_mask < 0.5
-
-    # Loss mask.
-    loss_mask = loss_mask.float().to(data.device)
 
     # Position ids.
     position_ids = torch.arange(seq_length, dtype=torch.long, device=data.device)
     position_ids = position_ids.unsqueeze(0).expand_as(data)
 
-    return attention_mask, loss_mask, position_ids
+    return attention_mask, position_ids
 
 
 def get_batch(data_iterator):
@@ -136,14 +137,16 @@ def get_batch(data_iterator):
     labels = torch.roll(tokens, shifts=-1, dims=-1)
 
     attention_mask = data_b["attention_mask"]
-    attention_mask[:, -1] = 0
+    attention_mask[:, -1] = 0  # no target for last element due to roll
 
     loss_mask = data_b["loss_mask"]
-    loss_mask[:, -1] = 0
+    loss_mask = torch.roll(loss_mask, -1, -1)
+    loss_mask[:, -1] = 0  # no target for last element due to roll
+    loss_mask = loss_mask.float().to(tokens.device)
 
     # Get the masks and postition ids.
-    attention_mask, loss_mask, position_ids = get_masks_and_position_ids(
-        tokens, attention_mask, loss_mask
+    attention_mask, position_ids = get_attention_mask_and_position_ids(
+        tokens, attention_mask
     )
 
     return tokens, labels, loss_mask, attention_mask, position_ids
@@ -153,6 +156,7 @@ def loss_func(loss_mask, output_tensor):
     losses = output_tensor.float()
     loss_mask = loss_mask.view(-1).float()
     loss = torch.sum(losses.view(-1) * loss_mask) / loss_mask.sum()
+    # batch_fill_rate = loss_mask.sum()/losses.nelement()
     # Reduce loss for logging.
     averaged_loss = average_losses_across_data_parallel_group([loss])
     return loss, {"lm loss": averaged_loss[0]}
@@ -237,7 +241,7 @@ def instruction_train_valid_test_datasets_provider(train_val_test_num_samples):
         valid_data_prefix=args.valid_data_path,
         test_data_prefix=args.test_data_path,
     )
-    print_rank_0("> finished creating GPT datasets ...")
+    print_rank_0("> finished creating Instruction datasets ...")
 
     return train_ds, valid_ds, test_ds
 
@@ -266,19 +270,24 @@ def instruction_collator(args, data):
     # pad data to seq_len, create attention mask
     batch_size = len(data)
     attention_mask = torch.ones((batch_size, seq_len), dtype=torch.long)
+    role = torch.full_like(attention_mask, -1)
     input = torch.zeros((batch_size, seq_len), dtype=torch.long)
 
     for i, x in enumerate(data):
         t = x["text"]
+        r = x["role"]
         l = len(t)
+
         if l < seq_len:
-            attention_mask[i, l :] = 0
-            input[i, l :] = pad_id
+            attention_mask[i, l:] = 0
+            input[i, l:] = pad_id
             input[i, :l] = torch.from_numpy(t)
+            role[i, :l] = torch.from_numpy(r)
         else:
             input[i] = torch.from_numpy(t[:seq_len])
+            role[i] = torch.from_numpy(r[:seq_len])
 
-    loss_mask = attention_mask.clone()
+    loss_mask = role.eq(2).long()  # 2: assistant tokens
 
     return {"text": input, "attention_mask": attention_mask, "loss_mask": loss_mask}
 

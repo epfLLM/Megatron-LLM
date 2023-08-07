@@ -13,3 +13,6 @@ hidden/*
 **.swo
 dist/
 megatron/data/helpers
+
+docs/_build/
+docs/api/megatron/

@@ -20,6 +20,17 @@ Added key features include:
 - Support for special tokens & tokenizers
 - WandB integration
 
+# Documentation
+
+Take a look at [the online documentation](https://epfllm.github.io/Megatron-LLM).
+
+Alternatively, build the compilation from source:
+```
+cd docs/
+pip install -r requirements.txt
+make html
+```
+
 # Setup
 
 Because of heavy use of [Apex](https://github.com/NVIDIA/apex), this codebase is currently for Nvidia GPUs only.
@@ -32,7 +43,6 @@ We additionally add a dependency on [HuggingFace Transfomers](https://pypi.org/p
 
 PyTorch>=2.0.0 is required for flash attention.
 
-Take a look at [the documentation](https://epfllm.github.io/Megatron-LLM).
 A recommended entrypoint is `examples/finetune.sh`.
 You will need to adjust some parameters  lines 64 to 104 of that file, as well as provide an indexed dataset (the general flow is weights2megatron -> prallelize -> finetune ).
 Information on preparing data is at `tokenize-utils/README.md`.

@@ -97,7 +97,7 @@ def convert_wqkv(llama_mega, layer_idx=0, n_heads=32, n_heads_kv=8):
     mega_qkv = llama_mega[key][f'layers.{layer_idx}.{attn_key}.query_key_value.weight']
     # jn_hidden_per_head = mega_qkv.shape[0]//n_heads//3
     n_hidden_per_head = mega_qkv.shape[1]//n_heads
-    mega_qkv = permute_qkv(mega_qkv, mega_qkv.shape[1], n_heads, n_heads_kv, revert=True)
+    # mega_qkv = permute_qkv(mega_qkv, mega_qkv.shape[1], n_heads, n_heads_kv)
     # mega_qkv = permute_qkv(mega_qkv, mega_qkv.shape[1], n_heads, n_heads_kv)
     mega_qkv_chunk = torch.split(mega_qkv, n_hidden_per_head, dim=0)
 
@@ -117,12 +117,20 @@ def convert_wqkv(llama_mega, layer_idx=0, n_heads=32, n_heads_kv=8):
     return wq_proj, wk_proj, wv_proj
 
 def convert_ffn(llama_mega, layer_idx=0, n_dense=11008):
+<<<<<<< Updated upstream
+<<<<<<< Updated upstream
+    mega_ffn = llama_mega['transformer'][f'layers.{layer_idx}.mlp.dense_h_to_4h.weight']
+    ffn_w3, ffn_w1 = mega_ffn.split(n_dense, dim=0)
+=======
+=======
+>>>>>>> Stashed changes
     if 'transformer' in llama_mega:
         key = 'transformer'
     else:
         key = 'encoder'
     mega_ffn = llama_mega[key][f'layers.{layer_idx}.mlp.dense_h_to_4h.weight']
-    ffn_w3, ffn_w1 = mega_ffn.split(n_dense, dim=0)
+    ffn_w1, ffn_w3 = mega_ffn.split(n_dense, dim=0)
+>>>>>>> Stashed changes
     return ffn_w1, ffn_w3
 
 def write_model(model_path, 
@@ -149,45 +157,42 @@ def write_model(model_path,
 
     # permute for sliced rotary
     def permute(w, skip_permute=skip_permute):
-        if skip_permute:
-            return w
-        return w.view(n_heads, n_hidden // n_heads // 2, 2, n_hidden).transpose(1, 2).reshape(n_hidden, n_hidden)
+        # return w
+        # if skip_permute:
+        #     return w
+        # return w.view(n_heads, n_hidden // n_heads // 2, 2, n_hidden).transpose(1, 2).reshape(n_hidden, n_hidden)
+        # return w.view(n_heads, 2, n_hidden // n_heads // 2, n_hidden).transpose(1, 2).reshape(n_hidden, n_hidden)
+        w = w.view(n_heads, 2, n_hidden // n_heads // 2, n_hidden).transpose(1, 2).reshape(n_hidden, n_hidden)
+        w = w.view(n_heads, 2, n_hidden // n_heads // 2, n_hidden).transpose(1, 2).reshape(n_hidden, n_hidden)
+        return w
 
     print(f"Fetching all parameters from the checkpoint at {input_base_path}.")
-    with open(os.path.join(input_base_path, 'latest_checkpointed_iteration.txt')) as f:
-        iteration = f.read()
-    print(f"Fetching iteration {iteration}")
-
     # Load weights
     if num_shards==1:
         # Not sharded
         # (The sharded implementation would also work, but this is simpler.)
         # /pure-mlo-scratch/alhernan/megatron-data/checkpoints/llama2-7b-tp4-pp1-optim/release/mp_rank_00/model_optim_rng.pt
-        loaded = torch.load(os.path.join(input_base_path, iteration, 'mp_rank_00', 'model_optim_rng.pt'), map_location="cpu")['model']['language_model']
+        loaded = torch.load(os.path.join(input_base_path, 'release', 'mp_rank_00', 'model_optim_rng.pt'), map_location="cpu")['model']['language_model']
         if 'transformer' in loaded:
             key = 'transformer'
             attn_key = 'attention'
-            word_key = 'word_embeddings.weight'
         else:
             key = 'encoder'
             attn_key = 'self_attention'
-            word_key = 'word_embeddings'
 
     else:
         # Sharded
         loaded = [
-            torch.load(os.path.join(input_base_path, iteration, f'mp_rank_{i:02d}', 'model_optim_rng.pt'), map_location="cpu")['model']['language_model']
+            torch.load(os.path.join(input_base_path, 'release', f'mp_rank_{i:02d}', 'model_optim_rng.pt'), map_location="cpu")['model']['language_model']
             for i in range(num_shards)
         ]
 
         if 'transformer' in loaded[0]:
             key = 'transformer'
             attn_key = 'attention'
-            word_key = 'word_embeddings.weight'
         else:
             key = 'encoder'
             attn_key = 'self_attention'
-            word_key = 'word_embeddings'
 
     print('Llama-Megatron Loaded!')
     param_count = 0
@@ -298,25 +303,18 @@ def write_model(model_path,
     if num_shards==1:
         # Unsharded
         state_dict = {
-            "model.norm.weight": loaded[key]['final_layernorm.weight'],
+            "model.embed_tokens.weight": loaded['embedding']['word_embeddings.weight'],
+            "model.norm.weight": loaded['transformer']['final_layernorm.weight'],
             "lm_head.weight": loaded['lm_head'],
         }
-        if "weight" in word_key:
-            state_dict["model.embed_tokens.weight"] = loaded['embedding'][word_key]
-        else:
-            state_dict["model.embed_tokens.weight"] = loaded['embedding'][word_key]["weight"]
     else:
         state_dict = {
-            "model.norm.weight": loaded[0][key]['final_layernorm.weight'],
+            "model.embed_tokens.weight": loaded[0]['embedding']['word_embeddings.weight'],
+            "model.norm.weight": loaded[0]['transformer']['final_layernorm.weight'],
             "lm_head.weight": loaded[0]['lm_head'],
         }
-        if "weight" in word_key:
-            state_dict["model.embed_tokens.weight"] = loaded['embedding'][word_key]
-        else:
-            state_dict["model.embed_tokens.weight"] = loaded['embedding'][word_key]["weight"]
 
     for k, v in state_dict.items():
-        print(k, v)
         index_dict["weight_map"][k] = filename
         param_count += v.numel()
     torch.save(state_dict, os.path.join(tmp_model_path, filename))
@@ -340,7 +338,7 @@ def write_model(model_path,
     gc.collect()
 
     print("Loading the checkpoint in a Llama model...")
-    model = LlamaForCausalLM.from_pretrained(tmp_model_path, torch_dtype=torch.float16)
+    model = LlamaForCausalLM.from_pretrained(tmp_model_path, torch_dtype=torch.float16, low_cpu_mem_usage=True)
     # Avoid saving this as part of the config.
     del model.config._name_or_path
 

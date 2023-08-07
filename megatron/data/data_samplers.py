@@ -4,6 +4,7 @@
 
 
 import random
+from typing import Optional
 import torch
 import numpy as np
 from torch.utils.data import Dataset
@@ -11,7 +12,7 @@ from megatron import get_args
 from megatron.core import mpu
 
 
-def build_pretraining_data_loader(dataset, consumed_samples):
+def build_pretraining_data_loader(dataset, consumed_samples, collate_fn: Optional[callable]=None):
     """Buld dataloader given an input dataset."""
 
     if dataset is None:
@@ -43,7 +44,8 @@ def build_pretraining_data_loader(dataset, consumed_samples):
     return torch.utils.data.DataLoader(dataset,
                                        batch_sampler=batch_sampler,
                                        num_workers=args.num_workers,
-                                       pin_memory=True)
+                                       pin_memory=True,
+                                       collate_fn=collate_fn)
 
 class MegatronPretrainingSampler:
 

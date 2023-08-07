@@ -3,11 +3,13 @@
 
 # default arguments
 SIZE=7
-TP=1
+TP=2
 PP=2
-GPUS_PER_NODE=4
-MICRO_BATCH=1
-GLOBAL_BATCH=1
+GPUS_PER_NODE=8
+MICRO_BATCH=2
+#MICRO_BATCH=1
+#GLOBAL_BATCH=8
+GLOBAL_BATCH=64
 RANK=0
 N_NODES=1
 ADDR=localhost
@@ -55,7 +57,7 @@ done
 
 # set args
 LR="3e-4"
-CHECKPOINT_PATH=/home/ubuntu/megatron-data/checkpoints/${MODEL}-${SIZE}b-tp$TP-pp$PP
+CHECKPOINT_PATH=/root/koepf/megatron-data/checkpoints/${MODEL}-${SIZE}b-tp$TP-pp$PP
 TENSORBOARD_PATH=$CHECKPOINT_PATH-trained/logging
 DISTRIBUTED_ARGS="--nproc_per_node $GPUS_PER_NODE --nnodes $N_NODES --node_rank
                   $RANK --master_addr $ADDR --master_port 6000"
@@ -65,11 +67,11 @@ if [[ $MODEL = falcon ]]; then
 	EXTRA_ARGS="--parallel_attn"
 	SEQ_LEN=2048
 elif [[ $MODEL = llama ]] || [[ $MODEL = llama2 ]]; then
-	DATA_PATH=/home/ubuntu/megatron-data/oa-top1/oa-top1-train_text_document
+	DATA_PATH=/root/koepf/data/llama_oasst_top1_2023-07-23/oasst_top1-train-text
 	TOKENIZER=SentencePieceTokenizer
-	EXTRA_ARGS='--vocab_file=/home/ubuntu/megatron-data/llama/tokenizer.model --use_rms_norm
+	EXTRA_ARGS='--vocab_file=/root/koepf/llama2/Llama-2-7b/tokenizer.model --use_rms_norm
 	            --glu_activation swiglu --no_tie_embed_logits
-		    --vocab_extra_ids_list "[bib_ref],[/bib_ref],[fig_ref],[/fig_ref],[bib],[/bib],[fig],[/fig],[table],[/table],[formula],[/formula]"'
+		    --vocab_extra_ids_list "<|im_start|>,<|im_end|>"'
 	if [[ $MODEL == llama ]]; then
 		SEQ_LEN=2048
 		EXTRA_ARGS="$EXTRA_ARGS --layernorm_epsilon 1e-6"
@@ -91,13 +93,13 @@ else
 	exit 1
 fi
 COMMON_ARGS="--use_flash_attn --no_bias_gelu_fusion
-	     --seq_length 512 --max_position_embeddings $SEQ_LEN
-             --log_interval 1 --save_interval 50 --eval_interval 50
+	     --seq_length 4096 --max_position_embeddings $SEQ_LEN
+             --log_interval 1 --save_interval 500 --eval_interval 50
              --eval_iters 10 --hidden_dropout 0.0 --position_embedding_type rotary
-	     --no_bias_dropout_fusion --use_checkpoint_args --train_iters 10000
+	     --no_bias_dropout_fusion --use_checkpoint_args --train_iters 2000
 	     --attention_dropout 0.0 --adam_beta1 0.9 --adam_beta2 0.95 --adam_eps 1e-5
-	     --lr_decay_style cosine --lr_warmup_iters 2000 --lr $LR --min_lr 1e-6
-	     --weight_decay 0.1 --sequence_parallel --recompute_granularity selective"
+	     --lr_decay_style cosine --lr_warmup_iters 100 --lr 1e-5 --min_lr 1e-6
+	     --weight_decay 0.000001 --sequence_parallel --recompute_granularity selective"
 
 # COMMON_ARGS="--use_flash_attn --no_bias_gelu_fusion
 # 	     --seq_length $SEQ_LEN --max_position_embeddings $SEQ_LEN
@@ -105,11 +107,11 @@ COMMON_ARGS="--use_flash_attn --no_bias_gelu_fusion
 #              --eval_iters 10 --hidden_dropout 0.0 --position_embedding_type rotary
 # 	     --no_bias_dropout_fusion --use_checkpoint_args --train_iters 10000
 # 	     --attention_dropout 0.0 --adam_beta1 0.9 --adam_beta2 0.95 --adam_eps 1e-5
-# 	     --lr_decay_style cosine --lr_warmup_iters 2000 --lr $LR --min_lr 1e-6
+# 	     --lr_decay_style cosine --lr_warmup_iters 2000 --lr 2e-5 --min_lr 1e-6
 # 	     --weight_decay 0.1 --sequence_parallel --recompute_granularity selective"
 
 if [[ $WANDB = 1 ]]; then
-	COMMON_ARGS="$COMMON_ARGS --wandb_logger"
+	COMMON_ARGS="$COMMON_ARGS --wandb_logger --wandb_project epfl-mt-sft --wandb_entity open-assistant --wandb_id run5"
 fi
 
 # print some args
@@ -125,6 +127,7 @@ echo TP=$TP
 echo PP=$PP
 echo MICRO_BATCH=$MICRO_BATCH
 echo GLOBAL_BATCH=$GLOBAL_BATCH
+echo COMMON_ARGS=$COMMON_ARGS
 echo
 
 

@@ -19,7 +19,8 @@ EXTRA_ARGS=""
 if [[ $MODEL = falcon ]]; then
 	TRUE_VOCAB_SIZE=65024
 elif [[ $MODEL = llama ]] || [[ $MODEL = llama2 ]]; then
-	TRUE_VOCAB_SIZE=32017  # 17 new tokens
+	#TRUE_VOCAB_SIZE=32017  # 17 new tokens
+       TRUE_VOCAB_SIZE=32007  # 7 new tokens:  <CLS>,<SEP>,EOD>,<MASK>,<PAD>,<|im_start|>,<|im_end|>
 	if (( $SIZE > 60 )); then
 		EXTRA_ARGS="--bf16"
 	fi
@@ -30,8 +31,8 @@ fi
 python tools/checkpoint_util.py \
        --target_tensor_parallel_size $TENSOR_PARALLELISM \
        --target_pipeline_parallel_size $PIPELINE_PARALLELISM \
-       --load_dir /home/ubuntu/megatron-data/checkpoints/${MODEL}-${SIZE}b/ \
-       --save_dir /home/ubuntu/megatron-data/checkpoints/${MODEL}-${SIZE}b-tp$TENSOR_PARALLELISM-pp$PIPELINE_PARALLELISM/ \
+       --load_dir /root/koepf/megatron-data/${MODEL}-${SIZE}b/ \
+       --save_dir /root/koepf/megatron-data/checkpoints/${MODEL}-${SIZE}b-tp$TENSOR_PARALLELISM-pp$PIPELINE_PARALLELISM/ \
        --model_type $MODEL \
        --true_vocab_size $TRUE_VOCAB_SIZE \
        $EXTRA_ARGS

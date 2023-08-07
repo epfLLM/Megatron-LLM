@@ -16,9 +16,11 @@ SIZE=$2
 if [[ $MODEL = falcon ]]; then
 	CACHE=/home/ubuntu/falcon
 elif [[ $MODEL = llama ]]; then
-	CACHE=/home/ubuntu/llama/${SIZE}B/
+	CACHE=/pure-mlo-scratch/llama/${SIZE}B/
+	#CACHE=/home/ubuntu/llama/${SIZE}B/
 elif [[ $MODEL = llama2 ]]; then
-	CACHE=/home/ubuntu/llama2/Llama-2-${SIZE}b/
+	#CACHE=/home/ubuntu/llama2/Llama-2-${SIZE}b/
+	CACHE=/root/koepf/llama2/Llama-2-${SIZE}b/
 else
 	echo "Model should be either llama or falcon, not $MODEL"
 	exit 1
@@ -26,9 +28,9 @@ fi
 
 
 # finally call the script
-mkdir /home/ubuntu/megatron-data
-python weights2megatron/weights2megatron.py \
+mkdir -p /root/koepf/megatron-data
+python3 weights2megatron/weights2megatron.py \
 	$MODEL \
 	--size=$SIZE \
-	--out=/home/ubuntu/megatron-data/${MODEL}-${SIZE}b/ \
+	--out=/root/koepf/megatron-data/${MODEL}-${SIZE}b/ \
 	--cache-dir=$CACHE

@@ -95,11 +95,11 @@ class WandbTBShim(object):
     def __init__(self, config:WandBConfig):
         super().__init__()
         self.cfg=config
-        if os.environ.get("WANDB_API_KEY") is None:
-            if self.cfg.api_key is None:
-                raise ValueError("WANDB_API_KEY is not set, nor passed as an argument")
-            else:
-                os.environ["WANDB_API_KEY"]=self.cfg.api_key
+        # if os.environ.get("WANDB_API_KEY") is None:
+        #     if self.cfg.api_key is None:
+        #         raise ValueError("WANDB_API_KEY is not set, nor passed as an argument")
+        #     else:
+        #         os.environ["WANDB_API_KEY"]=self.cfg.api_key
         wandb.init(config=config.config,
                    entity=config.entity,
                    project=config.project,

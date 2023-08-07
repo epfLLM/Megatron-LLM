@@ -11,6 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import sys
 import argparse
 import gc
 import json
@@ -22,6 +23,8 @@ import warnings
 import torch
 
 from transformers import LlamaConfig, LlamaForCausalLM, LlamaTokenizer
+
+from permute_qkv import permute_qkv
 
 
 try:
@@ -83,9 +86,19 @@ def write_json(text, path):
     with open(path, "w") as f:
         json.dump(text, f)
 
-def convert_wqkv(llama_mega, layer_idx=0, n_heads=32):
-    mega_qkv = llama_mega['transformer'][f'layers.{layer_idx}.attention.query_key_value.weight']
-    n_hidden_per_head = mega_qkv.shape[0]//n_heads//3
+def convert_wqkv(llama_mega, layer_idx=0, n_heads=32, n_heads_kv=8):
+    if 'transformer' in llama_mega:
+        key = 'transformer'
+        attn_key = 'attention'
+    else:
+        key = 'encoder'
+        attn_key = 'self_attention'
+
+    mega_qkv = llama_mega[key][f'layers.{layer_idx}.{attn_key}.query_key_value.weight']
+    # jn_hidden_per_head = mega_qkv.shape[0]//n_heads//3
+    n_hidden_per_head = mega_qkv.shape[1]//n_heads
+    mega_qkv = permute_qkv(mega_qkv, mega_qkv.shape[1], n_heads, n_heads_kv, revert=True)
+    # mega_qkv = permute_qkv(mega_qkv, mega_qkv.shape[1], n_heads, n_heads_kv)
     mega_qkv_chunk = torch.split(mega_qkv, n_hidden_per_head, dim=0)
 
     wq_proj, wk_proj, wv_proj = [], [], []
@@ -104,8 +117,12 @@ def convert_wqkv(llama_mega, layer_idx=0, n_heads=32):
     return wq_proj, wk_proj, wv_proj
 
 def convert_ffn(llama_mega, layer_idx=0, n_dense=11008):
-    mega_ffn = llama_mega['transformer'][f'layers.{layer_idx}.mlp.dense_h_to_4h.weight']
-    ffn_w1, ffn_w3 = mega_ffn.split(n_dense, dim=0)
+    if 'transformer' in llama_mega:
+        key = 'transformer'
+    else:
+        key = 'encoder'
+    mega_ffn = llama_mega[key][f'layers.{layer_idx}.mlp.dense_h_to_4h.weight']
+    ffn_w3, ffn_w1 = mega_ffn.split(n_dense, dim=0)
     return ffn_w1, ffn_w3
 
 def write_model(model_path, 
@@ -115,6 +132,7 @@ def write_model(model_path,
                 num_output_shards=2,
                 skip_permute=True,
                 norm_eps=1e-05):
+
     os.makedirs(model_path, exist_ok=True)
     tmp_model_path = os.path.join(model_path, "tmp")
     os.makedirs(tmp_model_path, exist_ok=True)
@@ -136,18 +154,41 @@ def write_model(model_path,
         return w.view(n_heads, n_hidden // n_heads // 2, 2, n_hidden).transpose(1, 2).reshape(n_hidden, n_hidden)
 
     print(f"Fetching all parameters from the checkpoint at {input_base_path}.")
+    with open(os.path.join(input_base_path, 'latest_checkpointed_iteration.txt')) as f:
+        iteration = f.read()
+    print(f"Fetching iteration {iteration}")
+
     # Load weights
     if num_shards==1:
         # Not sharded
         # (The sharded implementation would also work, but this is simpler.)
         # /pure-mlo-scratch/alhernan/megatron-data/checkpoints/llama2-7b-tp4-pp1-optim/release/mp_rank_00/model_optim_rng.pt
-        loaded = torch.load(os.path.join(input_base_path, 'release', 'mp_rank_00', 'model_optim_rng.pt'), map_location="cpu")['model']['language_model']
+        loaded = torch.load(os.path.join(input_base_path, iteration, 'mp_rank_00', 'model_optim_rng.pt'), map_location="cpu")['model']['language_model']
+        if 'transformer' in loaded:
+            key = 'transformer'
+            attn_key = 'attention'
+            word_key = 'word_embeddings.weight'
+        else:
+            key = 'encoder'
+            attn_key = 'self_attention'
+            word_key = 'word_embeddings'
+
     else:
         # Sharded
         loaded = [
-            torch.load(os.path.join(input_base_path, 'release', f'mp_rank_{i:02d}', 'model_optim_rng.pt'), map_location="cpu")['model']['language_model']
+            torch.load(os.path.join(input_base_path, iteration, f'mp_rank_{i:02d}', 'model_optim_rng.pt'), map_location="cpu")['model']['language_model']
             for i in range(num_shards)
         ]
+
+        if 'transformer' in loaded[0]:
+            key = 'transformer'
+            attn_key = 'attention'
+            word_key = 'word_embeddings.weight'
+        else:
+            key = 'encoder'
+            attn_key = 'self_attention'
+            word_key = 'word_embeddings'
+
     print('Llama-Megatron Loaded!')
     param_count = 0
     index_dict = {"weight_map": {}}
@@ -159,7 +200,8 @@ def write_model(model_path,
         if num_shards == 1:
             # Unsharded
             wq_proj, wk_proj, wv_proj = convert_wqkv(llama_mega=loaded, 
-                                          layer_idx=layer_i, n_heads=n_heads)
+                                          layer_idx=layer_i, n_heads=n_heads,
+                                          n_heads_kv=n_heads if model_size <= 13 else 8)
             ffn_w1, ffn_w3 = convert_ffn(llama_mega=loaded, 
                                         layer_idx=layer_i, 
                                         n_dense=n_dense)
@@ -171,12 +213,12 @@ def write_model(model_path,
                     wk_proj
                 ),
                 f"model.layers.{layer_i}.self_attn.v_proj.weight": wv_proj,
-                f"model.layers.{layer_i}.self_attn.o_proj.weight": loaded['transformer'][f"layers.{layer_i}.attention.dense.weight"],
+                f"model.layers.{layer_i}.self_attn.o_proj.weight": loaded[key][f"layers.{layer_i}.{attn_key}.dense.weight"],
                 f"model.layers.{layer_i}.mlp.gate_proj.weight": ffn_w1,
-                f"model.layers.{layer_i}.mlp.down_proj.weight": loaded['transformer'][f"layers.{layer_i}.mlp.dense_4h_to_h.weight"],
+                f"model.layers.{layer_i}.mlp.down_proj.weight": loaded[key][f"layers.{layer_i}.mlp.dense_4h_to_h.weight"],
                 f"model.layers.{layer_i}.mlp.up_proj.weight": ffn_w3,
-                f"model.layers.{layer_i}.input_layernorm.weight": loaded['transformer'][f"layers.{layer_i}.input_layernorm.weight"],
-                f"model.layers.{layer_i}.post_attention_layernorm.weight": loaded['transformer'][f"layers.{layer_i}.post_attention_layernorm.weight"],
+                f"model.layers.{layer_i}.input_layernorm.weight": loaded[key][f"layers.{layer_i}.input_layernorm.weight"],
+                f"model.layers.{layer_i}.post_attention_layernorm.weight": loaded[key][f"layers.{layer_i}.post_attention_layernorm.weight"],
             }
         else:
             # Sharded
@@ -185,10 +227,10 @@ def write_model(model_path,
             # redundant as other weights will be stitched from multiple shards. To avoid that, they are cloned.
 
             state_dict = {
-                f"model.layers.{layer_i}.input_layernorm.weight": loaded[0]['transformer'][
+                f"model.layers.{layer_i}.input_layernorm.weight": loaded[0][key][
                     f"layers.{layer_i}.input_layernorm.weight"
                     ].clone(),
-                f"model.layers.{layer_i}.post_attention_layernorm.weight": loaded[0]['transformer'][
+                f"model.layers.{layer_i}.post_attention_layernorm.weight": loaded[0][key][
                     f"layers.{layer_i}.post_attention_layernorm.weight"
                     ].clone(),
             }
@@ -256,18 +298,25 @@ def write_model(model_path,
     if num_shards==1:
         # Unsharded
         state_dict = {
-            "model.embed_tokens.weight": loaded['embedding']['word_embeddings.weight'],
-            "model.norm.weight": loaded['transformer']['final_layernorm.weight'],
+            "model.norm.weight": loaded[key]['final_layernorm.weight'],
             "lm_head.weight": loaded['lm_head'],
         }
+        if "weight" in word_key:
+            state_dict["model.embed_tokens.weight"] = loaded['embedding'][word_key]
+        else:
+            state_dict["model.embed_tokens.weight"] = loaded['embedding'][word_key]["weight"]
     else:
         state_dict = {
-            "model.embed_tokens.weight": loaded[0]['embedding']['word_embeddings.weight'],
-            "model.norm.weight": loaded[0]['transformer']['final_layernorm.weight'],
+            "model.norm.weight": loaded[0][key]['final_layernorm.weight'],
             "lm_head.weight": loaded[0]['lm_head'],
         }
+        if "weight" in word_key:
+            state_dict["model.embed_tokens.weight"] = loaded['embedding'][word_key]
+        else:
+            state_dict["model.embed_tokens.weight"] = loaded['embedding'][word_key]["weight"]
 
     for k, v in state_dict.items():
+        print(k, v)
         index_dict["weight_map"][k] = filename
         param_count += v.numel()
     torch.save(state_dict, os.path.join(tmp_model_path, filename))
@@ -291,7 +340,7 @@ def write_model(model_path,
     gc.collect()
 
     print("Loading the checkpoint in a Llama model...")
-    model = LlamaForCausalLM.from_pretrained(tmp_model_path, torch_dtype=torch.float16, low_cpu_mem_usage=True)
+    model = LlamaForCausalLM.from_pretrained(tmp_model_path, torch_dtype=torch.float16)
     # Avoid saving this as part of the config.
     del model.config._name_or_path
 
@@ -311,6 +360,11 @@ def write_tokenizer(tokenizer_path, input_tokenizer_path):
 
 
 def main():
+    # make sure megatron is importable
+    sys.path.append(os.path.abspath(
+        os.path.join(os.path.dirname(__file__),
+                     os.path.pardir)))
+
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--input_dir",

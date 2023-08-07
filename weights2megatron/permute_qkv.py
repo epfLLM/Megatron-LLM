@@ -10,9 +10,11 @@ from tqdm.auto import tqdm
 
 
 def permute_qkv(qkv_w: torch.Tensor, dim: int, n_heads: int,
-                n_heads_kv: int) -> torch.Tensor:
+                n_heads_kv: int, revert: bool = False) -> torch.Tensor:
 
     def permute(x):
+        if revert:
+            return x.view(head_dim//2, 2, dim).transpose(0, 1).reshape(head_dim, dim)
         return x.view(2, head_dim//2, dim).transpose(0, 1).reshape(head_dim, dim)
 
     head_dim = dim//n_heads

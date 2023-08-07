@@ -95,7 +95,7 @@ Don't forget to set the tensor and pipeline paralellism levels to the numbers se
 The loss should decrease across iterations.
 
 In order to use multi-node training using `examples/finetune.sh`, set the variables `--rank, --addr`.
-For instance, to train a llama2-7b with `pp=1, dp=4, pp=4` on two nodes with 8xGPUs each, use:
+For instance, to train a llama2-7b with `pp=1, dp=4, tp=4` on two nodes with 8xGPUs each, use:
 ```
 # on node1
 bash examples/finetune.sh llama2 --rank 0 --tp 4 --pp 1 --nodes 2 --addr host_address --size 7

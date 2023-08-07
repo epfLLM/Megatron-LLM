@@ -4,3 +4,4 @@ mist-parser >= 2.0.0
 flask >= 2.3.0
 flask_restful >= 0.3.0
 wandb >= 0.15.0
+torch >= 2.0.0

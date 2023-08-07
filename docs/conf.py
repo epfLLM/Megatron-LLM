@@ -43,6 +43,9 @@ napoleon_google_docstring = True
 # myst
 myst_enable_extensions = ["colon_fence"]
 
+# autodoc
+autodoc_mock_imports = ['amp_C', 'torchvision', 'flash_attn']
+
 templates_path = ['_templates']
 exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
 

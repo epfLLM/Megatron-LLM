@@ -126,7 +126,6 @@ class DatasetWriter:
 
 
 def format_pairs(pairs: list[str]|tuple[str]) -> tuple[list[str], list[int]]:
-    print('type(pairs)', type(pairs))
     assert isinstance(pairs, list) or isinstance(pairs, tuple)
     role_names = ("user", "assistant")
     role_ids = (1, 2)
@@ -157,7 +156,6 @@ def format_conversation(messages) -> str:
     elif isinstance(messages, DatasetEntryLm):
         return messages.text, [3]
     else:
-        print('type', type(messages), messages)
         return format_pairs(messages)
 
 
@@ -206,7 +204,6 @@ def tokenize_dataset(
 
         token_writer.add_item(tokens)
         role_writer.add_item(role_lables)
-        print(role_lables)
 
     token_writer.finalize()
     role_writer.finalize()

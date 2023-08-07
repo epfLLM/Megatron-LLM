@@ -22,7 +22,7 @@ First we need to install the dependencies.
    ```
    sudo docker run --gpus all -it --rm \
    	-v /path/to/Megatron-LLM/:/mpt/Megatron-LLM \
-   	nvcr.io/nvidia/pytorch:2.0-py3
+   	nvcr.io/nvidia/pytorch:23.07-py3
    ```
 
 1. Enter the repository:

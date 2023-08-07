@@ -1,0 +1,6 @@
+sphinx >= 4.2
+pydata-sphinx-theme >= 0.13.0
+mist-parser >= 2.0.0
+flask >= 2.3.0
+flask_restful >= 0.3.0
+wandb >= 0.15.0

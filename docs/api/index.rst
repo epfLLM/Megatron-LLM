@@ -30,8 +30,9 @@ megatron.core
 .. autosummary::
    :toctree: megatron/core
 
-   megaron.core.parallel_state
-   megaron.core.utils
+   megatron.core.parallel_state
+   megatron.core.utils
+
 
 megatron.core.tensor_parallel
 -----------------------------
@@ -124,8 +125,6 @@ megatron.tokenizer
 .. autosummary::
    :toctree: megatron/tokenizer
 
-   megatron.tokenizer.bert_tokenization.py
-   megatron.tokenizer.gpt2_tokenization.py
-   megatron.tokenizer.__init__.py
-   megatron.tokenizer.__pycache__
-   megatron.tokenizer.tokenizer.py
+   megatron.tokenizer.bert_tokenization
+   megatron.tokenizer.gpt2_tokenization
+   megatron.tokenizer.tokenizer

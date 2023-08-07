@@ -20,12 +20,21 @@ llama_s2hidden = {7: 4096, 13: 5120, 32: 6656, 65: 8192, 70: 8192}
 
 
 def falcon_to_megatron(weights: dict, size: int) -> dict:
+    def permute(qkv_w):
+        return permute_qkv(qkv_w, dim, n_heads, n_heads_kv)
+
     embedding = {}
     transformer = {}
     if size == 7:
         n_layer = 32
+        dim = 4544
+        n_heads = 71
+        n_heads_kv = 1
     else:
         n_layer = 60
+        dim = 8192
+        n_heads = 128
+        n_heads_kv = 8
 
     # weights independent of layers (i.e. token embeddings and layernorms
     assert torch.allclose(weights["lm_head.weight"],
@@ -45,7 +54,7 @@ def falcon_to_megatron(weights: dict, size: int) -> dict:
             weights[f"{prefix2}.mlp.dense_4h_to_h.weight"]
         # qkv weights
         transformer[f"{prefix1}.attention.query_key_value.weight"] = \
-            permute_qkv(weights[f"{prefix2}.self_attention.query_key_value.weight"])
+            permute(weights[f"{prefix2}.self_attention.query_key_value.weight"])
         # dense
         transformer[f"{prefix1}.self_attention.dense.weight"] = \
             weights[f"{prefix2}.self_attention.dense.weight"]

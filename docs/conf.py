@@ -11,7 +11,8 @@
 #
 import os
 import sys
-sys.path.insert(0, os.path.pardir)
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), os.path.pardir)))
+
 
 
 # -- Project information -----------------------------------------------------
@@ -44,7 +45,7 @@ napoleon_google_docstring = True
 myst_enable_extensions = ["colon_fence"]
 
 # autodoc
-autodoc_mock_imports = ['amp_C', 'torchvision', 'flash_attn']
+autodoc_mock_imports = ['amp_C', 'torchvision', 'flash_attn', 'apex']
 
 templates_path = ['_templates']
 exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']

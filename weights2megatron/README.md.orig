@@ -10,7 +10,6 @@ The main features are:
 1. **Checkpoint splitter**.
    Split the checkpoint saved in one file into multiple files, in order to use model parallelism.
 1. **Training**.
-1. **Evaluation using huggingface**.
 
 ## Tokenizing
 
@@ -34,14 +33,16 @@ See also `examples/weights2megatron.sh`.
 
 Llama weights are not so easily available, you need to [request them from meta](https://ai.meta.com/llama/).
 In this case you also need to specify the directory specified as `--cache-dir` will be used to fetch the llama weights, for instance run:
-```
-python weights2megatron.py llama2 --size=7 --out=/path/to/output/directory/ --cache-dir=/path/to/meta/llama-2-7b/
-```
 
+<<<<<<< HEAD
 **IMPORTANT**: If you are using megatron converted weights produced in the commit [332cf3c](https://github.com/epfLLM/Megatron-LLM/commit/332cf3cdb9b08a7dc26cb2764496378b58088012) or earlier, you will need to update your weights.
 Use:
 ```
 python weights2megatron/permute_qkv.py --input-dir=/path/to/old/checkpoint/ --output-dir=/path/to/new/checkpoint/
+=======
+```
+python weights2megatron.py llama2 --size=7 --out=/path/to/output/directory/ --cache-dir=/path/to/meta/llama-2-7b/
+>>>>>>> main
 ```
 
 ## Correctness verification
@@ -96,7 +97,7 @@ Don't forget to set the tensor and pipeline paralellism levels to the numbers se
 The loss should decrease across iterations.
 
 In order to use multi-node training using `examples/finetune.sh`, set the variables `--rank, --addr`.
-For instance, to train a llama2-7b with `pp=1, dp=4, tp=4` on two nodes with 8xGPUs each, use:
+For instance, to train a llama2-7b with `pp=1, dp=4, pp=4` on two nodes with 8xGPUs each, use:
 ```
 # on node1
 bash examples/finetune.sh llama2 --rank 0 --tp 4 --pp 1 --nodes 2 --addr host_address --size 7

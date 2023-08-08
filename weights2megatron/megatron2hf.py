@@ -91,13 +91,10 @@ def convert_ffn(llama_mega, layer_idx=0, n_dense=11008):
 def write_model(model_path, 
                 input_base_path, 
                 num_output_shards=2,
-                skip_permute=True,
                 norm_eps=1e-05):
 
     # permute for sliced rotary
-    def permute(w, skip_permute=skip_permute):
-        if skip_permute:
-            return w
+    def permute(w):
         return w.view(n_heads, n_hidden // n_heads // 2, 2, n_hidden).transpose(1, 2).reshape(n_hidden, n_hidden)
 
     # Preliminaries
@@ -230,7 +227,6 @@ def main():
         type=int,
         default=1,
     )
-    parser.add_argument('--skip_permute', action='store_true')
     
     parser.add_argument(
         "--output_dir",
@@ -241,8 +237,7 @@ def main():
     write_model(
         model_path=args.output_dir,
         input_base_path=args.input_dir,
-        num_output_shards=args.num_output_shards,
-        skip_permute=args.skip_permute
+        num_output_shards=args.num_output_shards
     )
     
 

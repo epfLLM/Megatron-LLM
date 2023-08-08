@@ -270,7 +270,16 @@ def _load_checkpoint(queue, args):
             if margs.use_bias:
                 message["qkv bias"] = torch.cat(qkv_bias, dim=0)
             message["dense weight"] = torch.cat(dense_weight, dim=1)
-            message["mlp l0 weight"] = torch.cat(mlp_l0_weight, dim=0)
+            if margs.glu_activation is None:
+                message["mlp l0 weight"] = torch.cat(mlp_l0_weight, dim=0)
+            else:
+                up_weights = []
+                gate_weights = []
+                for weight in mlp_l0_weight:
+                    up, gate = torch.chunk(weight, 2, dim=0)
+                    up_weights.append(up)
+                    gate_weights.append(gate)
+                message["mlp l0 weight"] = torch.cat(up_weights + gate_weights, dim=0)
             if margs.use_bias:
                 message["mlp l0 bias"] = torch.cat(mlp_l0_bias, dim=0)
             message["mlp l1 weight"] = torch.cat(mlp_l1_weight, dim=1)

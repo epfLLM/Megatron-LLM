@@ -17,8 +17,8 @@ import gc
 import json
 import math
 import os
-import shutil
 import warnings
+from tempfile import TemporaryDirectory
 
 import torch
 
@@ -133,20 +133,6 @@ def write_model(model_path,
                 skip_permute=True,
                 norm_eps=1e-05):
 
-    os.makedirs(model_path, exist_ok=True)
-    tmp_model_path = os.path.join(model_path, "tmp")
-    os.makedirs(tmp_model_path, exist_ok=True)
-
-    num_shards = num_input_shards
-    n_layers = llama_s2layer[model_size]
-    n_heads = llama_s2heads[model_size]
-    n_heads_per_shard = n_heads // num_shards
-    n_dense = llama_s2dense[model_size]
-    n_hidden = llama_s2hidden[model_size]
-    hidden_per_head = n_hidden // n_heads
-    base = 10000.0
-    inv_freq = 1.0 / (base ** (torch.arange(0, hidden_per_head, 2).float() / hidden_per_head))
-
     # permute for sliced rotary
     def permute(w, skip_permute=skip_permute):
         if skip_permute:
@@ -154,201 +140,217 @@ def write_model(model_path,
         return w.view(n_heads, n_hidden // n_heads // 2, 2, n_hidden).transpose(1, 2).reshape(n_hidden, n_hidden)
 
     print(f"Fetching all parameters from the checkpoint at {input_base_path}.")
-    with open(os.path.join(input_base_path, 'latest_checkpointed_iteration.txt')) as f:
-        iteration = f.read()
-    print(f"Fetching iteration {iteration}")
 
-    # Load weights
-    if num_shards==1:
-        # Not sharded
-        # (The sharded implementation would also work, but this is simpler.)
-        # /pure-mlo-scratch/alhernan/megatron-data/checkpoints/llama2-7b-tp4-pp1-optim/release/mp_rank_00/model_optim_rng.pt
-        loaded = torch.load(os.path.join(input_base_path, iteration, 'mp_rank_00', 'model_optim_rng.pt'), map_location="cpu")['model']['language_model']
-        if 'transformer' in loaded:
-            key = 'transformer'
-            attn_key = 'attention'
-            word_key = 'word_embeddings.weight'
-        else:
-            key = 'encoder'
-            attn_key = 'self_attention'
-            word_key = 'word_embeddings'
+    os.makedirs(model_path, exist_ok=True)
+    with TemporaryDirectory() as tmp_model_path:
+        num_shards = num_input_shards
+        n_layers = llama_s2layer[model_size]
+        n_heads = llama_s2heads[model_size]
+        n_heads_per_shard = n_heads // num_shards
+        n_dense = llama_s2dense[model_size]
+        n_hidden = llama_s2hidden[model_size]
+        hidden_per_head = n_hidden // n_heads
+        base = 10000.0
+        inv_freq = 1.0 / (base ** (torch.arange(0, hidden_per_head, 2).float() / hidden_per_head))
 
-    else:
-        # Sharded
-        loaded = [
-            torch.load(os.path.join(input_base_path, iteration, f'mp_rank_{i:02d}', 'model_optim_rng.pt'), map_location="cpu")['model']['language_model']
-            for i in range(num_shards)
-        ]
+        with open(os.path.join(input_base_path, 'latest_checkpointed_iteration.txt')) as f:
+            iteration = f.read()
+        if iteration != "release":
+            iteration = f"iter_{int(iteration):07d}"
+        print(f"Fetching iteration {iteration}")
 
-        if 'transformer' in loaded[0]:
-            key = 'transformer'
-            attn_key = 'attention'
-            word_key = 'word_embeddings.weight'
-        else:
-            key = 'encoder'
-            attn_key = 'self_attention'
-            word_key = 'word_embeddings'
+        # Load weights
+        if num_shards==1:
+            # Not sharded
+            # (The sharded implementation would also work, but this is simpler.)
+            # /pure-mlo-scratch/alhernan/megatron-data/checkpoints/llama2-7b-tp4-pp1-optim/release/mp_rank_00/model_optim_rng.pt
+            loaded = torch.load(os.path.join(input_base_path, iteration, 'mp_rank_00', 'model_optim_rng.pt'), map_location="cpu")
+            args = loaded['args']
+            loaded = loaded['model']['language_model']
+            if 'transformer' in loaded:
+                key = 'transformer'
+                attn_key = 'attention'
+                word_key = 'word_embeddings.weight'
+            else:
+                key = 'encoder'
+                attn_key = 'self_attention'
+                word_key = 'word_embeddings'
 
-    print('Llama-Megatron Loaded!')
-    param_count = 0
-    index_dict = {"weight_map": {}}
-    
-    print(f'Weighted Converting for {n_layers} layers...')
-    for layer_i in range(n_layers):
-        print(layer_i)
-        filename = f"pytorch_model-{layer_i + 1}-of-{n_layers + 1}.bin"
-        if num_shards == 1:
-            # Unsharded
-            wq_proj, wk_proj, wv_proj = convert_wqkv(llama_mega=loaded, 
-                                          layer_idx=layer_i, n_heads=n_heads,
-                                          n_heads_kv=n_heads if model_size <= 13 else 8)
-            ffn_w1, ffn_w3 = convert_ffn(llama_mega=loaded, 
-                                        layer_idx=layer_i, 
-                                        n_dense=n_dense)
-            state_dict = {
-                f"model.layers.{layer_i}.self_attn.q_proj.weight": permute(
-                    wq_proj
-                ),
-                f"model.layers.{layer_i}.self_attn.k_proj.weight": permute(
-                    wk_proj
-                ),
-                f"model.layers.{layer_i}.self_attn.v_proj.weight": wv_proj,
-                f"model.layers.{layer_i}.self_attn.o_proj.weight": loaded[key][f"layers.{layer_i}.{attn_key}.dense.weight"],
-                f"model.layers.{layer_i}.mlp.gate_proj.weight": ffn_w1,
-                f"model.layers.{layer_i}.mlp.down_proj.weight": loaded[key][f"layers.{layer_i}.mlp.dense_4h_to_h.weight"],
-                f"model.layers.{layer_i}.mlp.up_proj.weight": ffn_w3,
-                f"model.layers.{layer_i}.input_layernorm.weight": loaded[key][f"layers.{layer_i}.input_layernorm.weight"],
-                f"model.layers.{layer_i}.post_attention_layernorm.weight": loaded[key][f"layers.{layer_i}.post_attention_layernorm.weight"],
-            }
         else:
             # Sharded
-            # Note that attention.w{q,k,v,o}, feed_fordward.w[1,2,3], attention_norm.weight and ffn_norm.weight share
-            # the same storage object, saving attention_norm and ffn_norm will save other weights too, which is
-            # redundant as other weights will be stitched from multiple shards. To avoid that, they are cloned.
+            loaded = [
+                torch.load(os.path.join(input_base_path, iteration, f'mp_rank_{i:02d}', 'model_optim_rng.pt'), map_location="cpu")['model']['language_model']
+                for i in range(num_shards)
+            ]
 
-            state_dict = {
-                f"model.layers.{layer_i}.input_layernorm.weight": loaded[0][key][
-                    f"layers.{layer_i}.input_layernorm.weight"
-                    ].clone(),
-                f"model.layers.{layer_i}.post_attention_layernorm.weight": loaded[0][key][
-                    f"layers.{layer_i}.post_attention_layernorm.weight"
-                    ].clone(),
-            }
-            
-            wqs, wks, wvs, ffn_w1s, ffn_w3s = [], [], [], [], []
-            for shard_idx in range(num_shards):
-                wq_proj, wk_proj, wv_proj = convert_wqkv(llama_mega=loaded[shard_idx], 
-                                            layer_idx=layer_i, n_heads=n_heads)
-                ffn_w1, ffn_w3 = convert_ffn(llama_mega=loaded[shard_idx], 
+            if 'transformer' in loaded[0]:
+                key = 'transformer'
+                attn_key = 'attention'
+                word_key = 'word_embeddings.weight'
+            else:
+                key = 'encoder'
+                attn_key = 'self_attention'
+                word_key = 'word_embeddings'
+
+        print('Llama-Megatron Loaded!')
+        param_count = 0
+        index_dict = {"weight_map": {}}
+        
+        print(f'Weighted Converting for {n_layers} layers...')
+        for layer_i in range(n_layers):
+            print(layer_i)
+            filename = f"pytorch_model-{layer_i + 1}-of-{n_layers + 1}.bin"
+            if num_shards == 1:
+                # Unsharded
+                wq_proj, wk_proj, wv_proj = convert_wqkv(llama_mega=loaded, 
+                                              layer_idx=layer_i, n_heads=n_heads,
+                                              n_heads_kv=n_heads if model_size <= 13 else 8)
+                ffn_w1, ffn_w3 = convert_ffn(llama_mega=loaded, 
                                             layer_idx=layer_i, 
                                             n_dense=n_dense)
-                wqs.append(wq_proj)
-                wks.append(wk_proj)
-                wvs.append(wv_proj)
-                ffn_w1s.append(ffn_w1)
-                ffn_w3s.append(ffn_w3)
+                state_dict = {
+                    f"model.layers.{layer_i}.self_attn.q_proj.weight": permute(
+                        wq_proj
+                    ),
+                    f"model.layers.{layer_i}.self_attn.k_proj.weight": permute(
+                        wk_proj
+                    ),
+                    f"model.layers.{layer_i}.self_attn.v_proj.weight": wv_proj,
+                    f"model.layers.{layer_i}.self_attn.o_proj.weight": loaded[key][f"layers.{layer_i}.{attn_key}.dense.weight"],
+                    f"model.layers.{layer_i}.mlp.gate_proj.weight": ffn_w1,
+                    f"model.layers.{layer_i}.mlp.down_proj.weight": loaded[key][f"layers.{layer_i}.mlp.dense_4h_to_h.weight"],
+                    f"model.layers.{layer_i}.mlp.up_proj.weight": ffn_w3,
+                    f"model.layers.{layer_i}.input_layernorm.weight": loaded[key][f"layers.{layer_i}.input_layernorm.weight"],
+                    f"model.layers.{layer_i}.post_attention_layernorm.weight": loaded[key][f"layers.{layer_i}.post_attention_layernorm.weight"],
+                }
+            else:
+                # Sharded
+                # Note that attention.w{q,k,v,o}, feed_fordward.w[1,2,3], attention_norm.weight and ffn_norm.weight share
+                # the same storage object, saving attention_norm and ffn_norm will save other weights too, which is
+                # redundant as other weights will be stitched from multiple shards. To avoid that, they are cloned.
+
+                state_dict = {
+                    f"model.layers.{layer_i}.input_layernorm.weight": loaded[0][key][
+                        f"layers.{layer_i}.input_layernorm.weight"
+                        ].clone(),
+                    f"model.layers.{layer_i}.post_attention_layernorm.weight": loaded[0][key][
+                        f"layers.{layer_i}.post_attention_layernorm.weight"
+                        ].clone(),
+                }
                 
-            state_dict[f"model.layers.{layer_i}.self_attn.q_proj.weight"] = permute(
-                torch.cat(
+                wqs, wks, wvs, ffn_w1s, ffn_w3s = [], [], [], [], []
+                for shard_idx in range(num_shards):
+                    wq_proj, wk_proj, wv_proj = convert_wqkv(llama_mega=loaded[shard_idx], 
+                                                layer_idx=layer_i, n_heads=n_heads)
+                    ffn_w1, ffn_w3 = convert_ffn(llama_mega=loaded[shard_idx], 
+                                                layer_idx=layer_i, 
+                                                n_dense=n_dense)
+                    wqs.append(wq_proj)
+                    wks.append(wk_proj)
+                    wvs.append(wv_proj)
+                    ffn_w1s.append(ffn_w1)
+                    ffn_w3s.append(ffn_w3)
+                    
+                state_dict[f"model.layers.{layer_i}.self_attn.q_proj.weight"] = permute(
+                    torch.cat(
+                        [
+                            wq.view(n_heads_per_shard, hidden_per_head, n_hidden)
+                            for wq in range(wqs)
+                        ],
+                        dim=0,
+                    ).reshape(n_hidden, n_hidden)
+                )
+                state_dict[f"model.layers.{layer_i}.self_attn.k_proj.weight"] = permute(
+                    torch.cat(
+                        [
+                            wk.view(n_heads_per_shard, hidden_per_head, n_hidden)
+                            for wk in range(wks)
+                        ],
+                        dim=0,
+                    ).reshape(n_hidden, n_hidden)
+                )
+                state_dict[f"model.layers.{layer_i}.self_attn.v_proj.weight"] = torch.cat(
                     [
-                        wq.view(n_heads_per_shard, hidden_per_head, n_hidden)
-                        for wq in range(wqs)
+                        wv.view(n_heads_per_shard, hidden_per_head, n_hidden)
+                            for wv in range(wvs)
                     ],
                     dim=0,
                 ).reshape(n_hidden, n_hidden)
-            )
-            state_dict[f"model.layers.{layer_i}.self_attn.k_proj.weight"] = permute(
-                torch.cat(
-                    [
-                        wk.view(n_heads_per_shard, hidden_per_head, n_hidden)
-                        for wk in range(wks)
-                    ],
-                    dim=0,
-                ).reshape(n_hidden, n_hidden)
-            )
-            state_dict[f"model.layers.{layer_i}.self_attn.v_proj.weight"] = torch.cat(
-                [
-                    wv.view(n_heads_per_shard, hidden_per_head, n_hidden)
-                        for wv in range(wvs)
-                ],
-                dim=0,
-            ).reshape(n_hidden, n_hidden)
 
-            state_dict[f"model.layers.{layer_i}.self_attn.o_proj.weight"] = torch.cat(
-                [loaded[i]['transformer'][f"layers.{layer_i}.attention.dense.weight"] for i in range(num_shards)], dim=1
-            )
-            state_dict[f"model.layers.{layer_i}.mlp.gate_proj.weight"] = torch.cat(
-                ffn_w1s, dim=0
-            )
-            state_dict[f"model.layers.{layer_i}.mlp.down_proj.weight"] = torch.cat(
-                [loaded[i]['transformer'][f"layers.{layer_i}.mlp.dense_4h_to_h.weight"] for i in range(num_shards)], dim=1
-            )
-            state_dict[f"model.layers.{layer_i}.mlp.up_proj.weight"] = torch.cat(
-                ffn_w3s, dim=0
-            )
+                state_dict[f"model.layers.{layer_i}.self_attn.o_proj.weight"] = torch.cat(
+                    [loaded[i]['transformer'][f"layers.{layer_i}.attention.dense.weight"] for i in range(num_shards)], dim=1
+                )
+                state_dict[f"model.layers.{layer_i}.mlp.gate_proj.weight"] = torch.cat(
+                    ffn_w1s, dim=0
+                )
+                state_dict[f"model.layers.{layer_i}.mlp.down_proj.weight"] = torch.cat(
+                    [loaded[i]['transformer'][f"layers.{layer_i}.mlp.dense_4h_to_h.weight"] for i in range(num_shards)], dim=1
+                )
+                state_dict[f"model.layers.{layer_i}.mlp.up_proj.weight"] = torch.cat(
+                    ffn_w3s, dim=0
+                )
 
-        state_dict[f"model.layers.{layer_i}.self_attn.rotary_emb.inv_freq"] = inv_freq
+            state_dict[f"model.layers.{layer_i}.self_attn.rotary_emb.inv_freq"] = inv_freq
+            for k, v in state_dict.items():
+                index_dict["weight_map"][k] = filename
+                param_count += v.numel()
+            torch.save(state_dict, os.path.join(tmp_model_path, filename))
+            print(f'Sharded file saved to {filename}')
+
+        filename = f"pytorch_model-{n_layers + 1}-of-{n_layers + 1}.bin"
+        if num_shards==1:
+            # Unsharded
+            state_dict = {
+                "model.norm.weight": loaded[key]['final_layernorm.weight'],
+                "lm_head.weight": loaded['lm_head'],
+            }
+            if "weight" in word_key:
+                state_dict["model.embed_tokens.weight"] = loaded['embedding'][word_key]
+            else:
+                state_dict["model.embed_tokens.weight"] = loaded['embedding'][word_key]["weight"]
+        else:
+            state_dict = {
+                "model.norm.weight": loaded[0][key]['final_layernorm.weight'],
+                "lm_head.weight": loaded[0]['lm_head'],
+            }
+            if "weight" in word_key:
+                state_dict["model.embed_tokens.weight"] = loaded['embedding'][word_key]
+            else:
+                state_dict["model.embed_tokens.weight"] = loaded['embedding'][word_key]["weight"]
+
         for k, v in state_dict.items():
             index_dict["weight_map"][k] = filename
             param_count += v.numel()
         torch.save(state_dict, os.path.join(tmp_model_path, filename))
-        print(f'Sharded file saved to {filename}')
 
-    filename = f"pytorch_model-{n_layers + 1}-of-{n_layers + 1}.bin"
-    if num_shards==1:
-        # Unsharded
-        state_dict = {
-            "model.norm.weight": loaded[key]['final_layernorm.weight'],
-            "lm_head.weight": loaded['lm_head'],
-        }
-        if "weight" in word_key:
-            state_dict["model.embed_tokens.weight"] = loaded['embedding'][word_key]
-        else:
-            state_dict["model.embed_tokens.weight"] = loaded['embedding'][word_key]["weight"]
-    else:
-        state_dict = {
-            "model.norm.weight": loaded[0][key]['final_layernorm.weight'],
-            "lm_head.weight": loaded[0]['lm_head'],
-        }
-        if "weight" in word_key:
-            state_dict["model.embed_tokens.weight"] = loaded['embedding'][word_key]
-        else:
-            state_dict["model.embed_tokens.weight"] = loaded['embedding'][word_key]["weight"]
+        # Write configs
+        index_dict["metadata"] = {"total_size": param_count * 2}
+        write_json(index_dict, os.path.join(tmp_model_path, "pytorch_model.bin.index.json"))
 
-    for k, v in state_dict.items():
-        print(k, v)
-        index_dict["weight_map"][k] = filename
-        param_count += v.numel()
-    torch.save(state_dict, os.path.join(tmp_model_path, filename))
+        config = LlamaConfig(
+            vocab_size=args.padded_vocab_size,
+            hidden_size=n_hidden,
+            intermediate_size=compute_intermediate_size(n_hidden),
+            num_attention_heads=n_heads,
+            num_hidden_layers=n_layers,
+            rms_norm_eps=norm_eps,
+        )
+        config.save_pretrained(tmp_model_path)
 
-    # Write configs
-    index_dict["metadata"] = {"total_size": param_count * 2}
-    write_json(index_dict, os.path.join(tmp_model_path, "pytorch_model.bin.index.json"))
+        # Make space so we can load the model properly now.
+        del state_dict
+        del loaded
+        gc.collect()
 
-    config = LlamaConfig(
-        hidden_size=n_hidden,
-        intermediate_size=compute_intermediate_size(n_hidden),
-        num_attention_heads=n_heads,
-        num_hidden_layers=n_layers,
-        rms_norm_eps=norm_eps,
-    )
-    config.save_pretrained(tmp_model_path)
+        print("Loading the checkpoint in a Llama model...")
+        model = LlamaForCausalLM.from_pretrained(tmp_model_path, torch_dtype=torch.float16)
+        # Avoid saving this as part of the config.
+        del model.config._name_or_path
 
-    # Make space so we can load the model properly now.
-    del state_dict
-    del loaded
-    gc.collect()
-
-    print("Loading the checkpoint in a Llama model...")
-    model = LlamaForCausalLM.from_pretrained(tmp_model_path, torch_dtype=torch.float16)
-    # Avoid saving this as part of the config.
-    del model.config._name_or_path
-
-    print("Saving in the Transformers format.")
-    
-    max_num_params_per_shard = param_count*2 // max(1,(num_output_shards-1))
-    model.save_pretrained(model_path, max_shard_size=max_num_params_per_shard)
-    # shutil.rmtree(tmp_model_path)
+        print("Saving in the Transformers format.")
+        
+        max_num_params_per_shard = param_count*2 // max(1,(num_output_shards-1))
+        model.save_pretrained(model_path, max_shard_size=max_num_params_per_shard)
 
 
 def write_tokenizer(tokenizer_path, input_tokenizer_path):

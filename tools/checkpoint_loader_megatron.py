@@ -195,6 +195,7 @@ def _load_checkpoint(queue, args):
     mpu.set_pipeline_model_parallel_rank(0)
     post_process = pp_size == 1
     models = _get_models(tp_size, md.params_dtype, True, post_process)
+    models_init = models
 
     md.consumed_train_samples = consumed_train_samples
     md.consumed_valid_samples = consumed_valid_samples
@@ -205,7 +206,6 @@ def _load_checkpoint(queue, args):
         msg["name"] = name
         queue.put(msg)
 
-    # Send embeddings
     message = {
         "word embeddings": torch.cat(
             [models[tp_rank].language_model.embedding.word_embeddings.weight.data for tp_rank in range(tp_size)],
@@ -216,17 +216,31 @@ def _load_checkpoint(queue, args):
 
     queue_put("embeddings", message)
 
-    # Send lm_head, if possible
+    # Get last pipe stage if lm_head needs to be sent
     if not margs.tie_embed_logits:
+        mpu.set_pipeline_model_parallel_rank(pp_size - 1)
+        pre_process = pp_size == 1
+        if pre_process:
+            models = models_init
+        else:
+            models = _get_models(tp_size, md.params_dtype, pre_process, True)
+        models_final = models
+
         queue_put("lm_head", {"lm_head": torch.cat([models[tp_rank].language_model.lm_head.data
                                                     for tp_rank in range(tp_size)])})
 
     total_layer_num = 0
     for pp_rank in range(pp_size):
-        if pp_rank > 0:
-            mpu.set_pipeline_model_parallel_rank(pp_rank)
-            post_process = pp_rank == pp_size - 1
+        # For later pipeline parallel ranks, make the new models
+        mpu.set_pipeline_model_parallel_rank(pp_rank)
+        post_process = pp_rank == pp_size - 1
+        if pp_rank == 0:
+            models = models_init
+        elif pp_rank == pp_size - 1 and not md.tie_embed_logits:
+            models = models_final
+        else:
             models = _get_models(tp_size, md.params_dtype, False, post_process)
+
         for layer_num in range(len(models[0].language_model.encoder.layers)):
             message = {}
 
@@ -270,7 +284,16 @@ def _load_checkpoint(queue, args):
             if margs.use_bias:
                 message["qkv bias"] = torch.cat(qkv_bias, dim=0)
             message["dense weight"] = torch.cat(dense_weight, dim=1)
-            message["mlp l0 weight"] = torch.cat(mlp_l0_weight, dim=0)
+            if margs.glu_activation is None:
+                message["mlp l0 weight"] = torch.cat(mlp_l0_weight, dim=0)
+            else:
+                up_weights = []
+                gate_weights = []
+                for weight in mlp_l0_weight:
+                    up, gate = torch.chunk(weight, 2, dim=0)
+                    up_weights.append(up)
+                    gate_weights.append(gate)
+                message["mlp l0 weight"] = torch.cat(up_weights + gate_weights, dim=0)
             if margs.use_bias:
                 message["mlp l0 bias"] = torch.cat(mlp_l0_bias, dim=0)
             message["mlp l1 weight"] = torch.cat(mlp_l1_weight, dim=1)

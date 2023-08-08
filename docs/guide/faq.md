@@ -70,15 +70,15 @@ In order to launch training on multiple nodes, you will set the appropriate argu
 
 In this section we give a brief overview on the minimal hardware requirements we observed during our experiments.
 
-| Model      | min VRAM |
-| :--------- | :------: |
-| LLaMa2-7B  | 2x 80GB  |
-| LLaMa2-70B | 32x 80GB |
-| Falcon-40B | ???      |
+| Model      | min VRAM | tp  | pp  |
+| :--------- | :------: | :-: | :-: |
+| LLaMa2-7B  | 2x 80GB  | 2   | 1   |
+| Falcon-40B | 16x 80GB | 8   | 2   |
+| LLaMa2-70B | 32x 80GB | 8   | 4   |
 
 
 (shard)=
-## How to shard and unshard models?
+## How to shard and merge models?
 
 Use `tools/checkpoint_util.py` to set the desired tensor and pipeline parallelism levels.
 
@@ -93,3 +93,52 @@ python tools/checkpoint_util.py \
 ```
 Where MODEL can be either llama, llama2, falcon, gpt or bert, and TP and PP are the model parallelism levels desired.
 Note that you can convert sharded weights (i.e. TP, PP > 1) to unsharded weights (TP = PP = 1) or viceversa.
+
+## What arguments are used to train LLaMa 2?
+
+We set the same hyperparamters specified by Meta during finetuning (see [their paper for more information](https://ai.meta.com/research/publications/llama-2-open-foundation-and-fine-tuned-chat-models/)).
+This means, that training LLaMa 2 7B can be done with the following arguments:
+
+DISTRIBUTED_ARGS="--nproc_per_node $GPUS_PER_NODE --nnodes $N_NODES --node_rank
+                  $RANK --master_addr $ADDR --master_port 6000"
+```bash
+torchrun \
+	# torchrun arguments # \
+	--nproc_per_node <GPUs per node> \
+	--nnodes <number of nodes> \
+	--node_rank <0,1,2,etc a different number per node> \
+	--master_addr <address of main node> \
+	--master_port <port> \
+	finetune.py --model_name llama2 \
+	# hardware/distributed arguments # \
+	--tensor_model_parallel_size <tp size> \
+	--pipeline_model_parallel_size <pp>  \
+	--bf16 \
+	# training arguments # \
+	--train_iters <train iters> \
+	--adam_beta1 0.9 \
+	--adam_beta2 0.95 \
+	--adam_eps 1e-5 \
+	--lr_decay_style cosine 5 \
+	--lr_warmup_iters <warmup iters> \
+	--lr 3e-4 \
+	--min_lr 1e-6 \
+	--weight_decay 0.1 \
+	--micro_batch_size 5 \
+	--global_batch_size 1000 \
+	# additional optimization arguments # \
+	--use_flash_attn \
+	--sequence_parallel \
+	--recompute_granularity selective \
+	# logging/pathing arguments # \
+	--load <path to megatron-llama> \
+	--use_checkpoint_args \
+	--vocab_file <path to tokenizer.model provided by Meta> \
+	--log_interval 1 \
+	--data_path <path to tokenized data> \
+	--tokenizer_type SentencePieceTokenizer
+```
+
+```{seealso}
+The file `examples/finetune.sh` gives the full picture of the arguments used to train either LLaMa.
+```

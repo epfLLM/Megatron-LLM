@@ -233,7 +233,7 @@ We provide a Megatron to Huggingface conversion utility for easier deployment: `
 Run:
 ```
 python weights2megatron/megatron2hf.py --input_dir=/path/to/unsharded/trained/weights/ \
-	--model_size=7 --output_dir=/path/to/hf/weights/
+	--output_dir=/path/to/hf/weights/
 ```
 
 Once the conversion is done, you can load the fine tuned weights using huggingface:

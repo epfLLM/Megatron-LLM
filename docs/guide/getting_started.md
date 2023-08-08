@@ -2,10 +2,10 @@
 
 This tutorial will guide you on the basic usage of Megatrom-LLM.
 This guide we will fine tune a [LLaMa 2 7B](https://ai.meta.com/llama/) LLM on [code data](https://huggingface.co/datasets/bigcode/starcoderdata).
-It is recommended to have at least 160 VRAM available (e.g. two 80GB A100 GPUs).
+It is recommended to have at least 160GB VRAM available (e.g. two 80GB A100 GPUs).
 
 ```{note}
-This tutorial can be followed to train a Falcon architecture aswell using `falcon` instead of `llama2` throughout the guide.
+This tutorial can also be followed to train a Falcon architecture, using `falcon` instead of `llama2` throughout the guide.
 ```
 
 ## Setup
@@ -117,7 +117,7 @@ If you are using falcon, use `FalconTokenizer` instead of `SentencePieceTokenize
 (weight-conversion)=
 ## Weight conversion
 
-In order to use Falcon in the Megatron-LLM codebase, we will need to convert the official weights provided to be compatible with Megatron.
+In order to use pretrained weights in the Megatron-LLM codebase, we will need to convert the official weights provided to be compatible with Megatron.
 To do so, run:
 ```
 python weights2megatron/weights2megatron.py llama2 --size=7 \
@@ -150,9 +150,9 @@ torchrun $DISTRIBUTED_ARGS verify_correctness.py \
 This script will compare the logits output of Megatron model and the official implementation.
 Expected outputs will yield average absolute error smaller than `0.01` when using 32-bit precision and `0.1` when using 16-bit precision.
 
-## Checkpoint sharding
+## Model sharding
 
-In order to use model parallelism you need to split the previously converted weights into multiple files.
+In order to use model parallelism you need to split the previously converted weights into multiple files, before you start training.
 To do this, use `tools/checkpoint_util.py`.
 Feel free to use different tensor parallel (tp) and pipeline (pp) sizes.
 ```
@@ -215,9 +215,9 @@ Then, run the `finetune.py` script in all your nodes with the same parameters, j
 Take a look at `examples/finetune.sh for more information on the recommended hyperparameters
 ```
 
-## Deployment
+## Model Deployment
 
-First, merge your weights again:
+After training, merge your distributed weights again into a single model:
 ```
 python tools/checkpoint_util.py \
 	--target_tensor_parallel_size 1 \
@@ -229,7 +229,7 @@ python tools/checkpoint_util.py \
 	--bf16
 ```
 
-We provide with a Megatron to Huggingface utility for easier deployment: `weights2megatron/megatron2hf.py`.
+We provide a Megatron to Huggingface conversion utility for easier deployment: `weights2megatron/megatron2hf.py`.
 Run:
 ```
 python weights2megatron/megatron2hf.py --input_dir=/path/to/unsharded/trained/weights/ \
@@ -260,7 +260,7 @@ for sequence in sequences:
 
 ## What's next?
 
-1. Take a look at our example scripts to familiarize yourself with some other capabilities and hyperparameters used in the codebase:
+1. Take a look at our example scripts to familiarize yourself with some other capabilities and hyperparameters used in the codebase, such as to train larger models:
    - `examples/parallelize.sh`
    - `examples/finetune.sh`
    - `examples/verify.sh`

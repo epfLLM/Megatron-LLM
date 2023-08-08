@@ -271,7 +271,7 @@ def instruction_collator(args, data):
     batch_size = len(data)
     attention_mask = torch.ones((batch_size, seq_len), dtype=torch.long)
     role = torch.full_like(attention_mask, -1)
-    input = torch.zeros((batch_size, seq_len), dtype=torch.long)
+    input = torch.full_like(attention_mask, pad_id)
 
     for i, x in enumerate(data):
         t = x["text"]
@@ -280,14 +280,13 @@ def instruction_collator(args, data):
 
         if l < seq_len:
             attention_mask[i, l:] = 0
-            input[i, l:] = pad_id
             input[i, :l] = torch.from_numpy(t)
             role[i, :l] = torch.from_numpy(r)
         else:
             input[i] = torch.from_numpy(t[:seq_len])
             role[i] = torch.from_numpy(r[:seq_len])
 
-    loss_mask = role.eq(2).long()  # 2: assistant tokens
+    loss_mask = role.eq(2).long()  # assistant tokens have role == 2
 
     return {"text": input, "attention_mask": attention_mask, "loss_mask": loss_mask}
 

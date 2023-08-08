@@ -41,6 +41,7 @@ class InstructionDataset(Dataset):
         idx = self.sample_indices[idx]
         text = self.indexed_text.get(idx)
         role = self.indexed_role.get(idx)
+        assert text and role and text.shape == role.shape
         return {
             "text": text.astype(np.int64),
             "role": role.astype(np.int64),

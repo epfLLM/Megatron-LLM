@@ -3,10 +3,10 @@
 
 # default arguments
 SIZE=7
-TP=2
+TP=1
 PP=2
 GPUS_PER_NODE=8
-MICRO_BATCH=2
+MICRO_BATCH=1
 #MICRO_BATCH=1
 #GLOBAL_BATCH=8
 GLOBAL_BATCH=64
@@ -93,7 +93,7 @@ else
 	exit 1
 fi
 COMMON_ARGS="--use_flash_attn --no_bias_gelu_fusion
-	     --seq_length 4096 --max_position_embeddings $SEQ_LEN
+	     --seq_length 1024 --max_position_embeddings $SEQ_LEN
              --log_interval 1 --save_interval 500 --eval_interval 50
              --eval_iters 10 --hidden_dropout 0.0 --position_embedding_type rotary
 	     --no_bias_dropout_fusion --use_checkpoint_args --train_iters 2000
@@ -111,7 +111,7 @@ COMMON_ARGS="--use_flash_attn --no_bias_gelu_fusion
 # 	     --weight_decay 0.1 --sequence_parallel --recompute_granularity selective"
 
 if [[ $WANDB = 1 ]]; then
-	COMMON_ARGS="$COMMON_ARGS --wandb_logger --wandb_project epfl-mt-sft --wandb_entity open-assistant --wandb_id run7"
+	COMMON_ARGS="$COMMON_ARGS --wandb_logger --wandb_project epfl-mt-sft --wandb_entity open-assistant --wandb_id run8"
 fi
 
 # print some args

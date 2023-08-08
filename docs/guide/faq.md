@@ -99,8 +99,6 @@ Note that you can convert sharded weights (i.e. TP, PP > 1) to unsharded weights
 We set the same hyperparamters specified by Meta during finetuning (see [their paper for more information](https://ai.meta.com/research/publications/llama-2-open-foundation-and-fine-tuned-chat-models/)).
 This means, that training LLaMa 2 7B can be done with the following arguments:
 
-DISTRIBUTED_ARGS="--nproc_per_node $GPUS_PER_NODE --nnodes $N_NODES --node_rank
-                  $RANK --master_addr $ADDR --master_port 6000"
 ```bash
 torchrun \
 	# torchrun arguments # \

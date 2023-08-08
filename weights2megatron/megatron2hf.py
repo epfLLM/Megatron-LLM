@@ -172,6 +172,7 @@ def write_model(model_path,
         for k, v in state_dict.items():
             index_dict["weight_map"][k] = filename
             param_count += v.numel()
+        torch_dtype = state_dict["lm_head.weight"].dtype
         torch.save(state_dict, os.path.join(tmp_model_path, filename))
         print(f'Sharded file saved to {filename}')
 
@@ -194,7 +195,7 @@ def write_model(model_path,
         gc.collect()
 
         print("Loading the checkpoint in a Llama model...")
-        model = LlamaForCausalLM.from_pretrained(tmp_model_path, torch_dtype=torch.float16)
+        model = LlamaForCausalLM.from_pretrained(tmp_model_path, torch_dtype=torch_dtype)
         # Avoid saving this as part of the config.
         del model.config._name_or_path
 

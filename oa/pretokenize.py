@@ -7,6 +7,7 @@ import json
 import torch
 from torch.utils.data import Dataset, Subset, ConcatDataset
 
+
 from model_training.utils.utils import (
     get_dataset,
     read_yamls,
@@ -39,6 +40,114 @@ class Encoder(object):
     @property
     def special_tokens(self) -> dict:
         return self.tokenizer._special_tokens
+
+
+class DatasetWriter:
+    def __init__(
+        self,
+        filename_prefix: str,
+        vocab_size: int,
+        dataset_impl: str = "mmap",
+        feature: str = "text",
+    ):
+        self.bin_filename = f"{filename_prefix}-{feature}.bin"
+        self.idx_filename = f"{filename_prefix}-{feature}.idx"
+        self.builder = indexed_dataset.make_builder(self.bin_filename, impl=dataset_impl, vocab_size=vocab_size)
+
+    def add_item(self, tokenized_item):
+        self.builder.add_item(torch.IntTensor(tokenized_item))
+
+    def finalize(self):
+        self.builder.finalize(self.idx_filename)
+
+
+def format_pairs(pairs: list[str] | tuple[str]) -> tuple[list[str], list[int]]:
+    assert isinstance(pairs, list) or isinstance(pairs, tuple)
+    role_names = ("user", "assistant")
+    role_ids = (1, 2)
+    return [f"<|im_start|>{role_names[i%2]}\n{pairs[i]}<|im_end|>\n" for i in range(len(pairs))], [
+        role_ids[i % 2] for i in range(len(pairs))
+    ]
+
+
+def format_sft_entry(entry: DatasetEntrySft) -> tuple[list[str], list[int]]:
+    turns = []
+    roles = []
+    if entry.system_message and len(entry.system_message) > 0:
+        turns.append(f"<|im_start|>system\n{entry.system_message}<|im_end|>\n")
+        roles.append(0)
+    for m in entry.conversation:
+        if m.role == Role.prompter:
+            turns.append(f"<|im_start|>user\n{m.text}<|im_end|>\n")
+            roles.append(1)
+        elif m.role == Role.assistant:
+            turns.append(f"<|im_start|>assistant\n{m.text}<|im_end|>\n")
+            roles.append(2)
+    return turns, roles
+
+
+def format_conversation(messages) -> str:
+    if isinstance(messages, DatasetEntrySft):
+        return format_sft_entry(messages)
+    elif isinstance(messages, DatasetEntryLm):
+        return messages.text, [3]
+    else:
+        return format_pairs(messages)
+
+
+def tokenize_dataset(
+    output_dir: Path,
+    filename_prefix: str,
+    dataset: Dataset,
+    encoder: Encoder,
+    dataset_impl: str,
+    max_count: int | None = None,
+    check_tokenization: bool = True,
+):
+    full_prefix = str(output_dir / filename_prefix)
+
+    token_writer = DatasetWriter(
+        filename_prefix=full_prefix,
+        dataset_impl=dataset_impl,
+        vocab_size=encoder.tokenizer.vocab_size,
+        feature="text",
+    )
+
+    role_writer = DatasetWriter(
+        filename_prefix=full_prefix,
+        dataset_impl=dataset_impl,
+        vocab_size=16,
+        feature="role",
+    )
+
+    jsonl_path = Path(full_prefix + ".jsonl")
+    with jsonl_path.open("w", encoding="UTF-8") as jsonl_file:
+        for i, messages in enumerate(dataset):
+            if max_count and i >= max_count:
+                break
+
+            turns, turn_roles = format_conversation(messages)
+
+            tokens = []
+            role_lables = []
+            for t, r in zip(turns, turn_roles):
+                turn_tokens = encoder.encode_text(t)
+                turn_role = [r] * len(turn_tokens)
+                tokens.extend(turn_tokens)
+                role_lables.extend(turn_role)
+
+            if check_tokenization:
+                x = encoder.encode_text("".join(turns))
+                assert x == tokens and len(tokens) == len(role_lables)
+
+            token_writer.add_item(tokens)
+            role_writer.add_item(role_lables)
+
+            json.dump({"text": "".join(turns)}, jsonl_file)
+            jsonl_file.write("\n")
+
+    token_writer.finalize()
+    role_writer.finalize()
 
 
 def parse_args():
@@ -90,7 +199,7 @@ def parse_args():
     parser.add_argument(
         "--max_count",
         type=int,
-        help="Limit number of train/eval examples to process (debug)"
+        help="Limit number of train/eval examples to process (debug)",
     )
 
     args = parser.parse_args(remaining)
@@ -104,112 +213,10 @@ def parse_args():
     return args
 
 
-class DatasetWriter:
-    def __init__(
-        self,
-        filename_prefix: str,
-        vocab_size: int,
-        dataset_impl: str = "mmap",
-        feature: str = "text"
-    ):
-        self.bin_filename = f"{filename_prefix}-{feature}.bin"
-        self.idx_filename = f"{filename_prefix}-{feature}.idx"
-        self.builder = indexed_dataset.make_builder(
-            self.bin_filename, impl=dataset_impl, vocab_size=vocab_size
-        )
-
-    def add_item(self, tokenized_item):
-        self.builder.add_item(torch.IntTensor(tokenized_item))
-
-    def finalize(self):
-        self.builder.finalize(self.idx_filename)
-
-
-def format_pairs(pairs: list[str]|tuple[str]) -> tuple[list[str], list[int]]:
-    assert isinstance(pairs, list) or isinstance(pairs, tuple)
-    role_names = ("user", "assistant")
-    role_ids = (1, 2)
-    return [
-        f"<|im_start|>{role_names[i%2]}\n{pairs[i]}<|im_end|>\n" for i in range(len(pairs))
-    ], [role_ids[i%2] for i in range(len(pairs))]
-
-
-def format_sft_entry(entry: DatasetEntrySft) -> tuple[list[str], list[int]]:
-    turns = []
-    roles = []
-    if entry.system_message and len(entry.system_message) > 0:
-        turns.append(f"<|im_start|>system\n{entry.system_message}<|im_end|>\n")
-        roles.append(0)
-    for m in entry.conversation:
-        if m.role == Role.prompter:
-            turns.append(f"<|im_start|>user\n{m.text}<|im_end|>\n")
-            roles.append(1)
-        elif m.role == Role.assistant:
-            turns.append(f"<|im_start|>assistant\n{m.text}<|im_end|>\n")
-            roles.append(2)
-    return turns, roles
-
-
-def format_conversation(messages) -> str:
-    if isinstance(messages, DatasetEntrySft):
-        return format_sft_entry(messages)
-    elif isinstance(messages, DatasetEntryLm):
-        return messages.text, [3]
-    else:
-        return format_pairs(messages)
-
-
-def tokenize_dataset(
-    output_dir: Path,
-    filename_prefix: str,
-    dataset: Dataset,
-    encoder: Encoder,
-    dataset_impl: str,
-    max_count: int | None = None,
-    check_tokenization: bool = True,
-):
-    full_prefix = str(output_dir / filename_prefix)
-
-    token_writer = DatasetWriter(
-        filename_prefix=full_prefix,
-        dataset_impl=dataset_impl,
-        vocab_size=encoder.tokenizer.vocab_size,
-        feature="text"
-    )
-
-    role_writer = DatasetWriter(
-        filename_prefix=full_prefix,
-        dataset_impl=dataset_impl,
-        vocab_size=16,
-        feature="role"
-    )
-
-    for i, messages in enumerate(dataset):
-        if max_count and i >= max_count:
-            break
-
-        turns, turn_roles = format_conversation(messages)
-
-        tokens = []
-        role_lables = []
-        for t, r in zip(turns, turn_roles):
-            turn_tokens = encoder.encode_text(t)
-            turn_role = [r] * len(turn_tokens)
-            tokens.extend(turn_tokens)
-            role_lables.extend(turn_role)
-
-        if check_tokenization:
-            x = encoder.encode_text("".join(turns))
-            assert x == tokens and len(tokens) == len(role_lables)
-
-        token_writer.add_item(tokens)
-        role_writer.add_item(role_lables)
-
-    token_writer.finalize()
-    role_writer.finalize()
-
-
 def main():
+    """
+    Example usage: `python pretokenize.py --output_dir output--configs llama_oasst_top1`
+    """
     args = parse_args()
     print("Configuration:")
     for k, v in vars(args).items():
@@ -234,11 +241,12 @@ def main():
     print("Building encoder")
     encoder = Encoder(args)
 
-    print(f"Vocab size: {encoder.tokenizer.vocab_size}")
-    print(f"Output dir: {args.output_dir}")
-
     output_dir = Path(args.output_dir)
-    output_dir.mkdir(exist_ok=True)
+    
+    print(f"Vocab size: {encoder.tokenizer.vocab_size}")
+    print(f"Output dir: {args.output_dir} (exists: {output_dir.exists()})")
+
+    output_dir.mkdir(exist_ok=True)    
 
     fn = output_dir / "special_tokens.json"
     with fn.open("w") as f:

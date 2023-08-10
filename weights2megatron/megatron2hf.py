@@ -65,7 +65,7 @@ def write_json(text, path):
 def convert_wqkv(llama_mega, layer_idx=0, n_heads=32, n_heads_kv=8):
     mega_qkv = llama_mega["transformer"][f'layers.{layer_idx}.attention.query_key_value.weight']
     n_hidden_per_head = mega_qkv.shape[1]//n_heads
-    mega_qkv = permute_qkv(mega_qkv, mega_qkv.shape[1], n_heads, n_heads_kv, revert=True)
+    # mega_qkv = permute_qkv(mega_qkv, mega_qkv.shape[1], n_heads, n_heads_kv, revert=True)
     mega_qkv_chunk = torch.split(mega_qkv, n_hidden_per_head, dim=0)
 
     wq_proj, wk_proj, wv_proj = [], [], []

@@ -86,8 +86,8 @@ def llama_to_megatron(llama_config: dict, size: int, version: int = 1):
             n_kv_heads = 8
 
         dim = wq.shape[-1]
-        wq = wq.view(n_heads, n_hidden_per_head//2, 2, dim).transpose(1, 2).reshape(dim, dim)
-        wk = wk.view(n_kv_heads, n_hidden_per_head//2, 2, dim).transpose(1, 2).reshape(n_kv_heads*n_hidden_per_head, dim)
+        # wq = wq.view(n_heads, n_hidden_per_head//2, 2, dim).transpose(1, 2).reshape(dim, dim)
+        # wk = wk.view(n_kv_heads, n_hidden_per_head//2, 2, dim).transpose(1, 2).reshape(n_kv_heads*n_hidden_per_head, dim)
 
         wq_convert = torch.split(wq, n_hidden_per_head, dim=0)
         wk_convert = torch.split(wk, n_hidden_per_head, dim=0)
@@ -103,7 +103,7 @@ def llama_to_megatron(llama_config: dict, size: int, version: int = 1):
             w_qkv += [wq_convert[i*n_qs_per_kv + j] for j in range(n_qs_per_kv)]
             w_qkv += [wk_convert[i], wv_convert[i]]
         out = torch.concat(w_qkv, dim=0)
-        out = permute_qkv(out, dim, n_heads, n_kv_heads)
+        # out = permute_qkv(out, dim, n_heads, n_kv_heads)
         return out
 
     # dictionary

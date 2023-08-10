@@ -541,6 +541,9 @@ def _add_regularization_args(parser):
                        help='Post attention dropout probability.')
     group.add_argument('--hidden_dropout', type=float, default=0.1,
                        help='Dropout probability for hidden state transformer.')
+    # see "LIMA: Less Is More for Alignment", Zhou et al 2023, https://arxiv.org/abs/2305.11206
+    group.add_argument('--lima_dropout', action='store_true',
+                       help='Linearly raise the hidden_dropout probability from 0.0 at the first layer to the full hidden_dropout value at the last layer.')
     group.add_argument('--weight_decay', type=float, default=0.01,
                        help='Weight decay coefficient for L2 regularization.')
     group.add_argument('--start_weight_decay', type=float,

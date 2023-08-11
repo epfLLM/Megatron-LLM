@@ -131,7 +131,7 @@ def tokenize_dataset(
     with jsonl_path.open("w", encoding="UTF-8") as jsonl_file:
         for i, messages in enumerate(tqdm(dataset)):
 
-            if i % 10000 == 0 and min_assistant_tokens is not None:
+            if i > 0 and i % 10000 == 0 and min_assistant_tokens is not None:
                 print(f"{num_entries_below_min_assistant_tokens} ({num_entries_below_min_assistant_tokens/i:.1%}) entries had less than {min_assistant_tokens} tokens and were ignored.")
 
             turns, turn_roles = format_conversation(messages)

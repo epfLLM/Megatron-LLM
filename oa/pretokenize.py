@@ -3,6 +3,8 @@ import argparse
 from pathlib import Path
 import logging
 import json
+from tqdm import tqdm
+
 
 import torch
 from torch.utils.data import Dataset, Subset, ConcatDataset
@@ -102,6 +104,7 @@ def tokenize_dataset(
     encoder: Encoder,
     dataset_impl: str,
     max_count: int | None = None,
+    min_assistant_tokens: int | None = None,
     check_tokenization: bool = True,
 ):
     full_prefix = str(output_dir / filename_prefix)
@@ -120,21 +123,33 @@ def tokenize_dataset(
         feature="role",
     )
 
+    num_accepted_entries = 0
+    total_tokens = 0
+
+    num_entries_below_min_assistant_tokens = 0
     jsonl_path = Path(full_prefix + ".jsonl")
     with jsonl_path.open("w", encoding="UTF-8") as jsonl_file:
-        for i, messages in enumerate(dataset):
-            if max_count and i >= max_count:
-                break
+        for i, messages in enumerate(tqdm(dataset)):
+
+            if i % 10000 == 0 and min_assistant_tokens is not None:
+                print(f"{num_entries_below_min_assistant_tokens} ({num_entries_below_min_assistant_tokens/i:.1%}) entries had less than {min_assistant_tokens} tokens and were ignored.")
 
             turns, turn_roles = format_conversation(messages)
 
             tokens = []
             role_lables = []
+            num_assistant_tokens = 0
             for t, r in zip(turns, turn_roles):
                 turn_tokens = encoder.encode_text(t)
                 turn_role = [r] * len(turn_tokens)
                 tokens.extend(turn_tokens)
+                if r == 2: # assistant
+                    num_assistant_tokens += len(turn_tokens)
                 role_lables.extend(turn_role)
+
+            if min_assistant_tokens is not None and num_assistant_tokens < min_assistant_tokens:
+                num_entries_below_min_assistant_tokens += 1
+                continue
 
             if check_tokenization:
                 x = encoder.encode_text("".join(turns))
@@ -142,12 +157,22 @@ def tokenize_dataset(
 
             token_writer.add_item(tokens)
             role_writer.add_item(role_lables)
+            total_tokens += len(tokens)
 
             json.dump({"text": "".join(turns)}, jsonl_file)
             jsonl_file.write("\n")
 
+            num_accepted_entries += 1
+            if max_count and num_accepted_entries >= max_count:
+                break
+
     token_writer.finalize()
     role_writer.finalize()
+
+    print(f'Stats for {filename_prefix}:')
+    if min_assistant_tokens is not None:
+        print(f"{num_entries_below_min_assistant_tokens} ({num_entries_below_min_assistant_tokens/len(dataset):.1%}) entries had less than {min_assistant_tokens} tokens and were ignored.")
+    print(f"num_accepted_entries: {num_accepted_entries} (total_tokens: {total_tokens})")
 
 
 def parse_args():
@@ -261,6 +286,7 @@ def main():
             encoder=encoder,
             dataset_impl=args.dataset_impl,
             max_count=args.max_count,
+            min_assistant_tokens=args.min_assistant_tokens,
         )
 
 

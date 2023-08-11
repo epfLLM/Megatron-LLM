@@ -20,3 +20,20 @@ llama_oasst_top1:
         val_split: 0.05
   output_dir: "output/llama_oasst_top1_2023-07-23"
   filename_prefix: "oasst_top1"
+
+
+megacode2:
+  vocab_file: "/home/ubuntu/megatron-data/llama2-7b/tokenizer.model"
+  datasets:
+    # - dolphin-mix:
+    #     fraction: 0.1
+    #     max_char_len: 0
+    #     data_files: "flan1m-alpaca-uncensored.jsonl"
+    #     val_split: 0.02
+    #     max_val_set: 1000
+    - megacode2:
+        val_split: 0.01
+        max_val_set: 1000
+  output_dir: "output/megacode2"
+  filename_prefix: "megacode2"
+  min_assistant_tokens: 80

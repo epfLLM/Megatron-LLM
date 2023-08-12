@@ -1,6 +1,6 @@
 # import sys, os
 import argparse
-from enum import Enum
+from enum import IntEnum
 from pathlib import Path
 import logging
 import json
@@ -29,7 +29,7 @@ import indexed_dataset
 logger = logging.getLogger(__name__)
 
 
-class IntRole(Enum):
+class IntRole(IntEnum):
     System = 0
     Prompter = 1
     Assistant = 2
@@ -87,14 +87,14 @@ def format_sft_entry(entry: DatasetEntrySft) -> tuple[list[str], list[int]]:
     roles = []
     if entry.system_message and len(entry.system_message) > 0:
         turns.append(f"<|im_start|>system\n{entry.system_message}<|im_end|>\n")
-        roles.append(IntRole.System)  # 0
+        roles.append(IntRole.System.value)  # 0
     for m in entry.conversation:
         if m.role == Role.prompter:
             turns.append(f"<|im_start|>user\n{m.text}<|im_end|>\n")
-            roles.append(IntRole.Prompter)  # 1
+            roles.append(IntRole.Prompter.value)  # 1
         elif m.role == Role.assistant:
             turns.append(f"<|im_start|>assistant\n{m.text}<|im_end|>\n")
-            roles.append(IntRole.Assistant)  # 2
+            roles.append(IntRole.Assistant.value)  # 2
     return turns, roles
 
 
@@ -214,7 +214,7 @@ def tokenize_dataset(
                 turn_tokens = encoder.encode_text(t)
                 turn_role = [r] * len(turn_tokens)
                 tokens.extend(turn_tokens)
-                if r == Role.Assistant:  # assistant
+                if r == IntRole.Assistant:
                     num_assistant_tokens += len(turn_tokens)
                 role_lables.extend(turn_role)
 

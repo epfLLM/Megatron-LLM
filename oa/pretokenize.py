@@ -1,5 +1,6 @@
 # import sys, os
 import argparse
+from enum import Enum
 from pathlib import Path
 import logging
 import json
@@ -28,6 +29,12 @@ import indexed_dataset
 logger = logging.getLogger(__name__)
 
 
+class IntRole(Enum):
+    System = 0
+    Prompter = 1
+    Assistant = 2
+
+
 class Encoder(object):
     def __init__(self, args):
         self.args = args
@@ -54,7 +61,9 @@ class DatasetWriter:
     ):
         self.bin_filename = f"{filename_prefix}-{feature}.bin"
         self.idx_filename = f"{filename_prefix}-{feature}.idx"
-        self.builder = indexed_dataset.make_builder(self.bin_filename, impl=dataset_impl, vocab_size=vocab_size)
+        self.builder = indexed_dataset.make_builder(
+            self.bin_filename, impl=dataset_impl, vocab_size=vocab_size
+        )
 
     def add_item(self, tokenized_item):
         self.builder.add_item(torch.IntTensor(tokenized_item))
@@ -67,9 +76,10 @@ def format_pairs(pairs: list[str] | tuple[str]) -> tuple[list[str], list[int]]:
     assert isinstance(pairs, list) or isinstance(pairs, tuple)
     role_names = ("user", "assistant")
     role_ids = (1, 2)
-    return [f"<|im_start|>{role_names[i%2]}\n{pairs[i]}<|im_end|>\n" for i in range(len(pairs))], [
-        role_ids[i % 2] for i in range(len(pairs))
-    ]
+    return [
+        f"<|im_start|>{role_names[i%2]}\n{pairs[i]}<|im_end|>\n"
+        for i in range(len(pairs))
+    ], [role_ids[i % 2] for i in range(len(pairs))]
 
 
 def format_sft_entry(entry: DatasetEntrySft) -> tuple[list[str], list[int]]:
@@ -77,14 +87,14 @@ def format_sft_entry(entry: DatasetEntrySft) -> tuple[list[str], list[int]]:
     roles = []
     if entry.system_message and len(entry.system_message) > 0:
         turns.append(f"<|im_start|>system\n{entry.system_message}<|im_end|>\n")
-        roles.append(0)
+        roles.append(IntRole.System)  # 0
     for m in entry.conversation:
         if m.role == Role.prompter:
             turns.append(f"<|im_start|>user\n{m.text}<|im_end|>\n")
-            roles.append(1)
+            roles.append(IntRole.Prompter)  # 1
         elif m.role == Role.assistant:
             turns.append(f"<|im_start|>assistant\n{m.text}<|im_end|>\n")
-            roles.append(2)
+            roles.append(IntRole.Assistant)  # 2
     return turns, roles
 
 
@@ -97,6 +107,35 @@ def format_conversation(messages) -> str:
         return format_pairs(messages)
 
 
+class TokenStats:
+    def __init__(self, name: str, total_samples: int):
+        self.name = name
+        self.skipped_samples = 0
+        self.skipped_tokens = 0
+        self.total_samples = total_samples
+        self.min_tokens = None
+        self.max_tokens = 0
+        self.accepted_samples = 0
+        self.accepted_tokens = 0
+
+    @property
+    def processed_samples(self) -> int:
+        return self.accepted_samples + self.skipped_samples
+
+    def skip(self, tokens: list[int]) -> None:
+        self.skipped_samples += 1
+        self.skipped_tokens = len(tokens)
+
+    def add(self, tokens: list[int]) -> None:
+        l = len(tokens)
+        self.accepted_samples += 1
+        self.accepted_tokens += l
+        if self.min_tokens is None or self.min_tokens > l:
+            self.min_tokens = l
+        if self.max_tokens < l:
+            self.max_tokens = l
+
+
 def tokenize_dataset(
     output_dir: Path,
     filename_prefix: str,
@@ -106,33 +145,65 @@ def tokenize_dataset(
     max_count: int | None = None,
     min_assistant_tokens: int | None = None,
     check_tokenization: bool = True,
+    write_json: bool = False,
 ):
     full_prefix = str(output_dir / filename_prefix)
 
-    token_writer = DatasetWriter(
-        filename_prefix=full_prefix,
-        dataset_impl=dataset_impl,
-        vocab_size=encoder.tokenizer.vocab_size,
-        feature="text",
-    )
+    token_writer = None
+    role_writer = None
+    jsonl_file = None
 
-    role_writer = DatasetWriter(
-        filename_prefix=full_prefix,
-        dataset_impl=dataset_impl,
-        vocab_size=16,
-        feature="role",
-    )
+    total_stats = TokenStats("total", len(dataset))
+    per_dataset_stats: list[TokenStats] = []
+    cumulative_sizes: list[int] = []
 
-    num_accepted_entries = 0
-    total_tokens = 0
+    if isinstance(dataset, ConcatDataset):
+        per_dataset_stats
+        s = 0
+        for d in dataset.datasets:
+            if isinstance(d, Subset):
+                if hasattr(d.dataset, "name"):
+                    name = d.dataset.name
+                else:
+                    name = f"Subset of {type(d.dataset).__name__}"
+            else:
+                if hasattr(d, "name"):
+                    name += d.name
+                else:
+                    name = type(d).__name__
 
-    num_entries_below_min_assistant_tokens = 0
-    jsonl_path = Path(full_prefix + ".jsonl")
-    with jsonl_path.open("w", encoding="UTF-8") as jsonl_file:
+            per_dataset_stats.append(TokenStats(name, len(d)))
+            s += len(d)
+            cumulative_sizes.append(s)
+
+    try:
+        token_writer = DatasetWriter(
+            filename_prefix=full_prefix,
+            dataset_impl=dataset_impl,
+            vocab_size=encoder.tokenizer.vocab_size,
+            feature="text",
+        )
+
+        role_writer = DatasetWriter(
+            filename_prefix=full_prefix,
+            dataset_impl=dataset_impl,
+            vocab_size=16,
+            feature="role",
+        )
+
+        jsonl_path = Path(full_prefix + ".jsonl")
+        if write_json:
+            jsonl_file = jsonl_path.open("w", encoding="UTF-8")
+
+        subset_index = 0
         for i, messages in enumerate(tqdm(dataset)):
+            if i >= cumulative_sizes[subset_index]:
+                subset_index += 1
 
-            if i > 0 and i % 10000 == 0 and min_assistant_tokens is not None:
-                print(f"{num_entries_below_min_assistant_tokens} ({num_entries_below_min_assistant_tokens/i:.1%}) entries had less than {min_assistant_tokens} tokens and were ignored.")
+            if i > 0 and i % 10000 == 0:
+                print(
+                    f"Accepted: {total_stats.accepted_samples}/{total_stats.processed_samples} ({total_stats.accepted_samples/total_stats.processed_samples:.1%})"
+                )
 
             turns, turn_roles = format_conversation(messages)
 
@@ -143,12 +214,16 @@ def tokenize_dataset(
                 turn_tokens = encoder.encode_text(t)
                 turn_role = [r] * len(turn_tokens)
                 tokens.extend(turn_tokens)
-                if r == 2: # assistant
+                if r == Role.Assistant:  # assistant
                     num_assistant_tokens += len(turn_tokens)
                 role_lables.extend(turn_role)
 
-            if min_assistant_tokens is not None and num_assistant_tokens < min_assistant_tokens:
-                num_entries_below_min_assistant_tokens += 1
+            if (
+                min_assistant_tokens is not None
+                and num_assistant_tokens < min_assistant_tokens
+            ):
+                total_stats.skip(tokens)
+                per_dataset_stats[subset_index].skip(tokens)
                 continue
 
             if check_tokenization:
@@ -157,22 +232,44 @@ def tokenize_dataset(
 
             token_writer.add_item(tokens)
             role_writer.add_item(role_lables)
-            total_tokens += len(tokens)
 
-            json.dump({"text": "".join(turns)}, jsonl_file)
-            jsonl_file.write("\n")
+            # update stats
+            total_stats.add(tokens)
+            per_dataset_stats[subset_index].add(tokens)
 
-            num_accepted_entries += 1
-            if max_count and num_accepted_entries >= max_count:
+            if jsonl_file:
+                json.dump({"text": "".join(turns)}, jsonl_file)
+                jsonl_file.write("\n")
+
+            if max_count and total_stats.accepted_samples >= max_count:
                 break
+    finally:
+        if token_writer:
+            token_writer.finalize()
+        if role_writer:
+            role_writer.finalize()
+        if jsonl_file:
+            jsonl_file.close()
 
-    token_writer.finalize()
-    role_writer.finalize()
+    print(f"# Stats for {full_prefix}*")
 
-    print(f'Stats for {filename_prefix}:')
-    if min_assistant_tokens is not None:
-        print(f"{num_entries_below_min_assistant_tokens} ({num_entries_below_min_assistant_tokens/len(dataset):.1%}) entries had less than {min_assistant_tokens} tokens and were ignored.")
-    print(f"num_accepted_entries: {num_accepted_entries} (total_tokens: {total_tokens})")
+    for stats in per_dataset_stats:
+        print(f"## Stats for '{stats.name}' ({stats.total_samples} samples)")
+        print("-----------------")
+        print(
+            f"  Accepted: {stats.accepted_samples}/{stats.processed_samples} ({stats.accepted_samples/stats.processed_samples:.1%})"
+        )
+        print(f"  Accepted tokens: {stats.accepted_tokens}")
+        print(
+            f"  Skipped: {stats.skipped_samples} ({stats.skipped_samples/stats.processed_samples:.1%})"
+        )
+        print(f"  Min tokens per sample: {stats.min_tokens}")
+        print(f"  Max tokens per sample: {stats.max_tokens}")
+        print(
+            f"  Avg tokens per sample: {stats.accepted_tokens/stats.accepted_samples}"
+        )
+        print("-----------------")
+        print()
 
 
 def parse_args():
@@ -188,6 +285,11 @@ def parse_args():
         "--output_dir",
         type=str,
         help="Path to binary output file without suffix",
+    )
+    group.add_argument(
+        "--write_json",
+        type=_strtobool,
+        default=False,
     )
 
     args, remaining = parser.parse_known_args()
@@ -267,11 +369,11 @@ def main():
     encoder = Encoder(args)
 
     output_dir = Path(args.output_dir)
-    
+
     print(f"Vocab size: {encoder.tokenizer.vocab_size}")
     print(f"Output dir: {args.output_dir} (exists: {output_dir.exists()})")
 
-    output_dir.mkdir(exist_ok=True)    
+    output_dir.mkdir(exist_ok=True)
 
     fn = output_dir / "special_tokens.json"
     with fn.open("w") as f:
@@ -287,6 +389,7 @@ def main():
             dataset_impl=args.dataset_impl,
             max_count=args.max_count,
             min_assistant_tokens=args.min_assistant_tokens,
+            write_json=args.write_json,
         )
 
 

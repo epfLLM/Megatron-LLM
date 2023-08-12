@@ -38,6 +38,7 @@ megacode2:
   vocab_file: "/home/ubuntu/megatron-data/llama2-7b/tokenizer.model"
   datasets:
     - megacode2:
+        fraction: 0.5
         val_split: 0.01
         max_val_set: 1000
   output_dir: "output/megacode2"

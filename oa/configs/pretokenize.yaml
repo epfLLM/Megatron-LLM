@@ -7,7 +7,7 @@ defaults:
   tokenizer_type: "SentencePieceTokenizer"
   vocab_extra_ids_list: "<|im_start|>,<|im_end|>"
   dataset_impl: "mmap"
-  min_assistant_tokens: 
+  min_assistant_tokens:
 
 
 llama_oasst_top1:
@@ -34,12 +34,12 @@ megacode2_min100:
   min_assistant_tokens: 100
 
 
-megacode2:
+megacode2_frac05:
   vocab_file: "/home/ubuntu/megatron-data/llama2-7b/tokenizer.model"
   datasets:
     - megacode2:
         fraction: 0.5
         val_split: 0.01
         max_val_set: 1000
-  output_dir: "output/megacode2"
+  output_dir: "output/megacode2_frac05"
   filename_prefix: "megacode2"

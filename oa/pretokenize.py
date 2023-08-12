@@ -1,4 +1,4 @@
-# import sys, os
+import random
 import argparse
 from enum import IntEnum
 from pathlib import Path
@@ -6,13 +6,14 @@ import logging
 import json
 from tqdm import tqdm
 
-
+import numpy as np
 import torch
 from torch.utils.data import Dataset, Subset, ConcatDataset
 
 
 from model_training.utils.utils import (
     get_dataset,
+    get_dataset_fractions,
     read_yamls,
     _strtobool,
 )
@@ -142,10 +143,12 @@ def tokenize_dataset(
     dataset: Dataset,
     encoder: Encoder,
     dataset_impl: str,
+    datasets_config: dict,
     max_count: int | None = None,
     min_assistant_tokens: int | None = None,
     check_tokenization: bool = True,
     write_json: bool = False,
+    seed: int = 42,
 ):
     full_prefix = str(output_dir / filename_prefix)
 
@@ -157,10 +160,22 @@ def tokenize_dataset(
     per_dataset_stats: list[TokenStats] = []
     cumulative_sizes: list[int] = []
 
+    rng = np.random.RandomState(seed=seed)
+
     if isinstance(dataset, ConcatDataset):
-        per_dataset_stats
-        s = 0
-        for d in dataset.datasets:
+        datasets = list(dataset.datasets)
+
+        if datasets_config:
+            dataset_sizes = [len(x) for x in datasets]
+            fractions = get_dataset_fractions(datasets_config, dataset_sizes, False)
+            dataset_target_sizes = [
+                int(size * frac) for size, frac in zip(dataset_sizes, fractions)
+            ]
+        else:
+            dataset_target_sizes = None
+
+        for i in range(len(datasets)):
+            d = datasets[i]
             if isinstance(d, Subset):
                 if hasattr(d.dataset, "name"):
                     name = d.dataset.name
@@ -168,13 +183,25 @@ def tokenize_dataset(
                     name = f"Subset of {type(d.dataset).__name__}"
             else:
                 if hasattr(d, "name"):
-                    name += d.name
+                    name = d.name
                 else:
                     name = type(d).__name__
 
+            if dataset_target_sizes:
+                if dataset_target_sizes[i] < len(d):
+                    # sample subset of dataset
+                    subset_indices = rng.choice(
+                        len(d), size=dataset_target_sizes[i], replace=False
+                    )
+                    d = Subset(d, subset_indices)
+                    datasets[i] = d
+
             per_dataset_stats.append(TokenStats(name, len(d)))
-            s += len(d)
-            cumulative_sizes.append(s)
+
+        dataset = ConcatDataset(datasets)
+        cumulative_sizes = dataset.cummulative_sizes
+    else:
+        cumulative_sizes = [len(dataset)]
 
     try:
         token_writer = DatasetWriter(
@@ -349,6 +376,11 @@ def main():
     for k, v in vars(args).items():
         print(f"{k}: {v}")
 
+    # initialize random states for reproducibility
+    random.seed(args.rng_seed)
+    np.random.seed(args.rng_seed)
+    torch.manual_seed(args.rng_seed)
+
     train, evals = get_dataset(args)
 
     # show dataset stats
@@ -381,15 +413,18 @@ def main():
 
     val = ConcatDataset(evals.values())
     for split_name, ds in zip(["train", "val"], [train, val]):
+        datasets_config = args.datasets if split_name == "train" else None
         tokenize_dataset(
             output_dir=output_dir,
             filename_prefix=f"{args.filename_prefix}-{split_name}",
             dataset=ds,
             encoder=encoder,
             dataset_impl=args.dataset_impl,
+            datasets_config=datasets_config,
             max_count=args.max_count,
             min_assistant_tokens=args.min_assistant_tokens,
             write_json=args.write_json,
+            seed=args.rng_seed,
         )
 
 

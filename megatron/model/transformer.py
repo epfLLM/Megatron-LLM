@@ -590,6 +590,7 @@ class ParallelTransformerLayer(MegatronModule):
                  self_attn_mask_type=AttnMaskType.padding,
                  drop_path_rate: float=0.0,
                  world_size: int=None,
+                 hidden_dropout: float=0.0,
                  args=None):
         super(ParallelTransformerLayer, self).__init__()
 
@@ -638,7 +639,7 @@ class ParallelTransformerLayer(MegatronModule):
             attn_mask_type=self_attn_mask_type,
             world_size=world_size,
             args=args)
-        self.hidden_dropout = args.hidden_dropout
+        self.hidden_dropout = hidden_dropout
         self.bias_dropout_fusion = args.bias_dropout_fusion
         self.drop_path = DropPath(drop_path_rate) if drop_path_rate > 0.0 else None
         self.parallel_attn = args.parallel_attn
@@ -955,8 +956,17 @@ class ParallelTransformer(MegatronModule):
 
         self.drop_path_rates = [rate.item() for rate in torch.linspace(0, self.drop_path_rate, args.num_layers)]
 
+        if args.lima_dropout:
+            # Use a layer dependent dropout probability, starting at p_d=0.0 at the bottom layer
+            # and linearly raising the rate to the value specified by `args.hidden_dropout` at the last layer.
+            # see "LIMA: Less Is More for Alignment", Zhou et al 2023, https://arxiv.org/abs/2305.11206
+            self.hidden_dropouts = [rate.item() for rate in torch.linspace(0, args.hidden_dropout, args.num_layers)]
+        else:
+            # Use standard residual dropout with the same dropout probability for all layers.
+            self.hidden_dropouts = [args.hidden_dropout] * args.num_layers
+
         # Transformer layers.
-        def build_layer(layer_number):
+        def build_layer(layer_number: int):
             if args.transformer_impl == 'local':
                 return ParallelTransformerLayer(
                     init_method,
@@ -966,6 +976,7 @@ class ParallelTransformer(MegatronModule):
                     self_attn_mask_type=self_attn_mask_type,
                     drop_path_rate=self.drop_path_rates[layer_number - 1],
                     world_size=world_size,
+                    hidden_dropout=self.hidden_dropouts[layer_number - 1],
                     args=args)
             else:
                 return transformer_engine.pytorch.TransformerLayer(
@@ -973,7 +984,7 @@ class ParallelTransformer(MegatronModule):
                     args.ffn_hidden_size,
                     args.num_attention_heads,
                     layernorm_epsilon=args.layernorm_epsilon,
-                    hidden_dropout=args.hidden_dropout,
+                    hidden_dropout=self.hidden_dropouts[layer_number - 1],
                     attention_dropout=args.attention_dropout,
                     init_method=init_method,
                     output_layer_init_method=output_layer_init_method,

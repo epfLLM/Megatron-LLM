@@ -34,7 +34,7 @@ class LlamaModel(GPTModel):
             warnings.warn("Llama is not intended to use bias_gelu_fusion")
         if args.bias_dropout_fusion:
             warnings.warn("Llama is not intended to use bias_dropout_fusion")
-        if args.hidden_dropout > 0.0:
+        if args.hidden_dropout > 0.0 and not args.lima_dropout:
             warnings.warn( "Llama is not intended to use dropout")
         if args.attention_dropout > 0.0:
             warnings.warn( "Llama is not intended to use dropout")

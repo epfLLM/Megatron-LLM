@@ -34,7 +34,7 @@ class FalconModel(GPTModel):
             warnings.warn("Falcon should not use bias_gelu_fusion")
         if args.bias_dropout_fusion:
             warnings.warn("Falcon should not use bias_dropout_fusion")
-        if args.hidden_dropout > 0.0:
+        if args.hidden_dropout > 0.0 and not args.lima_dropout:
             warnings.warn("Falcon should not use dropout")
         super().__init__(num_tokentypes=num_tokentypes, parallel_output=parallel_output,
                          pre_process=pre_process, post_process=post_process,

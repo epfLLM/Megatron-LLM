@@ -124,6 +124,8 @@ def save_checkpoint(queue, args):
         sys.argv += ["--use_rms_norm"]
     if not md.tie_embed_logits:
         sys.argv += ["--no_tie_embed_logits"]
+    if md.lima_dropout:
+        sys.argv += ["--lima_dropout"]
 
     if md.make_vocab_size_divisible_by is not None:
         sys.argv.extend(['--make_vocab_size_divisible_by', str(md.make_vocab_size_divisible_by)])

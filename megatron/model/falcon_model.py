@@ -24,7 +24,7 @@ class FalconModel(GPTModel):
         assert args.glu_activation is None, \
                 "FalconModel requires gelu activation (set glu_activation=None)"
         assert not args.use_bias, "Falcon does not use bias"
-        assert args.parallel_attn, "Falcon does uses parallel_attn"
+        assert args.parallel_attn, "Falcon uses parallel_attn"
         if not args.parallel_layernorm:
             warnings.warn("Falcon uses parallel_layernorm, or are you running falcon-7b?")
 

@@ -32,7 +32,7 @@ def apply_rotary_emb(
 
     freqs_cis = freqs_cis.to(xq.device)
     if position_ids is None:
-        # we assume position_ids to be torch.arange(0, seq_[eng])
+        # we assume position_ids to be torch.arange(seq_len)
         freqs_cis = reshape_for_broadcast(freqs_cis, xq_)
         # freqs_cis: [seq_len, 1, 1, head_dim//2] (complex64)
     else:

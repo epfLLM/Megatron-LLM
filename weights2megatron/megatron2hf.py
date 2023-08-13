@@ -63,25 +63,31 @@ def write_json(text, path):
 
 
 def convert_wqkv(llama_mega, layer_idx=0, n_heads=32, n_heads_kv=8):
-    mega_qkv = llama_mega["transformer"][f'layers.{layer_idx}.attention.query_key_value.weight']
-    n_hidden_per_head = mega_qkv.shape[1]//n_heads
-    # mega_qkv = permute_qkv(mega_qkv, mega_qkv.shape[1], n_heads, n_heads_kv, revert=True)
-    mega_qkv_chunk = torch.split(mega_qkv, n_hidden_per_head, dim=0)
+    qkv_w = llama_mega["transformer"][f'layers.{layer_idx}.attention.query_key_value.weight']
+    n_hidden = qkv_w.size(1)
+    hidden_dim = n_hidden//n_heads
+    qkv_w = permute_qkv(qkv_w, n_hidden, n_heads, n_heads_kv, revert=True)
 
-    wq_proj, wk_proj, wv_proj = [], [], []
-    for i,chk in enumerate(mega_qkv_chunk):
-        if i%3 == 0:
-            wq_proj.append(chk)
-        elif i%3 == 1:
-            wk_proj.append(chk)
-        else:
-            wv_proj.append(chk)
+    n_qs_per_kv = n_heads//n_heads_kv
+    n_groups = qkv_w.size(0)//hidden_dim//(n_qs_per_kv + 2)
+    qkv_w = list(torch.split(qkv_w, hidden_dim, dim=0))
 
-    wq_proj = torch.concat(wq_proj, dim=0)
-    wk_proj = torch.concat(wk_proj, dim=0)
-    wv_proj = torch.concat(wv_proj, dim=0)
+    wq, wk, wv = [], [], []
+    for group in range(n_groups):
+        for qs in range(n_qs_per_kv):
+            wq.append(qkv_w[0])
+            del qkv_w[0]
+            wk.append(qkv_w[0])
+            del qkv_w[0]
+        wv.append(qkv_w[0])
+        del qkv_w[0]
+    assert len(qkv_w) == 0
 
-    return wq_proj, wk_proj, wv_proj
+    wq = torch.concat(wq, dim=0)
+    wk = torch.concat(wk, dim=0)
+    wv = torch.concat(wv, dim=0)
+    return wq, wk, wv
+
 
 def convert_ffn(llama_mega, layer_idx=0, n_dense=11008):
     mega_ffn = llama_mega["transformer"][f'layers.{layer_idx}.mlp.dense_h_to_4h.weight']
@@ -92,10 +98,6 @@ def write_model(model_path,
                 input_base_path, 
                 num_output_shards=2,
                 norm_eps=1e-05):
-
-    # permute for sliced rotary
-    def permute(w):
-        return w.view(n_heads, n_hidden // n_heads // 2, 2, n_hidden).transpose(1, 2).reshape(n_hidden, n_hidden)
 
     # Preliminaries
     print(f"Fetching all parameters from the checkpoint at {input_base_path}.")
@@ -144,8 +146,8 @@ def write_model(model_path,
                                         layer_idx=layer_i, 
                                         n_dense=n_dense)
             state_dict = {
-                f"model.layers.{layer_i}.self_attn.q_proj.weight": permute(wq_proj),
-                f"model.layers.{layer_i}.self_attn.k_proj.weight": permute(wk_proj),
+                f"model.layers.{layer_i}.self_attn.q_proj.weight": wq_proj,
+                f"model.layers.{layer_i}.self_attn.k_proj.weight": wk_proj,
                 f"model.layers.{layer_i}.self_attn.v_proj.weight": wv_proj,
                 f"model.layers.{layer_i}.self_attn.o_proj.weight": loaded["transformer"][f"layers.{layer_i}.attention.dense.weight"],
                 f"model.layers.{layer_i}.mlp.gate_proj.weight": ffn_w1,

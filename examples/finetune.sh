@@ -59,7 +59,7 @@ done
 LR="3e-4"
 CHECKPOINT_PATH=/pure-mlo-scratch/akoepf/checkpoints/${MODEL}-${SIZE}b-tp$TP-pp$PP
 #OUTPUT_PATH=/pure-mlo-scratch/akoepf/checkpoints/${MODEL}-${SIZE}b-tp$TP-pp$PP-megacode2_min100
-OUTPUT_PATH=/pure-mlo-scratch/akoepf/checkpoints/${MODEL}-${SIZE}b-tp$TP-pp$PP-megacode2_frac05
+OUTPUT_PATH=/pure-mlo-scratch/akoepf/checkpoints/${MODEL}-${SIZE}b-tp$TP-pp$PP-test_rope_scale2
 TENSORBOARD_PATH=$CHECKPOINT_PATH-trained/logging
 DISTRIBUTED_ARGS="--nproc_per_node $GPUS_PER_NODE --nnodes $N_NODES --node_rank
                   $RANK --master_addr $ADDR --master_port 6000"
@@ -103,7 +103,8 @@ COMMON_ARGS="--use_flash_attn --no_bias_gelu_fusion
 	--no_bias_dropout_fusion --use_checkpoint_args --train_iters 8000
 	--attention_dropout 0.0 --adam_beta1 0.9 --adam_beta2 0.95 --adam_eps 1e-12
 	--lr_decay_style cosine --lr_warmup_iters 100 --lr 1e-5 --min_lr 1e-6
-	--weight_decay 0.000001 --sequence_parallel --recompute_granularity selective --log_timers_to_tensorboard"
+	--weight_decay 0.000001 --sequence_parallel --recompute_granularity selective --log_timers_to_tensorboard
+	--rope_scaling_factor 1.0"
 
 # COMMON_ARGS="--use_flash_attn --no_bias_gelu_fusion
 # 	     --seq_length $SEQ_LEN --max_position_embeddings $SEQ_LEN
@@ -115,7 +116,7 @@ COMMON_ARGS="--use_flash_attn --no_bias_gelu_fusion
 # 	     --weight_decay 0.1 --sequence_parallel --recompute_granularity selective"
 
 if [[ $WANDB = 1 ]]; then
-	COMMON_ARGS="$COMMON_ARGS --wandb_logger --wandb_project epfl-mt-sft --wandb_entity open-assistant --wandb_id run18_megacode2_frac05"
+	COMMON_ARGS="$COMMON_ARGS --wandb_logger --wandb_project epfl-mt-sft --wandb_entity open-assistant --wandb_id run29_var_seq_len_withadd"
 fi
 
 # print some args

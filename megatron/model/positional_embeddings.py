@@ -30,6 +30,7 @@ def apply_rotary_emb(
     xq_ = torch.view_as_complex(xq.float().reshape(*xq.shape[:-1], -1, 2))
     xk_ = torch.view_as_complex(xk.float().reshape(*xk.shape[:-1], -1, 2))
 
+    freqs_cis = freqs_cis.to(xq.device)
     if position_ids is None:
         # we assume position_ids to be torch.arange(0, seq_[eng])
         freqs_cis = reshape_for_broadcast(freqs_cis, xq_)
@@ -39,12 +40,12 @@ def apply_rotary_emb(
         # tensor shapes & tpyes:
         # xq_: [seq_len, batch_size, heads, head_dim//2] (complex64)
         # position_ids: [batch_size, seq_len] (long)
+        position_ids = position_ids.to(xq.device)   # normally already on correct device
         assert position_ids.shape == (xq_.shape[1], xq_.shape[0])
         assert (freqs_cis.shape[1] == xq_.shape[-1])
         freqs_cis = freqs_cis[position_ids].transpose(0, 1).unsqueeze(-2)
         # freqs_cis: [seq_len, batch_size, 1, head_dim//2] (complex64)
 
-    freqs_cis = freqs_cis.to(xq.device)
     xq_out = torch.view_as_real(xq_ * freqs_cis).flatten(3)
     xk_out = torch.view_as_real(xk_ * freqs_cis).flatten(3)
     return xq_out.type_as(xq), xk_out.type_as(xk)

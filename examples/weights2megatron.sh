@@ -2,7 +2,7 @@
 
 # assert correct usage
 if [[ $# -ne 2 ]]; then
-	echo "Usage: $0 <llama/falcon> <7,13,30,34,40,65,70>"
+	echo "Usage: $0 <llama/llama2/falcon> <7,13,30,34,40,65,70>"
 	exit 1
 fi
 

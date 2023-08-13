@@ -24,7 +24,7 @@ class FalconModel(GPTModel):
         assert args.glu_activation is None, \
                 "FalconModel requires gelu activation (set glu_activation=None)"
         assert not args.use_bias, "Falcon does not use bias"
-        assert args.parallel_attn, "Falcon does uses parallel_attn"
+        assert args.parallel_attn, "Falcon uses parallel_attn"
         if not args.parallel_layernorm:
             warnings.warn("Falcon uses parallel_layernorm, or are you running falcon-7b?")
 
@@ -34,7 +34,7 @@ class FalconModel(GPTModel):
             warnings.warn("Falcon should not use bias_gelu_fusion")
         if args.bias_dropout_fusion:
             warnings.warn("Falcon should not use bias_dropout_fusion")
-        if args.hidden_dropout > 0.0:
+        if args.hidden_dropout > 0.0 and not args.lima_dropout:
             warnings.warn("Falcon should not use dropout")
         super().__init__(num_tokentypes=num_tokentypes, parallel_output=parallel_output,
                          pre_process=pre_process, post_process=post_process,

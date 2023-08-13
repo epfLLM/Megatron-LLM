@@ -582,10 +582,6 @@ def training_log(loss_dict, total_loss_dict, learning_rate, iteration,
                 mem_stats["allocation.all.current"],
                 iteration,
             )
-        # if using wandb writer, flush the stats we just filled here, close to the creation time
-        # if hasattr(writer,"flush_all"):
-        #     writer.flush_all()
-        
 
     if iteration % args.log_interval == 0:
         elapsed_time = timers('interval-time').elapsed(barrier=True)
@@ -594,9 +590,6 @@ def training_log(loss_dict, total_loss_dict, learning_rate, iteration,
             if args.log_timers_to_tensorboard:
                 writer.add_scalar('iteration-time',
                                   elapsed_time_per_iteration, iteration)
-            # if using wandb writer, flush the stats we just filled here, close to the creation time
-            # if hasattr(writer,"flush_all"):
-            #     writer.flush_all()
         log_string = ' iteration {:8d}/{:8d} |'.format(
             iteration, args.train_iters)
         log_string += ' consumed samples: {:12d} |'.format(
@@ -715,9 +708,9 @@ def _train(args, forward_step_func,
                                        iteration, process_non_loss_data_func,
                                        verbose=False, args=args)
 
-        # if using wandb writer, flush the stats we just filled here, close to the creation time
+        # if using wandb writer, flush the stats of train_step & potentially evaluate
         writer = get_tensorboard_writer()
-        if hasattr(writer,"flush_all"):
+        if hasattr(writer, "flush_all"):
             writer.flush_all()
 
         # Checkpointing
@@ -850,9 +843,6 @@ def evaluate_and_print_results(prefix,
                 writer.add_scalar('{} validation ppl vs samples'.format(key),
                                   ppl, args.consumed_train_samples)
 
-            # if using wandb writer, flush the stats we just filled here, close to the creation time
-            if hasattr(writer,"flush_all"):
-                writer.flush_all()
     if process_non_loss_data_func is not None and writer and is_last_rank():
         process_non_loss_data_func(collected_non_loss_data, iteration, writer)
 

@@ -97,7 +97,7 @@ def get_attention_mask_and_position_ids(data, attention_mask):
     # Attention mask (lower triangular).
     att_mask_batch = micro_batch_size
     attention_mask = (
-        attention_mask.unsqueeze(-1)
+        attention_mask.unsqueeze(1)
         .expand(micro_batch_size, seq_length, seq_length)
         .to(data.device)
     )
@@ -137,11 +137,10 @@ def get_batch(data_iterator):
     labels = torch.roll(tokens, shifts=-1, dims=-1)
 
     attention_mask = data_b["attention_mask"]
-    attention_mask[:, -1] = 0  # no target for last element due to roll
 
     loss_mask = data_b["loss_mask"]
-    loss_mask = torch.roll(loss_mask, -1, -1)
-    loss_mask[:, -1] = 0  # no target for last element due to roll
+    loss_mask[:, 0] = 0  # first tokens are no targets due to roll
+    loss_mask = torch.roll(loss_mask, shifts=-1, dims=-1)
     loss_mask = loss_mask.float().to(tokens.device)
 
     # Get the masks and postition ids.
@@ -259,13 +258,22 @@ def extra_args(parser):
     )
     group.add_argument("--log_learning_rate_to_tensorboard", type=bool, default=True)
     group.add_argument("--log_loss_scale_to_tensorboard", type=bool, default=True)
+    group.add_argument("--variable_seq_lengths", type=bool, default=True)
     return parser
 
 
+def round_to_multiple_of(x: int, y: int) -> int:
+    return ((x + y - 1) // y) * y
+
+
 def instruction_collator(args, data):
-    seq_len = args.seq_length
     tokenizer = get_tokenizer()
     pad_id = tokenizer.pad
+    seq_len = args.seq_length
+
+    if args.variable_seq_lengths:
+        max_sample_length = max(len(x["text"]) for x in data)
+        seq_len = min(args.seq_length, round_to_multiple_of(max_sample_length, 16))
 
     # pad data to seq_len, create attention mask
     batch_size = len(data)

@@ -175,7 +175,8 @@ def validate_args(args, defaults={}):
     # across batches/microbatches. Due to additional communication overhead
     # during pipeline parallelism, it should not be set if sequence length
     # is constant during training.
-    args.variable_seq_lengths = False
+    if args.variable_seq_lengths is None:
+        args.variable_seq_lengths = False
 
     # Iteration-based training.
     if args.train_iters:

@@ -109,7 +109,7 @@ def format_conversation(messages) -> str:
 
 
 class TokenStats:
-    def __init__(self, name: str, total_samples: int):
+    def __init__(self, name: str, total_samples: int, fraction: float = 1):
         self.name = name
         self.skipped_samples = 0
         self.skipped_tokens = 0
@@ -118,6 +118,7 @@ class TokenStats:
         self.max_tokens = 0
         self.accepted_samples = 0
         self.accepted_tokens = 0
+        self.fraction = fraction
 
     @property
     def processed_samples(self) -> int:
@@ -156,7 +157,6 @@ def tokenize_dataset(
     role_writer = None
     jsonl_file = None
 
-    total_stats = TokenStats("total", len(dataset))
     per_dataset_stats: list[TokenStats] = []
     cumulative_sizes: list[int] = []
 
@@ -187,7 +187,9 @@ def tokenize_dataset(
                 else:
                     name = type(d).__name__
 
+            frac = 1
             if dataset_target_sizes:
+                frac = fractions[i]
                 if dataset_target_sizes[i] < len(d):
                     # sample subset of dataset
                     subset_indices = rng.choice(
@@ -196,12 +198,14 @@ def tokenize_dataset(
                     d = Subset(d, subset_indices)
                     datasets[i] = d
 
-            per_dataset_stats.append(TokenStats(name, len(d)))
+            per_dataset_stats.append(TokenStats(name, len(d), frac))
 
         dataset = ConcatDataset(datasets)
         cumulative_sizes = dataset.cummulative_sizes
     else:
         cumulative_sizes = [len(dataset)]
+
+    total_stats = TokenStats("total", len(dataset))
 
     try:
         token_writer = DatasetWriter(
@@ -278,10 +282,12 @@ def tokenize_dataset(
         if jsonl_file:
             jsonl_file.close()
 
-    print(f"# Stats for {full_prefix}*")
+    print(f"\n# Stats for {full_prefix}*\n")
 
     for stats in per_dataset_stats:
-        print(f"## Stats for '{stats.name}' ({stats.total_samples} samples)")
+        print(
+            f"## Stats for '{stats.name}' ({stats.total_samples} samples ({stats.fraction:.1%}))"
+        )
         print("-----------------")
         print(
             f"  Accepted: {stats.accepted_samples}/{stats.processed_samples} ({stats.accepted_samples/stats.processed_samples:.1%})"
@@ -295,8 +301,7 @@ def tokenize_dataset(
         print(
             f"  Avg tokens per sample: {stats.accepted_tokens/stats.accepted_samples}"
         )
-        print("-----------------")
-        print()
+        print("-----------------\n")
 
 
 def parse_args():

@@ -15,7 +15,7 @@ def build_tokenizer(args):
         print('> building {} tokenizer ...'.format(args.tokenizer_type),
               flush=True)
 
-    if args.tokenizer_type not in {'SentencePieceTokenizer', 'FalconTokenizer'}:
+    if args.tokenizer_type != 'FalconTokenizer':
         assert args.vocab_file is not None
 
     # Select and instantiate the tokenizer.
@@ -31,7 +31,6 @@ def build_tokenizer(args):
         assert args.merge_file is not None
         tokenizer = _GPT2BPETokenizer(args.vocab_file, args.merge_file)
     elif args.tokenizer_type == 'SentencePieceTokenizer':
-        assert args.vocab_file is not None
         tokenizer = _SentencePieceTokenizer(args.vocab_file, vocab_extra_ids=args.vocab_extra_ids, 
                                             vocab_extra_ids_list=args.vocab_extra_ids_list, new_tokens=args.new_tokens)
     elif args.tokenizer_type == 'FalconTokenizer':

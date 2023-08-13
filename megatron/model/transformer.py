@@ -373,8 +373,9 @@ class ParallelAttention(MegatronModule):
         self.position_embedding_type = args.position_embedding_type
         if self.position_embedding_type == PositionEmbeddingType.rotary:
             self.freqs_cis = precompute_freqs_cis(
-                # self.params.dim // self.params.n_heads, self.params.max_seq_len * 2 # NOTE: LLaMA version
-                args.hidden_size // args.num_attention_heads, self.seq_length # * 2
+                dim=args.hidden_size // args.num_attention_heads,
+                end=self.seq_length,
+                scaling_factor=args.rope_scaling_factor,
             )
 
     def _checkpointed_attention_forward(self,
@@ -411,7 +412,8 @@ class ParallelAttention(MegatronModule):
                 hidden_states,
                 attention_mask,
                 encoder_output=None,
-                inference_params=None):
+                inference_params=None,
+                position_ids=None):
         # hidden_states: [sq, b, h]
 
         # =================================================
@@ -496,7 +498,7 @@ class ParallelAttention(MegatronModule):
         # Rotary embeddings
         # ==================================
         if self.position_embedding_type == PositionEmbeddingType.rotary:
-            query_layer, key_layer = apply_rotary_emb(query_layer, key_layer, self.freqs_cis)
+            query_layer, key_layer = apply_rotary_emb(query_layer, key_layer, self.freqs_cis, position_ids=position_ids)
 
         # ==================================
         # core attention computation
@@ -694,7 +696,8 @@ class ParallelTransformerLayer(MegatronModule):
                 attention_mask: torch.Tensor,
                 encoder_output=None,
                 enc_dec_attn_mask=None,
-                inference_params=None):
+                inference_params=None,
+                position_ids=None):
 
         ##
         # PRELIMINARIES - utilities to compute residual + dropout
@@ -752,7 +755,8 @@ class ParallelTransformerLayer(MegatronModule):
         # Get attention.
         attention_output, attention_bias = self.self_attention(layernorm_output,
                                                                attention_mask,
-                                                               inference_params=inference_params)
+                                                               inference_params=inference_params,
+                                                               position_ids=position_ids)
 
         # Determines the value of the next residual connection.
         # if not parallel_attn: used after the post_attention_layernorm,
@@ -1155,7 +1159,8 @@ class ParallelTransformer(MegatronModule):
                 attention_mask: torch.Tensor,
                 encoder_output=None,
                 enc_dec_attn_mask=None,
-                inference_params=None):
+                inference_params=None,
+                position_ids=None):
 
         # hidden_states: [s, b, h]
 
@@ -1220,6 +1225,7 @@ class ParallelTransformer(MegatronModule):
                         'encoder_output': encoder_output,
                         'enc_dec_attn_mask': enc_dec_attn_mask,
                         'inference_params': inference_params,
+                        'position_ids': position_ids,
                     }
 
                     if self.transformer_impl == 'transformer_engine':

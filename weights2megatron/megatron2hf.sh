@@ -3,9 +3,9 @@
 PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python
 NUM_IN_SHARDS=4
 NUM_OUT_SHARDS=8
-INPUT_DIR=/pure-mlo-scratch/akoepf/checkpoints/llama2-7b-tp2-pp2-megacode2_min100
-UNSHARDED_DIR=/pure-mlo-scratch/akoepf/checkpoints/tmp-unsharded-megacode2_min100
-OUTPUT_DIR=/pure-mlo-scratch/akoepf/checkpoints/llama2-7b-megacode2_min100
+INPUT_DIR=/pure-mlo-scratch/akoepf/checkpoints/llama2-13b-tp4-pp2-megacode2_oasst
+UNSHARDED_DIR=/pure-mlo-scratch/akoepf/checkpoints/tmp-unsharded-megacode2_oasst
+OUTPUT_DIR=/pure-mlo-scratch/akoepf/checkpoints/llama2-13b-megacode2-oasst-hf
 MEGATRON_PATH=/root/koepf/epfl-megatron
 VOCAB_SIZE=32007
 

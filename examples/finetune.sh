@@ -57,11 +57,12 @@ done
 
 # set args
 LR="3e-4"
-CHECKPOINT_PATH=/pure-mlo-scratch/akoepf/checkpoints/${MODEL}-${SIZE}b-tp$TP-pp$PP
-#OUTPUT_PATH=/pure-mlo-scratch/akoepf/checkpoints/${MODEL}-${SIZE}b-tp$TP-pp$PP-megacode2_min100
+#CHECKPOINT_PATH=/pure-mlo-scratch/akoepf/checkpoints/${MODEL}-${SIZE}b-tp$TP-pp$PP
+CHECKPOINT_PATH=/pure-mlo-scratch/akoepf/checkpoints/llama2-13b-tp4-pp2-megacode2_min100
+OUTPUT_PATH=/pure-mlo-scratch/akoepf/checkpoints/${MODEL}-${SIZE}b-tp$TP-pp$PP-megacode2_oasst
 #OUTPUT_PATH=/pure-mlo-scratch/akoepf/checkpoints/${MODEL}-${SIZE}b-tp$TP-pp$PP-test_rope_scale2
-OUTPUT_PATH=/pure-mlo-scratch/akoepf/checkpoints/${MODEL}-${SIZE}b-tp$TP-pp$PP-oasst1_varseq
-TENSORBOARD_PATH=$CHECKPOINT_PATH-trained/logging
+#OUTPUT_PATH=/pure-mlo-scratch/akoepf/checkpoints/${MODEL}-${SIZE}b-tp$TP-pp$PP-oasst1_varseq
+TENSORBOARD_PATH=$OUTPUT_PATH/logging
 DISTRIBUTED_ARGS="--nproc_per_node $GPUS_PER_NODE --nnodes $N_NODES --node_rank
                   $RANK --master_addr $ADDR --master_port 6000"
 if [[ $MODEL = falcon ]]; then
@@ -97,15 +98,27 @@ else
 	help
 	exit 1
 fi
+# COMMON_ARGS="--use_flash_attn --no_bias_gelu_fusion
+# 	--seq_length $SEQ_LEN --max_position_embeddings $SEQ_LEN
+# 	--log_interval 1 --save_interval 500 --eval_interval 50
+# 	--eval_iters 10 --hidden_dropout 0.0 --position_embedding_type rotary
+# 	--no_bias_dropout_fusion --use_checkpoint_args --train_iters 8000
+# 	--attention_dropout 0.0 --adam_beta1 0.9 --adam_beta2 0.95 --adam_eps 1e-12
+# 	--lr_decay_style cosine --lr_warmup_iters 100 --lr 1e-5 --min_lr 1e-6
+# 	--weight_decay 0.000001 --sequence_parallel --recompute_granularity selective --log_timers_to_tensorboard
+# 	--rope_scaling_factor 1.0"
+
+
+OA lima fine-tuning:
 COMMON_ARGS="--use_flash_attn --no_bias_gelu_fusion
 	--seq_length $SEQ_LEN --max_position_embeddings $SEQ_LEN
 	--log_interval 1 --save_interval 1000 --eval_interval 50
-	--eval_iters 10 --hidden_dropout 0.2 --lima_dropout --position_embedding_type rotary
-	--no_bias_dropout_fusion --use_checkpoint_args --train_iters 650
+	--eval_iters 10 --hidden_dropout 0.25 --lima_dropout --position_embedding_type rotary
+	--no_bias_dropout_fusion --use_checkpoint_args --train_iters 500
 	--attention_dropout 0.0 --adam_beta1 0.9 --adam_beta2 0.95 --adam_eps 1e-12
 	--lr_decay_style cosine --lr_warmup_iters 100 --lr 1e-5 --min_lr 1e-6
 	--weight_decay 0.000001 --sequence_parallel --recompute_granularity selective --log_timers_to_tensorboard
-	--rope_scaling_factor 1.0"
+	--rope_scaling_factor 1.0 --finetune"
 
 # COMMON_ARGS="--use_flash_attn --no_bias_gelu_fusion
 # 	     --seq_length $SEQ_LEN --max_position_embeddings $SEQ_LEN
@@ -117,7 +130,7 @@ COMMON_ARGS="--use_flash_attn --no_bias_gelu_fusion
 # 	     --weight_decay 0.1 --sequence_parallel --recompute_granularity selective"
 
 if [[ $WANDB = 1 ]]; then
-	COMMON_ARGS="$COMMON_ARGS --wandb_logger --wandb_project epfl-mt-sft --wandb_entity open-assistant --wandb_id run32_oasst1_13b"
+	COMMON_ARGS="$COMMON_ARGS --wandb_logger --wandb_project epfl-mt-sft --wandb_entity open-assistant --wandb_id run35_megacode2_oasst_13b"
 fi
 
 # print some args

@@ -2,8 +2,8 @@
 
 
 # default arguments
-SIZE=7
-TP=2
+SIZE=13
+TP=4
 PP=2
 GPUS_PER_NODE=8
 MICRO_BATCH=2
@@ -59,7 +59,8 @@ done
 LR="3e-4"
 CHECKPOINT_PATH=/pure-mlo-scratch/akoepf/checkpoints/${MODEL}-${SIZE}b-tp$TP-pp$PP
 #OUTPUT_PATH=/pure-mlo-scratch/akoepf/checkpoints/${MODEL}-${SIZE}b-tp$TP-pp$PP-megacode2_min100
-OUTPUT_PATH=/pure-mlo-scratch/akoepf/checkpoints/${MODEL}-${SIZE}b-tp$TP-pp$PP-test_rope_scale2
+#OUTPUT_PATH=/pure-mlo-scratch/akoepf/checkpoints/${MODEL}-${SIZE}b-tp$TP-pp$PP-test_rope_scale2
+OUTPUT_PATH=/pure-mlo-scratch/akoepf/checkpoints/${MODEL}-${SIZE}b-tp$TP-pp$PP-oasst1_varseq
 TENSORBOARD_PATH=$CHECKPOINT_PATH-trained/logging
 DISTRIBUTED_ARGS="--nproc_per_node $GPUS_PER_NODE --nnodes $N_NODES --node_rank
                   $RANK --master_addr $ADDR --master_port 6000"
@@ -69,9 +70,9 @@ if [[ $MODEL = falcon ]]; then
 	EXTRA_ARGS="--parallel_attn"
 	SEQ_LEN=2048
 elif [[ $MODEL = llama ]] || [[ $MODEL = llama2 ]]; then
-	#DATA_PATH=/pure-mlo-scratch/akoepf/data/llama_oasst_top1_2023-07-23/oasst_top1-train
+	DATA_PATH=/pure-mlo-scratch/akoepf/data/llama_oasst_top1_2023-07-23/oasst_top1-train
 	#DATA_PATH=/pure-mlo-scratch/akoepf/data/megacode2_min100/megacode2-train
-	DATA_PATH=/pure-mlo-scratch/akoepf/data/megacode2_frac05/megacode2-train
+	#DATA_PATH=/pure-mlo-scratch/akoepf/data/megacode2_frac05/megacode2-train
 	TOKENIZER=SentencePieceTokenizer
 	EXTRA_ARGS='--vocab_file=/pure-mlo-scratch/akoepf/llama2/Llama-2-7b/tokenizer.model --use_rms_norm
 	            --glu_activation swiglu --no_tie_embed_logits
@@ -99,8 +100,8 @@ fi
 COMMON_ARGS="--use_flash_attn --no_bias_gelu_fusion
 	--seq_length $SEQ_LEN --max_position_embeddings $SEQ_LEN
 	--log_interval 1 --save_interval 1000 --eval_interval 50
-	--eval_iters 10 --position_embedding_type rotary
-	--no_bias_dropout_fusion --use_checkpoint_args --train_iters 8000
+	--eval_iters 10 --hidden_dropout 0.2 --lima_dropout --position_embedding_type rotary
+	--no_bias_dropout_fusion --use_checkpoint_args --train_iters 650
 	--attention_dropout 0.0 --adam_beta1 0.9 --adam_beta2 0.95 --adam_eps 1e-12
 	--lr_decay_style cosine --lr_warmup_iters 100 --lr 1e-5 --min_lr 1e-6
 	--weight_decay 0.000001 --sequence_parallel --recompute_granularity selective --log_timers_to_tensorboard
@@ -116,7 +117,7 @@ COMMON_ARGS="--use_flash_attn --no_bias_gelu_fusion
 # 	     --weight_decay 0.1 --sequence_parallel --recompute_granularity selective"
 
 if [[ $WANDB = 1 ]]; then
-	COMMON_ARGS="$COMMON_ARGS --wandb_logger --wandb_project epfl-mt-sft --wandb_entity open-assistant --wandb_id run29_var_seq_len_withadd"
+	COMMON_ARGS="$COMMON_ARGS --wandb_logger --wandb_project epfl-mt-sft --wandb_entity open-assistant --wandb_id run32_oasst1_13b"
 fi
 
 # print some args

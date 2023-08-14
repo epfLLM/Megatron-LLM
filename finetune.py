@@ -258,7 +258,6 @@ def extra_args(parser):
     )
     group.add_argument("--log_learning_rate_to_tensorboard", type=bool, default=True)
     group.add_argument("--log_loss_scale_to_tensorboard", type=bool, default=True)
-    group.add_argument("--variable_seq_lengths", type=bool, default=True)
     return parser
 
 
@@ -300,7 +299,7 @@ def instruction_collator(args, data):
 
 
 if __name__ == "__main__":
-    args_defaults = {"tokenizer_type": "GPT2BPETokenizer"}
+    args_defaults = {"tokenizer_type": "GPT2BPETokenizer", "variable_seq_lengths": True}
     initialize_megatron(extra_args, args_defaults)
     args = get_args()
     pretrain(

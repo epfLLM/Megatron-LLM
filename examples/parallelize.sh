@@ -31,8 +31,8 @@ fi
 python tools/checkpoint_util.py \
        --target_tensor_parallel_size $TENSOR_PARALLELISM \
        --target_pipeline_parallel_size $PIPELINE_PARALLELISM \
-       --load_dir /root/koepf/megatron-data/${MODEL}-${SIZE}b/ \
-       --save_dir /root/koepf/megatron-data/checkpoints/${MODEL}-${SIZE}b-tp$TENSOR_PARALLELISM-pp$PIPELINE_PARALLELISM/ \
+       --load_dir /pure-mlo-scratch/akoepf/checkpoints/${MODEL}-${SIZE}b/ \
+       --save_dir /pure-mlo-scratch/akoepf/checkpoints/${MODEL}-${SIZE}b-tp$TENSOR_PARALLELISM-pp$PIPELINE_PARALLELISM/ \
        --model_type $MODEL \
        --true_vocab_size $TRUE_VOCAB_SIZE \
        $EXTRA_ARGS

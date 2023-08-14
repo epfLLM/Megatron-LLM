@@ -917,6 +917,8 @@ def _add_data_args(parser):
                        help='comma separated list of special vocab ids to add to the tokenizer')
     group.add_argument('--seq_length', type=int, default=None,
                        help='Maximum sequence length to process.')
+    group.add_argument('--variable_seq_lengths', action='store_true', default=None,
+                       help='Enable variable sequence lengths.')
     group.add_argument('--encoder_seq_length', type=int, default=None,
                        help='Maximum encoder sequence length to process.'
                        'This should be exclusive of --seq_length')

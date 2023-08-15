@@ -14,7 +14,7 @@ SIZE=$2
 
 # determine cache directory (either raw llama or huggingface cache)
 if [[ $MODEL = falcon ]]; then
-	CACHE=/home/ubuntu/falcon
+	CACHE=.cache/falcon
 elif [[ $MODEL = llama ]]; then
 	CACHE=/pure-mlo-scratch/llama/${SIZE}B/
 	#CACHE=/home/ubuntu/llama/${SIZE}B/

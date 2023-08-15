@@ -57,18 +57,18 @@ done
 
 # set args
 LR="3e-4"
-#CHECKPOINT_PATH=/pure-mlo-scratch/akoepf/checkpoints/${MODEL}-${SIZE}b-tp$TP-pp$PP
-CHECKPOINT_PATH=/pure-mlo-scratch/akoepf/checkpoints/llama2-13b-tp4-pp2-megacode2_min100
-OUTPUT_PATH=/pure-mlo-scratch/akoepf/checkpoints/${MODEL}-${SIZE}b-tp$TP-pp$PP-megacode2_oasst
+CHECKPOINT_PATH=/pure-mlo-scratch/akoepf/checkpoints/${MODEL}-${SIZE}b-tp$TP-pp$PP
+#CHECKPOINT_PATH=/pure-mlo-scratch/akoepf/checkpoints/llama2-13b-tp4-pp2-megacode2_min100
+OUTPUT_PATH=/pure-mlo-scratch/akoepf/checkpoints/${MODEL}-${SIZE}b-tp$TP-pp$PP-oasst
 #OUTPUT_PATH=/pure-mlo-scratch/akoepf/checkpoints/${MODEL}-${SIZE}b-tp$TP-pp$PP-test_rope_scale2
 #OUTPUT_PATH=/pure-mlo-scratch/akoepf/checkpoints/${MODEL}-${SIZE}b-tp$TP-pp$PP-oasst1_varseq
 TENSORBOARD_PATH=$OUTPUT_PATH/logging
 DISTRIBUTED_ARGS="--nproc_per_node $GPUS_PER_NODE --nnodes $N_NODES --node_rank
                   $RANK --master_addr $ADDR --master_port 6000"
 if [[ $MODEL = falcon ]]; then
-	DATA_PATH=/home/ubuntu/megatron-data/oa-top1/oa-top1-train_text_document
+	DATA_PATH=/pure-mlo-scratch/akoepf/data/llama_oasst_top1_2023-07-23/oasst_top1-train
 	TOKENIZER=FalconTokenizer
-	EXTRA_ARGS="--parallel_attn"
+	EXTRA_ARGS='--parallel_attn --vocab_extra_ids_list "<|im_start|>,<|im_end|>"'
 	SEQ_LEN=2048
 elif [[ $MODEL = llama ]] || [[ $MODEL = llama2 ]]; then
 	DATA_PATH=/pure-mlo-scratch/akoepf/data/llama_oasst_top1_2023-07-23/oasst_top1-train

@@ -128,7 +128,6 @@ class _FalconTokenizer(AbstractTokenizer):
         from transformers import AutoTokenizer
 
         self.tokenizer = AutoTokenizer.from_pretrained("tiiuae/falcon-40b")
-        self._eod = self.tokenizer.vocab["<|endoftext|>"]
 
         if vocab_extra_ids_list and new_tokens:
             self.tokenizer.add_special_tokens(
@@ -160,7 +159,19 @@ class _FalconTokenizer(AbstractTokenizer):
 
     @property
     def eod(self):
-        return self._eod
+        return self.eos_token_id
+
+    @property
+    def pad(self):
+        return self.eos_token_id
+
+    @property
+    def eod(self):
+        return self.eos_token_id
+
+    @property
+    def eos_token_id(self):
+        return self.tokenizer.eos_token_id
 
 
 class _SentencePieceTokenizer(AbstractTokenizer):

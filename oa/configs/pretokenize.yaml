@@ -14,7 +14,7 @@ defaults:
 llama2:
   vocab_file: "/home/ubuntu/megatron-data/llama2-7b/tokenizer.model"
   tokenizer_type: "SentencePieceTokenizer"
-  output_dir_suffix: "_llama"
+  output_dir_suffix: "_llama2"
 
 
 falcon:

@@ -1,3 +1,4 @@
+from subprocess import run
 import random
 import argparse
 from enum import IntEnum
@@ -323,6 +324,11 @@ def parse_args():
         type=_strtobool,
         default=False,
     )
+    group.add_argument(
+        "--compress",
+        action="store_true",
+        help="If specified compresses the output directory to a tar.gz"
+    )
 
     args, remaining = parser.parse_known_args()
 
@@ -431,6 +437,9 @@ def main():
             write_json=args.write_json,
             seed=args.rng_seed,
         )
+
+    if args.compress:
+        run(f"tar -czvf {output_dir}.tar.gz {output_dir}", shell=True, check=True)
 
 
 if __name__ == "__main__":

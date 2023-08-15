@@ -2,6 +2,7 @@
 
 """Megatron optimizer."""
 
+import math
 from abc import ABC
 from abc import abstractmethod
 from apex.multi_tensor_apply import multi_tensor_applier
@@ -438,6 +439,10 @@ class MixedPrecisionOptimizer(MegatronOptimizer):
             grad_norm = self.clip_grad_norm(self.clip_grad)
         timers('optimizer-clip-main-grad').stop()
 
+        if grad_norm is not None and not math.isfinite(grad_norm):
+            print_rank_0(f'***WARNING*** Bad grad_norm detected (grad_norm={grad_norm})')
+            return False, grad_norm, None
+
         # Count the zeros in the grads.
         timers('optimizer-count-zeros', log_level=1).start(
             barrier=args.barrier_with_L1_time)
@@ -744,6 +749,10 @@ class FP32Optimizer(MegatronOptimizer):
         if self.clip_grad > 0.0:
             grad_norm = self.clip_grad_norm(self.clip_grad)
         timers('optimizer-clip-main-grad').stop()
+
+        if grad_norm is not None and not math.isfinite(grad_norm):
+            print_rank_0(f'***WARNING*** Bad grad_norm detected (grad_norm={grad_norm})')
+            return False, grad_norm, None
 
         # count the zeros in the grads
         timers('optimizer-count-zeros', log_level=1).start(

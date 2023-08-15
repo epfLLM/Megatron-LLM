@@ -66,7 +66,8 @@ TENSORBOARD_PATH=$OUTPUT_PATH/logging
 DISTRIBUTED_ARGS="--nproc_per_node $GPUS_PER_NODE --nnodes $N_NODES --node_rank
                   $RANK --master_addr $ADDR --master_port 6000"
 if [[ $MODEL = falcon ]]; then
-	DATA_PATH=/pure-mlo-scratch/akoepf/data/llama_oasst_top1_2023-07-23/oasst_top1-train
+	DATA_PATH=/pure-mlo-scratch/akoepf/data/megacode2_min100_falcon/megacode2-train
+	#DATA_PATH=/pure-mlo-scratch/akoepf/data/oasst_top1_2023-07-23_falcon/oasst_top1-train
 	TOKENIZER=FalconTokenizer
 	EXTRA_ARGS='--parallel_attn --vocab_extra_ids_list "<|im_start|>,<|im_end|>"'
 	SEQ_LEN=2048
@@ -130,7 +131,7 @@ COMMON_ARGS="--use_flash_attn --no_bias_gelu_fusion
 # 	     --weight_decay 0.1 --sequence_parallel --recompute_granularity selective"
 
 if [[ $WANDB = 1 ]]; then
-	COMMON_ARGS="$COMMON_ARGS --wandb_logger --wandb_project epfl-mt-sft --wandb_entity open-assistant --wandb_id run35_megacode2_oasst_13b"
+	COMMON_ARGS="$COMMON_ARGS --wandb_logger --wandb_project epfl-mt-sft --wandb_entity open-assistant --wandb_id run37_megacode_falcon40"
 fi
 
 # print some args

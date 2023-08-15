@@ -392,6 +392,19 @@ def main():
     np.random.seed(args.rng_seed)
     torch.manual_seed(args.rng_seed)
 
+    print("Building encoder")
+    encoder = Encoder(args)
+
+    tokenizer_check_input = "<|im_start|>system\nsystem message<|im_end|>\n<|im_start|>user\nprompt<|im_end|><|im_start|>assistant\nreply<|im_end|>\n"
+    tokenizer_check_output = encoder.encode_text(tokenizer_check_input)
+    print('Tokenizer check:')
+    print('Input:', tokenizer_check_input.replace("\n", r"\n"))
+    print('Output:', tokenizer_check_output)
+    print(f"Vocab size: {encoder.tokenizer.vocab_size}")
+
+    output_dir = Path(args.output_dir + args.output_dir_suffix)
+    print(f"Output dir: {output_dir} (exists: {output_dir.exists()})")
+
     train, evals = get_dataset(args)
 
     # show dataset stats
@@ -407,14 +420,6 @@ def main():
             if hasattr(d, "name"):
                 name += f" ({d.name})"
         print(f"{name}: {len(d)} ({len(d) / total:.2%})")
-
-    print("Building encoder")
-    encoder = Encoder(args)
-
-    output_dir = Path(args.output_dir + args.output_dir_suffix)
-
-    print(f"Vocab size: {encoder.tokenizer.vocab_size}")
-    print(f"Output dir: {output_dir} (exists: {output_dir.exists()})")
 
     output_dir.mkdir(exist_ok=True)
 

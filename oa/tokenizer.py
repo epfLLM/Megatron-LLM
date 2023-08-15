@@ -130,12 +130,16 @@ class _FalconTokenizer(AbstractTokenizer):
         self.tokenizer = AutoTokenizer.from_pretrained("tiiuae/falcon-40b")
 
         if vocab_extra_ids_list and new_tokens:
-            self.tokenizer.add_special_tokens(
-                {
-                    "additional_special_tokens": self.tokenizer.additional_special_tokens
-                    + vocab_extra_ids_list.split(",")
-                }
+            special_tokens = (
+                self.tokenizer.additional_special_tokens
+                + vocab_extra_ids_list.split(",")
             )
+            self.tokenizer.add_special_tokens(
+                {"additional_special_tokens": special_tokens}
+            )
+            self._special_tokens = {tok: self.vocab[tok] for tok in special_tokens}
+        else:
+            self._special_tokens = {}
 
         self._inv_vocab = {idx: token for token, idx in self.tokenizer.vocab.items()}
 

@@ -201,7 +201,7 @@ def tokenize_dataset(
             per_dataset_stats.append(TokenStats(name, len(d), frac))
 
         dataset = ConcatDataset(datasets)
-        cumulative_sizes = dataset.cummulative_sizes
+        cumulative_sizes = dataset.cumulative_sizes
     else:
         cumulative_sizes = [len(dataset)]
 
@@ -405,10 +405,10 @@ def main():
     print("Building encoder")
     encoder = Encoder(args)
 
-    output_dir = Path(args.output_dir)
+    output_dir = Path(args.output_dir + args.output_dir_suffix)
 
     print(f"Vocab size: {encoder.tokenizer.vocab_size}")
-    print(f"Output dir: {args.output_dir} (exists: {output_dir.exists()})")
+    print(f"Output dir: {output_dir} (exists: {output_dir.exists()})")
 
     output_dir.mkdir(exist_ok=True)
 

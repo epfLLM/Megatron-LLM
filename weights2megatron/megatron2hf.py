@@ -216,24 +216,27 @@ def write_tokenizer(tokenizer_path, input_tokenizer_path):
 
 
 def write_falcon_model(model_path: str, input_base_path: str, num_output_shards: int=2):
-    input_base_path = Path(input_base_path)
     # Preliminaries
     print(f"Fetching all parameters from the checkpoint at {input_base_path}.")
-    with open(os.path.join(input_base_path, 'latest_checkpointed_iteration.txt')) as f:
-        iteration = f.read()
+    input_base_path = Path(input_base_path)
+    iteration = (input_base_path / 'latest_checkpointed_iteration.txt').read_text()
     if iteration != "release":
         iteration = f"iter_{int(iteration):07d}"
     print(f"Fetching iteration {iteration}")
 
     # Load weights
-    loaded = torch.load(input_base_path / iteration / 'mp_rank_00' / 'model_optim_rng.pt', map_location="cpu")
-    args = loaded['args']
-    loaded = loaded['model']['language_model']
+    loaded = torch.load(input_base_path / iteration / "mp_rank_00" / "model_optim_rng.pt", map_location="cpu")
+    args = loaded["args"]
+    loaded = loaded["model"]["language_model"]
 
-    print("embedding", loaded["embedding"].keys())
-    print("transformer", loaded["transformer"].keys())
+    if "transformer" not in loaded:  # normalize key names
+        loaded["transformer"] = loaded.pop("encoder")
+        loaded["embedding"]["word_embeddings.weight"] = loaded["embedding"].pop("word_embeddings")["weight"]
+        args.num_layers = args.encoder_num_layers
 
-    print("args", args)
+    # Make sure the self_attention layer is called "attention" in the megatron state dict
+    for key in list(loaded["transformer"].keys()):
+        loaded["transformer"][key.replace("self_attention", "attention")] = loaded["transformer"].pop(key)
 
     embedding = loaded["embedding"]
     transformer = loaded["transformer"]
@@ -249,7 +252,7 @@ def write_falcon_model(model_path: str, input_base_path: str, num_output_shards:
 
     weights = {}
 
-    # # weights independent of layers (i.e. token embeddings and layernorms
+    # weights independent of layers (i.e. token embeddings and layernorms
     weights["transformer.word_embeddings.weight"] = embedding["word_embeddings.weight"]
     weights["lm_head.weight"] = weights["transformer.word_embeddings.weight"]
     weights["transformer.ln_f.weight"] = transformer["final_layernorm.weight"]
@@ -271,7 +274,7 @@ def write_falcon_model(model_path: str, input_base_path: str, num_output_shards:
 
         # dense
         weights[f"{prefix2}.self_attention.dense.weight"] = \
-            transformer[f"{prefix1}.self_attention.dense.weight"]
+            transformer[f"{prefix1}.attention.dense.weight"]
 
         # falcon7 and falcon40 differ in the input layernorms
         if n_layers <= 32:   # 7B model
@@ -291,13 +294,17 @@ def write_falcon_model(model_path: str, input_base_path: str, num_output_shards:
 
     print('Falcon-Megatron Loaded!')
 
+    vocab_size = 65024  # default size for falcon
+    if "padded_vocab_size" in args:
+        vocab_size = args.padded_vocab_size
+
     # creating HF falcon model
     config = FalconConfig(
-        vocab_size=65024, # args.padded_vocab_size,
+        vocab_size=vocab_size,
         hidden_size=args.hidden_size,
         num_hidden_layers=args.num_layers,
         num_attention_heads=args.num_attention_heads,
-        num_kv_heads=None if args.num_attention_heads_kv else args.num_attention_heads_kv,
+        num_kv_heads=None if args.num_attention_heads_kv == 1 else args.num_attention_heads_kv,
         new_decoder_architecture=args.num_layers >= 60,
     )
 
@@ -306,9 +313,9 @@ def write_falcon_model(model_path: str, input_base_path: str, num_output_shards:
     torch_dtype = weights["lm_head.weight"].dtype
     print(f"dtype: {torch_dtype}")
     print("Loading state dict...")
+    model.to(torch_dtype)   # convert model to soucre dtype
     model.load_state_dict(weights)
-    #model = model.to(torch.bfloat16)
-    print("done")
+    print("Done!")
 
     param_count = 0
     for v in weights.values():
@@ -316,8 +323,9 @@ def write_falcon_model(model_path: str, input_base_path: str, num_output_shards:
     print(f"param_count: {param_count}")
 
     # write model
-    print(f"Saving in the Transformers format to: {model_path}")
-    max_shard_size = param_count * 2 // num_output_shards
+    print(f"Saving in the Transformers format to: {model_path} ()")
+    bytes_per_param = torch.finfo(torch_dtype) / 8
+    max_shard_size = param_count * bytes_per_param // num_output_shards
     print(f"max_shard_size: {max_shard_size}")
     model.save_pretrained(model_path, max_shard_size=max_shard_size)
 
@@ -339,7 +347,7 @@ def main():
         default=1,
     )
     parser.add_argument(
-        "model",
+        "--model",
         choices={"falcon", "llama", "llama2"},
         default="llama2",
     )

@@ -18,10 +18,12 @@ import json
 import os
 import warnings
 from tempfile import TemporaryDirectory
+from pathlib import Path
+from tqdm.auto import trange
 
 import torch
 
-from transformers import LlamaConfig, LlamaForCausalLM, LlamaTokenizer
+from transformers import LlamaConfig, LlamaForCausalLM, LlamaTokenizer, FalconConfig, FalconForCausalLM
 
 from permute_qkv import permute_qkv
 
@@ -88,8 +90,9 @@ def convert_ffn(llama_mega, layer_idx=0, n_dense=11008):
     ffn_w3, ffn_w1 = mega_ffn.split(n_dense, dim=0)
     return ffn_w1, ffn_w3
 
-def write_model(model_path, 
-                input_base_path, 
+
+def write_llama_model(model_path,
+                input_base_path,
                 num_output_shards=2,
                 norm_eps=1e-05):
 
@@ -212,6 +215,113 @@ def write_tokenizer(tokenizer_path, input_tokenizer_path):
     tokenizer.save_pretrained(tokenizer_path)
 
 
+def write_falcon_model(model_path: str, input_base_path: str, num_output_shards: int=2):
+    input_base_path = Path(input_base_path)
+    # Preliminaries
+    print(f"Fetching all parameters from the checkpoint at {input_base_path}.")
+    with open(os.path.join(input_base_path, 'latest_checkpointed_iteration.txt')) as f:
+        iteration = f.read()
+    if iteration != "release":
+        iteration = f"iter_{int(iteration):07d}"
+    print(f"Fetching iteration {iteration}")
+
+    # Load weights
+    loaded = torch.load(input_base_path / iteration / 'mp_rank_00' / 'model_optim_rng.pt', map_location="cpu")
+    args = loaded['args']
+    loaded = loaded['model']['language_model']
+
+    print("embedding", loaded["embedding"].keys())
+    print("transformer", loaded["transformer"].keys())
+
+    print("args", args)
+
+    embedding = loaded["embedding"]
+    transformer = loaded["transformer"]
+
+    # Load arguments
+    n_layers = args.num_layers
+    dim = args.hidden_size
+    n_heads = args.num_attention_heads
+    n_heads_kv = args.num_attention_heads_kv
+
+    def permute(qkv_w):
+        return permute_qkv(qkv_w, dim, n_heads, n_heads_kv, revert=True)
+
+    weights = {}
+
+    # # weights independent of layers (i.e. token embeddings and layernorms
+    weights["transformer.word_embeddings.weight"] = embedding["word_embeddings.weight"]
+    weights["lm_head.weight"] = weights["transformer.word_embeddings.weight"]
+    weights["transformer.ln_f.weight"] = transformer["final_layernorm.weight"]
+    weights["transformer.ln_f.bias"] = transformer["final_layernorm.bias"]
+
+    # copy weights for each transformer layer
+    for layer in trange(n_layers, desc="Converting weights"):
+        prefix1 = f"layers.{layer}"
+        prefix2 = f"transformer.h.{layer}"
+        # mlp
+        weights[f"{prefix2}.mlp.dense_h_to_4h.weight"] = \
+            transformer[f"{prefix1}.mlp.dense_h_to_4h.weight"]
+        weights[f"{prefix2}.mlp.dense_4h_to_h.weight"] = \
+            transformer[f"{prefix1}.mlp.dense_4h_to_h.weight"]
+
+        # qkv weights
+        weights[f"{prefix2}.self_attention.query_key_value.weight"] = \
+            permute(transformer[f"{prefix1}.attention.query_key_value.weight"])
+
+        # dense
+        weights[f"{prefix2}.self_attention.dense.weight"] = \
+            transformer[f"{prefix1}.self_attention.dense.weight"]
+
+        # falcon7 and falcon40 differ in the input layernorms
+        if n_layers <= 32:   # 7B model
+            weights[f"{prefix2}.input_layernorm.weight"] = \
+                transformer[f"{prefix1}.input_layernorm.weight"]
+            weights[f"{prefix2}.input_layernorm.bias"] = \
+                transformer[f"{prefix1}.input_layernorm.bias"]
+        else:
+            weights[f"{prefix2}.ln_attn.weight"] = \
+                transformer[f"{prefix1}.input_layernorm.weight"]
+            weights[f"{prefix2}.ln_mlp.weight"] = \
+                transformer[f"{prefix1}.mlp_layernorm.weight"]
+            weights[f"{prefix2}.ln_attn.bias"] = \
+                transformer[f"{prefix1}.input_layernorm.bias"]
+            weights[f"{prefix2}.ln_mlp.bias"] = \
+                transformer[f"{prefix1}.mlp_layernorm.bias"]
+
+    print('Falcon-Megatron Loaded!')
+
+    # creating HF falcon model
+    config = FalconConfig(
+        vocab_size=65024, # args.padded_vocab_size,
+        hidden_size=args.hidden_size,
+        num_hidden_layers=args.num_layers,
+        num_attention_heads=args.num_attention_heads,
+        num_kv_heads=None if args.num_attention_heads_kv else args.num_attention_heads_kv,
+        new_decoder_architecture=args.num_layers >= 60,
+    )
+
+    print("Creating FalconForCausalLM")
+    model = FalconForCausalLM(config=config)
+    torch_dtype = weights["lm_head.weight"].dtype
+    print(f"dtype: {torch_dtype}")
+    print("Loading state dict...")
+    model.load_state_dict(weights)
+    #model = model.to(torch.bfloat16)
+    print("done")
+
+    param_count = 0
+    for v in weights.values():
+        param_count += v.numel()
+    print(f"param_count: {param_count}")
+
+    # write model
+    print(f"Saving in the Transformers format to: {model_path}")
+    max_shard_size = param_count * 2 // num_output_shards
+    print(f"max_shard_size: {max_shard_size}")
+    model.save_pretrained(model_path, max_shard_size=max_shard_size)
+
+
 def main():
     # make sure megatron is importable
     sys.path.append(os.path.abspath(
@@ -228,18 +338,29 @@ def main():
         type=int,
         default=1,
     )
-    
+    parser.add_argument(
+        "model",
+        choices={"falcon", "llama", "llama2"},
+        default="llama2",
+    )
     parser.add_argument(
         "--output_dir",
         help="Location to write HF model and tokenizer",
     )
     
     args = parser.parse_args()
-    write_model(
-        model_path=args.output_dir,
-        input_base_path=args.input_dir,
-        num_output_shards=args.num_output_shards
-    )
+    if args.model in ("llama", "llama2"):
+        write_llama_model(
+            model_path=args.output_dir,
+            input_base_path=args.input_dir,
+            num_output_shards=args.num_output_shards
+        )
+    elif args.model == "falcon":
+        write_falcon_model(
+            model_path=args.output_dir,
+            input_base_path=args.input_dir,
+            num_output_shards=args.num_output_shards
+        )
     
 
 if __name__ == "__main__":

@@ -219,7 +219,7 @@ def write_falcon_model(model_path: str, input_base_path: str, num_output_shards:
     # Preliminaries
     print(f"Fetching all parameters from the checkpoint at {input_base_path}.")
     input_base_path = Path(input_base_path)
-    iteration = (input_base_path / 'latest_checkpointed_iteration.txt').read_text()
+    iteration = (input_base_path / "latest_checkpointed_iteration.txt").read_text()
     if iteration != "release":
         iteration = f"iter_{int(iteration):07d}"
     print(f"Fetching iteration {iteration}")
@@ -292,7 +292,7 @@ def write_falcon_model(model_path: str, input_base_path: str, num_output_shards:
             weights[f"{prefix2}.ln_mlp.bias"] = \
                 transformer[f"{prefix1}.mlp_layernorm.bias"]
 
-    print('Falcon-Megatron Loaded!')
+    print("Falcon-Megatron Loaded!")
 
     vocab_size = 65024  # default size for falcon
     if "padded_vocab_size" in args:
@@ -320,13 +320,13 @@ def write_falcon_model(model_path: str, input_base_path: str, num_output_shards:
     param_count = 0
     for v in weights.values():
         param_count += v.numel()
-    print(f"param_count: {param_count}")
+    print(f"param_count: {param_count:,}")
 
     # write model
-    print(f"Saving in the Transformers format to: {model_path} ()")
-    bytes_per_param = torch.finfo(torch_dtype) / 8
-    max_shard_size = param_count * bytes_per_param // num_output_shards
-    print(f"max_shard_size: {max_shard_size}")
+    print(f"Saving in the Transformers format to: {model_path} ({torch_dtype})")
+    bits_per_param = torch.finfo(torch_dtype).bits
+    max_shard_size = param_count * bits_per_param // num_output_shards // 8
+    print(f"max_shard_size: {max_shard_size:,} bytes")
     model.save_pretrained(model_path, max_shard_size=max_shard_size)
 
 

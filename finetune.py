@@ -10,8 +10,15 @@ from megatron.training import pretrain
 from megatron.core import tensor_parallel
 from megatron.model import GPTModel, ModelType, LlamaModel, FalconModel
 from megatron.utils import get_ltor_masks_and_position_ids, average_losses_across_data_parallel_group
-from megatron.data.gpt_dataset import build_train_valid_test_datasets
+from megatron.data.gpt_dataset import build_train_valid_test_datasets as gpt_build_datasets
+from megatron.data.instruction_dataset import instruction_collator
+from megatron.data.instruction_dataset import build_train_valid_test_datasets as instruct_build_datasets
 from megatron.initialize import initialize_megatron
+
+
+##
+# Model provider utilities
+##
 
 
 def model_provider(pre_process: bool = True, post_process: bool = True):
@@ -48,14 +55,50 @@ def model_provider(pre_process: bool = True, post_process: bool = True):
     return model
 
 
+##
+# Dataset utilities
+##
+
+def get_attention_mask_and_position_ids(data, attention_mask):
+    """Build masks and position id for left to right model."""
+
+    # Extract batch size and sequence length.
+    micro_batch_size, seq_length = data.size()
+
+    # Attention mask (lower triangular).
+    att_mask_batch = micro_batch_size
+    attention_mask = (
+        attention_mask.unsqueeze(1)
+        .expand(micro_batch_size, seq_length, seq_length)
+        .to(data.device)
+    )
+    attention_mask = torch.tril(attention_mask).view(
+        att_mask_batch, 1, seq_length, seq_length
+    )
+
+    # Convert attention mask to binary, True entries will masked
+    attention_mask = attention_mask < 0.5
+
+    # Position ids.
+    position_ids = torch.arange(seq_length, dtype=torch.long, device=data.device)
+    position_ids = position_ids.unsqueeze(0).expand_as(data)
+
+    return attention_mask, position_ids
+
+
 def get_batch(data_iterator):
     """Generate a batch"""
     args = get_args()
     tokenizer = get_tokenizer()
 
     # Items and their type.
-    keys = ['text']
     datatype = torch.int64
+    if args.data_type == "gpt":
+        keys = ["text"]
+    elif args.data_type == "instruction":
+        keys = ["text", "attention_mask", "loss_mask"]
+    else:
+        raise KeyError(f"Unknown dataset type {args.data_type}")
 
     # Broadcast data.
     if data_iterator is not None:
@@ -65,19 +108,67 @@ def get_batch(data_iterator):
     data_b = tensor_parallel.broadcast_data(keys, data, datatype)
 
     # Unpack.
-    tokens_ = data_b['text'].long()
-    labels = tokens_[:, 1:].contiguous()
-    tokens = tokens_[:, :-1].contiguous()
+    tokens = data_b["text"]
+    if args.data_type == "gpt":
+        labels = tokens_[:, 1:].contiguous()
+        tokens = tokens_[:, :-1].contiguous()
+
+        # Get the masks and postition ids.
+        attention_mask, loss_mask, position_ids = get_ltor_masks_and_position_ids(
+            tokens,
+            tokenizer.eod,
+            args.reset_position_ids,
+            args.reset_attention_mask,
+            args.eod_mask_loss
+        )
+        return tokens, labels, loss_mask, attention_mask, position_ids
+
+    # Instruction dataset.
+    labels = torch.roll(tokens, shifts=-1, dims=-1)  # TODO this is different
+    attention_mask = data_b["attention_mask"]
+    loss_mask = data_b["loss_mask"]
+    loss_mask[:, 0] = 0  # first tokens are no targets due to roll
+    loss_mask = torch.roll(loss_mask, shifts=-1, dims=-1)
+    loss_mask = loss_mask.float().to(tokens.device)
 
     # Get the masks and postition ids.
-    attention_mask, loss_mask, position_ids = get_ltor_masks_and_position_ids(
-        tokens,
-        tokenizer.eod,
-        args.reset_position_ids,
-        args.reset_attention_mask,
-        args.eod_mask_loss)
+    attention_mask, position_ids = get_attention_mask_and_position_ids(
+        tokens, attention_mask
+    )
 
     return tokens, labels, loss_mask, attention_mask, position_ids
+
+
+def data_provider(train_val_test_num_samples):
+    """Build train, valid, and test datasets."""
+    args = get_args()
+
+    if args.data_type == "gpt":
+        builder = gpt_build_datasets
+    elif args.data_type == "instruction":
+        builder = instruct_build_datasets
+
+    print_rank_0("> building train, validation, and test datasets ...")
+    train_ds, valid_ds, test_ds = builder(
+        data_prefix=args.data_path,
+        data_impl=args.data_impl,
+        splits_string=args.split,
+        train_valid_test_num_samples=train_val_test_num_samples,
+        seq_length=args.seq_length,
+        seed=args.seed,
+        skip_warmup=(not args.mmap_warmup),
+        train_data_prefix=args.train_data_path,
+        valid_data_prefix=args.valid_data_path,
+        test_data_prefix=args.test_data_path
+    )
+    print_rank_0("> finished creating datasets ...")
+
+    return train_ds, valid_ds, test_ds
+
+
+##
+# Loss and forward
+##
 
 
 def loss_func(loss_mask, output_tensor):
@@ -99,31 +190,46 @@ def forward_step(data_iterator, model):
     tokens, labels, loss_mask, attention_mask, position_ids = get_batch(data_iterator)
     timers("batch-generator").stop()
 
+    if torch.distributed.get_rank() == 0 and False:
+        tokenizer = get_tokenizer()
+        print()
+        print("=====")
+        print("Batch")
+        print("Tokens:", tokens.size())
+        print("Labels:", labels.size())
+        print("loss_mask:", loss_mask.size())
+        print("attention_mask:", attention_mask.size())
+        print("position_ids:", position_ids.size())
+        for i in range(tokens.size(0)):
+            if i > 0:
+                print()
+            print("----")
+            print("Sample", i)
+            n_pads = 0
+            for j in range(tokens.size(1)):
+                is_pad = tokens[i, j].item() == tokenizer._pad_id
+                if is_pad:
+                    n_pads += 1
+                else:
+                    if n_pads > 0:
+                        print("<PAD> x", n_pads)
+                    n_pads = 0
+                    print(tokenizer.detokenize([tokens[i, j].item()]), tokens[i, j].item(),
+                          labels[i, j].item(), loss_mask[i, j].item(), position_ids[i, j].item())
+            if n_pads > 0:
+                print("<PAD> x", n_pads)
+        print("====")
+        print()
+
+
     output_tensor = model(tokens, position_ids, attention_mask,
                           labels=labels)
     return output_tensor, partial(loss_func, loss_mask)
 
 
-def train_valid_test_datasets_provider(train_val_test_num_samples):
-    """Build train, valid, and test datasets."""
-    args = get_args()
-
-    print_rank_0('> building train, validation, and test datasets '
-                 'for GPT ...')
-    train_ds, valid_ds, test_ds = build_train_valid_test_datasets(
-        data_prefix=args.data_path,
-        data_impl=args.data_impl,
-        splits_string=args.split,
-        train_valid_test_num_samples=train_val_test_num_samples,
-        seq_length=args.seq_length,
-        seed=args.seed,
-        skip_warmup=(not args.mmap_warmup),
-        train_data_prefix=args.train_data_path,
-        valid_data_prefix=args.valid_data_path,
-        test_data_prefix=args.test_data_path,)
-    print_rank_0("> finished creating GPT datasets ...")
-
-    return train_ds, valid_ds, test_ds
+##
+# Main
+##
 
 
 def extra_args(parser):
@@ -133,6 +239,8 @@ def extra_args(parser):
                        default="gpt")
     group.add_argument("--model_type", choices={"encoder_or_decoder", "encoder_and_decoder"},
                        default="encoder_or_decoder")
+    group.add_argument("--data_type", choices={"gpt", "instruction"},
+                       default="gpt")
     group.add_argument("--log_learning_rate_to_tensorboard", type=bool, default=True)
     group.add_argument("--log_loss_scale_to_tensorboard", type=bool, default=True)
     return parser
@@ -142,9 +250,13 @@ if __name__ == "__main__":
     args_defaults = {"tokenizer_type": "GPT2BPETokenizer"}
     initialize_megatron(extra_args, args_defaults)
     args = get_args()
-    pretrain(args,
-             train_valid_test_datasets_provider,
-             model_provider,
-             ModelType.encoder_or_decoder,
-             forward_step)
+
+    if args.data_type == "gpt":
+        collate_fn = None
+    else:
+        collate_fn = instruction_collator
+
+
+    pretrain(args, data_provider, model_provider,  ModelType.encoder_or_decoder,
+             forward_step, collate_fn=collate_fn)
     print(f"Done {dt.datetime.now(dt.timezone.utc)}")

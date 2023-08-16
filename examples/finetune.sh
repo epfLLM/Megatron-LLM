@@ -12,9 +12,10 @@ RANK=0
 N_NODES=1
 ADDR=localhost
 WANDB=0
+INSTRUCT=0
 HELP_STR="[--rank=$RANK] [--size=$SIZE] [--tp=$TP] [--pp=$PP] [--gpus=$GPUS_PER_NODE] \
 [--micro-batch=$MICRO_BATCH] [--global-batch=$GLOBAL_BATCH] [--nodes=$N_NODES] \
-[--addr=$ADDR] [--wandb] [--help]"
+[--addr=$ADDR] [--wandb] [--instruct] [--help]"
 
 
 # define help function
@@ -48,6 +49,7 @@ while [[ $# -gt 0 ]]; do
 		--nodes) N_NODES=$2; shift; shift;;
 		--addr) ADDR=$2; shift; shift;;
 		--wandb) WANDB=1; shift;;
+		--instruct) INSTRUCT=1; shift;;
 		*) echo unknown argument $1; help; exit 1;;
 	esac
 done
@@ -56,7 +58,9 @@ done
 # set args
 LR="3e-4"
 CHECKPOINT_PATH=/pure-mlo-scratch/alhernan/megatron-data/checkpoints/${MODEL}-${SIZE}b-tp$TP-pp$PP
-TENSORBOARD_PATH=$CHECKPOINT_PATH-trained/logging
+# TRAINED_PATH=$CHECKPOINT_PATH-trained
+TRAINED_PATH=$CHECKPOINT_PATH-instructed
+TENSORBOARD_PATH=$TRAINED_PATH/logging
 DISTRIBUTED_ARGS="--nproc_per_node $GPUS_PER_NODE --nnodes $N_NODES --node_rank
                   $RANK --master_addr $ADDR --master_port 6000"
 if [[ $MODEL = falcon ]]; then
@@ -65,11 +69,21 @@ if [[ $MODEL = falcon ]]; then
 	EXTRA_ARGS="--parallel_attn"
 	SEQ_LEN=2048
 elif [[ $MODEL = llama ]] || [[ $MODEL = llama2 ]]; then
-	DATA_PATH=/pure-mlo-scratch/trial-runs/test/pubmed-all-llama_text_document
+	# closing " missing intentionally
+	EXTRA_IDS='"[bib_ref],[/bib_ref],[fig_ref],[/fig_ref],[bib],[/bib],[fig],[/fig],[table],[/table],[formula],[/formula]'
+	EXTRA_ARGS="--vocab_file=/pure-mlo-scratch/llama/tokenizer.model --use_rms_norm
+	            --glu_activation swiglu --no_tie_embed_logits"
+	if [[ $INSTRUCT = 1 ]]; then
+		# DATA_PATH=/pure-mlo-scratch/alhernan/data/medmc/medmc-v1
+		DATA_PATH=/pure-mlo-scratch/alhernan/data/orca/orca
+		EXTRA_IDS="$EXTRA_IDS,<|im_start|>,<|im_end|>\""
+       		EXTRA_ARGS="$EXTRA_ARGS --data_type instruction"
+	else
+		DATA_PATH=/pure-mlo-scratch/data/tokenized/pubmed-all/pubmed-all-llama_text_document
+		EXTRA_IDS="$EXTRA_IDS\""
+	fi
 	TOKENIZER=SentencePieceTokenizer
-	EXTRA_ARGS='--vocab_file=/pure-mlo-scratch/llama/tokenizer.model --use_rms_norm
-	            --glu_activation swiglu --no_tie_embed_logits
-		    --vocab_extra_ids_list "[bib_ref],[/bib_ref],[fig_ref],[/fig_ref],[bib],[/bib],[fig],[/fig],[table],[/table],[formula],[/formula]"'
+	EXTRA_ARGS="$EXTRA_ARGS --vocab_extra_ids_list $EXTRA_IDS"
 	if [[ $MODEL == llama ]]; then
 		SEQ_LEN=2048
 		EXTRA_ARGS="$EXTRA_ARGS --layernorm_epsilon 1e-6"
@@ -116,6 +130,7 @@ echo TP=$TP
 echo PP=$PP
 echo MICRO_BATCH=$MICRO_BATCH
 echo GLOBAL_BATCH=$GLOBAL_BATCH
+echo INSTRUCT=$INSTRUCT
 echo
 
 
@@ -124,7 +139,7 @@ CUDA_DEVICE_MAX_CONNECTIONS=1 OMP_NUM_THREADS=16 torchrun $DISTRIBUTED_ARGS fine
        --tensor_model_parallel_size $TP \
        --pipeline_model_parallel_size $PP  \
        --load $CHECKPOINT_PATH \
-       --save $CHECKPOINT_PATH-trained \
+       --save $TRAINED_PATH \
        --tensorboard_dir $TENSORBOARD_PATH \
        --data_path $DATA_PATH \
        --model_name $MODEL \
@@ -132,5 +147,6 @@ CUDA_DEVICE_MAX_CONNECTIONS=1 OMP_NUM_THREADS=16 torchrun $DISTRIBUTED_ARGS fine
        --bf16 \
        --global_batch_size $GLOBAL_BATCH \
        --micro_batch_size $MICRO_BATCH \
+       --num_workers=2 \
        $EXTRA_ARGS \
-       $COMMON_ARGS
+       $COMMON_ARGS \

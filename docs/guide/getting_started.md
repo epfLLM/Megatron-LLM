@@ -246,7 +246,7 @@ from transformers import LlamaForCausalLM, LlamaTokenizer
 pipeline = transformers.pipeline(
     "text-generation",
     model=LlamaForCausalLM.from_pretrained("/path/to/hf/weights/"),
-    tokenizer=LlamaTokenizer("/path/to/tokenizer.model"),
+    tokenizer=LlamaTokenizer.from_pretrained("/path/to/hf/weights/"),
     torch_dtype=torch.bfloat16,
     device_map="auto"
 )

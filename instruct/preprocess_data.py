@@ -15,6 +15,7 @@ python instruct/preprocess_data.py --input=/pure-mlo-scratch/alhernan/data/medmc
 import sys
 import json
 import time
+import itertools
 from pathlib import Path
 from typing import Optional
 from multiprocessing import Pool
@@ -101,8 +102,8 @@ def format_message(message: str, role: str) -> str:
 def get_args():
     parser = ArgumentParser()
     group = parser.add_argument_group(title='input data')
-    group.add_argument('--input', type=str, required=True,
-                       help='Path to input JSON')
+    group.add_argument('--input', type=str, nargs="+",
+                       help='Path(s) to input JSON file(s)')
     group.add_argument('--system_key',
                        help='key to extract system info from json (optional)')
     group.add_argument('--question_key', default='input',
@@ -161,13 +162,14 @@ def main():
 
     encoder = Encoder(args)
     vocab_size = build_tokenizer(args).vocab_size
-    with open(args.input) as f, \
-            Pool(args.workers, initializer=encoder.initializer) as pool, \
+    fs = map(open, args.input)
+    with Pool(args.workers, initializer=encoder.initializer) as pool, \
             DatasetWriter(args.output_prefix, vocab_size, args.dataset_impl,
                           "text") as token_writer, \
             DatasetWriter(args.output_prefix, 16, args.dataset_impl,
                           "role") as role_writer:
 
+        f = itertools.chain(*fs)
         docs = pool.imap(encoder.encode, f, args.chunk_size)
         startup_end = time.time()
         proc_start = time.time()
@@ -184,6 +186,9 @@ def main():
                 mbs = total_bytes_processed/1024/1024/elapsed
                 print(f"Processed {i} documents ({i/elapsed} docs/s, {mbs} MB/s).")
         print("Done! Now finalizing.")
+
+    for f in fs:
+        f.close()
 
 
 if __name__ == '__main__':

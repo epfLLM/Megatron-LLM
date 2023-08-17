@@ -50,11 +50,13 @@ def update_checkpoint(input_dir: Path, output_dir: Path, overwrite_ok: bool = Fa
     print("Updating weights of iteration", it)
     with open(output_dir/"latest_checkpointed_iteration.txt", "w+") as f:
         f.write(it)
+    if it != "release":
+        it = f"iter_{int(it):07d}"
     (output_dir/it).mkdir()
 
     # convert weights
     for fname in tqdm(list((input_dir/it).iterdir())):
-        checkpoint = torch.load(fname/"model_optim_rng.pt")
+        checkpoint = torch.load(fname/"model_optim_rng.pt", map_location="cpu")
         args = checkpoint["args"]
         args = (args.hidden_size, args.num_attention_heads,
                 args.num_attention_heads_kv)

@@ -12,7 +12,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "model_name",
-        help="Path to checkpoint path or model name",
+        help="Path to checkpoint or model name",
         type=str,
     )
     parser.add_argument(
@@ -28,7 +28,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--auth_token",
-        help="User access token used for model upload",
+        help="User access token (HuggingFace) used for model upload",
         type=str,
     )
     parser.add_argument(
@@ -125,7 +125,7 @@ def main():
             "factor": args.rope_scaling_factor,
         }
         print(
-            f"setting new rope_scaling config: {rope_scaling} (old: {model.config.rope_scaling})"
+            f"Setting new rope_scaling config: {rope_scaling} (old: {model.config.rope_scaling})"
         )
         model.config.rope_scaling = rope_scaling
 
@@ -145,7 +145,7 @@ def main():
         tokenizer.save_pretrained(args.output_folder)
 
     if args.hf_repo_name:
-        print(f"Uploading model to HF... ({args.hf_repo_name})")
+        print(f"Uploading model to HF repository ('{args.hf_repo_name}') ...")
         model.push_to_hub(
             args.hf_repo_name,
             use_auth_token=args.auth_token,
@@ -153,7 +153,7 @@ def main():
             safe_serialization=safe_serialization,
         )
 
-        print("Uploading tokenizer to HF... ({args.hf_repo_name})")
+        print(f"Uploading tokenizer to HF repository ('{args.hf_repo_name}') ...")
         tokenizer.push_to_hub(args.hf_repo_name, use_auth_token=args.auth_token)
 
 

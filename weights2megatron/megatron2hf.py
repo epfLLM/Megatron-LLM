@@ -215,7 +215,12 @@ def write_tokenizer(tokenizer_path, input_tokenizer_path):
     tokenizer.save_pretrained(tokenizer_path)
 
 
-def write_falcon_model(model_path: str, input_base_path: str, num_output_shards: int=2):
+def write_falcon_model(
+    model_path: str,
+    input_base_path: str,
+    num_output_shards: int = 2,
+    safe_serialization: bool = True,
+):
     # Preliminaries
     print(f"Fetching all parameters from the checkpoint at {input_base_path}.")
     input_base_path = Path(input_base_path)
@@ -225,18 +230,25 @@ def write_falcon_model(model_path: str, input_base_path: str, num_output_shards:
     print(f"Fetching iteration {iteration}")
 
     # Load weights
-    loaded = torch.load(input_base_path / iteration / "mp_rank_00" / "model_optim_rng.pt", map_location="cpu")
+    loaded = torch.load(
+        input_base_path / iteration / "mp_rank_00" / "model_optim_rng.pt",
+        map_location="cpu",
+    )
     args = loaded["args"]
     loaded = loaded["model"]["language_model"]
 
     if "transformer" not in loaded:  # normalize key names
         loaded["transformer"] = loaded.pop("encoder")
-        loaded["embedding"]["word_embeddings.weight"] = loaded["embedding"].pop("word_embeddings")["weight"]
+        loaded["embedding"]["word_embeddings.weight"] = loaded["embedding"].pop(
+            "word_embeddings"
+        )["weight"]
         args.num_layers = args.encoder_num_layers
 
     # Make sure the self_attention layer is called "attention" in the megatron state dict
     for key in list(loaded["transformer"].keys()):
-        loaded["transformer"][key.replace("self_attention", "attention")] = loaded["transformer"].pop(key)
+        loaded["transformer"][key.replace("self_attention", "attention")] = loaded[
+            "transformer"
+        ].pop(key)
 
     embedding = loaded["embedding"]
     transformer = loaded["transformer"]
@@ -263,34 +275,44 @@ def write_falcon_model(model_path: str, input_base_path: str, num_output_shards:
         prefix1 = f"layers.{layer}"
         prefix2 = f"transformer.h.{layer}"
         # mlp
-        weights[f"{prefix2}.mlp.dense_h_to_4h.weight"] = \
-            transformer[f"{prefix1}.mlp.dense_h_to_4h.weight"]
-        weights[f"{prefix2}.mlp.dense_4h_to_h.weight"] = \
-            transformer[f"{prefix1}.mlp.dense_4h_to_h.weight"]
+        weights[f"{prefix2}.mlp.dense_h_to_4h.weight"] = transformer[
+            f"{prefix1}.mlp.dense_h_to_4h.weight"
+        ]
+        weights[f"{prefix2}.mlp.dense_4h_to_h.weight"] = transformer[
+            f"{prefix1}.mlp.dense_4h_to_h.weight"
+        ]
 
         # qkv weights
-        weights[f"{prefix2}.self_attention.query_key_value.weight"] = \
-            permute(transformer[f"{prefix1}.attention.query_key_value.weight"])
+        weights[f"{prefix2}.self_attention.query_key_value.weight"] = permute(
+            transformer[f"{prefix1}.attention.query_key_value.weight"]
+        )
 
         # dense
-        weights[f"{prefix2}.self_attention.dense.weight"] = \
-            transformer[f"{prefix1}.attention.dense.weight"]
+        weights[f"{prefix2}.self_attention.dense.weight"] = transformer[
+            f"{prefix1}.attention.dense.weight"
+        ]
 
         # falcon7 and falcon40 differ in the input layernorms
-        if n_layers <= 32:   # 7B model
-            weights[f"{prefix2}.input_layernorm.weight"] = \
-                transformer[f"{prefix1}.input_layernorm.weight"]
-            weights[f"{prefix2}.input_layernorm.bias"] = \
-                transformer[f"{prefix1}.input_layernorm.bias"]
+        if n_layers <= 32:  # 7B model
+            weights[f"{prefix2}.input_layernorm.weight"] = transformer[
+                f"{prefix1}.input_layernorm.weight"
+            ]
+            weights[f"{prefix2}.input_layernorm.bias"] = transformer[
+                f"{prefix1}.input_layernorm.bias"
+            ]
         else:
-            weights[f"{prefix2}.ln_attn.weight"] = \
-                transformer[f"{prefix1}.input_layernorm.weight"]
-            weights[f"{prefix2}.ln_mlp.weight"] = \
-                transformer[f"{prefix1}.mlp_layernorm.weight"]
-            weights[f"{prefix2}.ln_attn.bias"] = \
-                transformer[f"{prefix1}.input_layernorm.bias"]
-            weights[f"{prefix2}.ln_mlp.bias"] = \
-                transformer[f"{prefix1}.mlp_layernorm.bias"]
+            weights[f"{prefix2}.ln_attn.weight"] = transformer[
+                f"{prefix1}.input_layernorm.weight"
+            ]
+            weights[f"{prefix2}.ln_mlp.weight"] = transformer[
+                f"{prefix1}.mlp_layernorm.weight"
+            ]
+            weights[f"{prefix2}.ln_attn.bias"] = transformer[
+                f"{prefix1}.input_layernorm.bias"
+            ]
+            weights[f"{prefix2}.ln_mlp.bias"] = transformer[
+                f"{prefix1}.mlp_layernorm.bias"
+            ]
 
     print("Falcon-Megatron Loaded!")
 
@@ -304,7 +326,9 @@ def write_falcon_model(model_path: str, input_base_path: str, num_output_shards:
         hidden_size=args.hidden_size,
         num_hidden_layers=args.num_layers,
         num_attention_heads=args.num_attention_heads,
-        num_kv_heads=None if args.num_attention_heads_kv == 1 else args.num_attention_heads_kv,
+        num_kv_heads=None
+        if args.num_attention_heads_kv == 1
+        else args.num_attention_heads_kv,
         new_decoder_architecture=args.num_layers >= 60,
     )
 
@@ -313,7 +337,7 @@ def write_falcon_model(model_path: str, input_base_path: str, num_output_shards:
     torch_dtype = weights["lm_head.weight"].dtype
     print(f"dtype: {torch_dtype}")
     print("Loading state dict...")
-    model.to(torch_dtype)   # convert model to soucre dtype
+    model.to(torch_dtype)  # convert model to soucre dtype
     model.load_state_dict(weights)
     print("Done!")
 
@@ -327,7 +351,11 @@ def write_falcon_model(model_path: str, input_base_path: str, num_output_shards:
     bits_per_param = torch.finfo(torch_dtype).bits
     max_shard_size = param_count * bits_per_param // num_output_shards // 8
     print(f"max_shard_size: {max_shard_size:,} bytes")
-    model.save_pretrained(model_path, max_shard_size=max_shard_size)
+    model.save_pretrained(
+        model_path,
+        max_shard_size=max_shard_size,
+        safe_serialization=safe_serialization,
+    )
 
 
 def main():
@@ -367,9 +395,9 @@ def main():
         write_falcon_model(
             model_path=args.output_dir,
             input_base_path=args.input_dir,
-            num_output_shards=args.num_output_shards
+            num_output_shards=args.num_output_shards,
+            safe_serialization=True,
         )
-    
 
 if __name__ == "__main__":
     main()

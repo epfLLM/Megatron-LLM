@@ -11,31 +11,24 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import sys
-import argparse
 import gc
-import json
 import os
+import sys
+import json
 import warnings
-from tempfile import TemporaryDirectory
 from pathlib import Path
-from tqdm.auto import trange
+from tempfile import TemporaryDirectory
+from argparse import ArgumentParser, Namespace
+sys.path.append(str(Path(__file__).parent.parent.absolute()))  # megatron is importable
 
 import torch
-
-from transformers import LlamaConfig, LlamaForCausalLM, LlamaTokenizer, FalconConfig, FalconForCausalLM
+from tqdm.auto import trange
+from transformers import LlamaConfig, LlamaForCausalLM, LlamaTokenizer, FalconConfig, FalconForCausalLM, AutoTokenizer
 
 from permute_qkv import permute_qkv
 
+from megatron.tokenizer import build_tokenizer
 
-try:
-    from transformers import LlamaTokenizerFast
-except ImportError as e:
-    warnings.warn(e)
-    warnings.warn(
-        "The converted tokenizer will be the `slow` tokenizer. To use the fast, update your `tokenizers` library and re-run the tokenizer conversion"
-    )
-    LlamaTokenizerFast = None
 
 """
 Sample usage:
@@ -113,7 +106,9 @@ def write_llama_model(model_path,
     print(f"Fetching iteration {iteration}")
 
     # Load weights
-    loaded = torch.load(os.path.join(input_base_path, iteration, 'mp_rank_00', 'model_optim_rng.pt'), map_location="cpu")
+    base_path = Path(input_base_path)/iteration
+    assert len(list(base_path.glob("mp_rank_*"))) == 1, "Unshard your model with checkpoint_util.py first!"
+    loaded = torch.load(base_path/"mp_rank_00"/"model_optim_rng.pt", map_location="cpu")
     args = loaded['args']
     loaded = loaded['model']['language_model']
     if 'transformer' not in loaded:  # normalize key names
@@ -207,14 +202,6 @@ def write_llama_model(model_path,
     print("Saving in the Transformers format.")
     max_num_params_per_shard = param_count*2 // max(1,(num_output_shards-1))
     model.save_pretrained(model_path, max_shard_size=max_num_params_per_shard)
-
-
-def write_tokenizer(tokenizer_path, input_tokenizer_path):
-    # Initialize the tokenizer based on the `spm` model
-    tokenizer_class = LlamaTokenizer if LlamaTokenizerFast is None else LlamaTokenizerFast
-    print(f"Saving a {tokenizer_class.__name__} to {tokenizer_path}.")
-    tokenizer = tokenizer_class(input_tokenizer_path)
-    tokenizer.save_pretrained(tokenizer_path)
 
 
 def write_falcon_model(
@@ -360,34 +347,92 @@ def write_falcon_model(
     )
 
 
+def write_tokenizer(args: Namespace):
+    if args.model in {"llama", "llama2"}:
+        try:  # try loading from huggingface
+            hf_tokenizer = LlamaTokenizer.from_pretrained("meta-llama/Llama-2-7b-hf",
+                                                          cache_dir=args.cache_dir)
+            print("LlamaTokenizer loaded from huggingface")
+            if args.vocab_file is None:
+                print("vocab_file not set, assuming same tokenizer.model used "
+                      "by llama LlamaTokenizer")
+                args.vocab_file = hf_tokenizer.vocab_file
+        except OSError:
+            assert args.vocab_file is not None
+            hf_tokenizer = LlamaTokenizer.from_pretrained(args.vocab_file)
+        args.tokenizer_type = "SentencePieceTokenizer"
+    else:
+        hf_tokenizer = AutoTokenizer.from_pretrained("tiiuae/falcon-40b", cache_dir=args.cache_dir)
+        args.tokenizer_type = "FalconTokenizer"
+
+    # add default args for megatron tokenizer
+    args.rank = 0
+    args.vocab_extra_ids = 0
+    args.new_tokens = True
+    args.make_vocab_size_divisible_by = 128
+    args.tensor_model_parallel_size = 1
+    mt_tokenizer = build_tokenizer(args)
+
+    if args.tokenizer_type == "SentencePieceTokenizer":
+        if mt_tokenizer.cls is not None:
+            hf_tokenizer.add_tokens("<CLS>", special_tokens=True)
+            hf_tokenizer.cls_token_id = mt_tokenizer.cls
+        if mt_tokenizer.sep is not None:
+            hf_tokenizer.add_tokens("<SEP>", special_tokens=True)
+            hf_tokenizer.sep_token_id = mt_tokenizer.sep
+        if mt_tokenizer.eod is not None:
+            hf_tokenizer.add_tokens("<EOD>", special_tokens=True)
+        if mt_tokenizer.mask is not None:
+            hf_tokenizer.add_tokens("<MASK>", special_tokens=True)
+            hf_tokenizer.mask_token_id = mt_tokenizer.mask
+        if mt_tokenizer.pad is not None:
+            hf_tokenizer.add_tokens("<PAD>", special_tokens=True)
+            hf_tokenizer.pad_token_id = mt_tokenizer.pad
+
+        additional_special_tokens = hf_tokenizer.additional_special_tokens
+        special_tokens = {"additional_special_tokens": additional_special_tokens}
+        if args.vocab_extra_ids_list:
+            additional_special_tokens.extend(args.vocab_extra_ids_list.split(","))
+
+        hf_tokenizer.add_special_tokens(special_tokens_dict=special_tokens, replace_additional_special_tokens=True)
+
+        additional_special_tokens_ids = [mt_tokenizer.vocab.get(t) for t in additional_special_tokens]
+        hf_tokenizer.additional_special_tokens_ids = additional_special_tokens_ids
+
+        hf_vocab = hf_tokenizer.get_vocab()
+        tokens_to_check = [
+            v for k, v in hf_tokenizer.special_tokens_map.items() if k != "additional_special_tokens"
+        ] + additional_special_tokens
+        for t in tokens_to_check:
+            a = mt_tokenizer.vocab.get(t)
+            b = hf_vocab.get(t)
+            assert a == b, f"Mismatch between megatron and huggingface tokenizer vocabularies {t}, {a}, {b}"
+    elif args.tokenizer_type == "FalconTokenizer":
+        hf_tokenizer = mt_tokenizer.tokenizer
+    else:
+        raise RuntimeError(f"Unsupported tokenizer type: {args.tokenizer_type}")
+
+    hf_tokenizer.save_pretrained(args.output_dir)
+
+
 def main():
     # make sure megatron is importable
-    sys.path.append(os.path.abspath(
-        os.path.join(os.path.dirname(__file__),
-                     os.path.pardir)))
 
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--input_dir",
-        help="Location of LLaMA_Megatron weights",
-    )
-    parser.add_argument(
-        "--num_output_shards",
-        type=int,
-        default=1,
-    )
-    parser.add_argument(
-        "--model",
-        choices={"falcon", "llama", "llama2"},
-        default="llama2",
-    )
-    parser.add_argument(
-        "--output_dir",
-        help="Location to write HF model and tokenizer",
-    )
+    parser = ArgumentParser()
+    parser.add_argument("--input_dir", help="Location of LLaMA_Megatron weights",
+                        required=True)
+    parser.add_argument("--num_output_shards", type=int, default=1)
+    parser.add_argument("--model", choices={"falcon", "llama", "llama2"},
+                         default="llama2")
+    parser.add_argument("--output_dir", help="Location to write HF model and tokenizer",
+                        required=True)
+    parser.add_argument("--cache_dir", help="Huggingface cache_dir (optional)")
+    parser.add_argument("--vocab_file", type=Path, help="Path to the vocab file")
+    parser.add_argument("--vocab_extra_ids_list",
+                        help="comma separated list of special vocab ids to add to the tokenizer")
     
     args = parser.parse_args()
-    if args.model in ("llama", "llama2"):
+    if args.model in {"llama", "llama2"}:
         write_llama_model(
             model_path=args.output_dir,
             input_base_path=args.input_dir,
@@ -400,6 +445,7 @@ def main():
             num_output_shards=args.num_output_shards,
             safe_serialization=True,
         )
+    write_tokenizer(args)
 
 if __name__ == "__main__":
     main()

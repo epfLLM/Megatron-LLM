@@ -307,7 +307,6 @@ def _build_index_mappings(name, data_prefix, documents, sizes,
 
             # If we need only one epoch, then separating last epoch  does
             # not mean anything.
-            print('num_epochs', num_epochs)
             if num_epochs == 1:
                 separate_last_epoch = False
                 print(' > only one epoch required, setting '
@@ -319,15 +318,9 @@ def _build_index_mappings(name, data_prefix, documents, sizes,
                     (num_epochs - 1) * tokens_per_epoch - 1) // seq_length
                 last_epoch_num_samples = num_samples - \
                                          num_samples_from_epochs_minus_one
-                print('tokens_per_epoch', tokens_per_epoch)
-                print('num_samples_from_epochs_minus_one', num_samples_from_epochs_minus_one)
-                print('last_epoch_num_samples', last_epoch_num_samples)
                 assert last_epoch_num_samples >= 0, \
                     'last epoch number of samples should be non-negative.'
                 num_samples_per_epoch = (tokens_per_epoch - 1) // seq_length
-                print('num_samples_per_epoch', num_samples_per_epoch)
-
-                num_samples_per_epoch = max(1, num_samples_per_epoch)
                 assert last_epoch_num_samples < (num_samples_per_epoch + 1), \
                     'last epoch number of samples exceeded max value.'
                 # If we have less than 80% of the samples for the last epoch,

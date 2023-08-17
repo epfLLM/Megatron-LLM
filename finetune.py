@@ -120,11 +120,11 @@ def get_batch(data_iterator):
     args = get_args()
     tokenizer = get_tokenizer()
 
-    # Items and their type.
-    keys = ["text", "attention_mask", "loss_mask"]
+    # Items and their type
+    keys = ["text", "attention_mask", "label_mask"]
     datatype = torch.int64
 
-    # Broadcast data.
+    # Broadcast data
     if data_iterator is not None:
         data = next(data_iterator)
     else:
@@ -132,30 +132,29 @@ def get_batch(data_iterator):
 
     data_b = tensor_parallel.broadcast_data(keys, data, datatype)
 
-    # Unpack.
+    # Unpack
     tokens = data_b["text"]
-    labels = torch.roll(tokens, shifts=-1, dims=-1)
-
+    label_mask = data_b["label_mask"]
     attention_mask = data_b["attention_mask"]
 
-    loss_mask = data_b["loss_mask"]
-    loss_mask[:, 0] = 0  # first tokens are no targets due to roll
-    loss_mask = torch.roll(loss_mask, shifts=-1, dims=-1)
-    loss_mask = loss_mask.float().to(tokens.device)
+    labels = tokens[:, 1:]
+    label_mask = label_mask[:, 1:].float().to(tokens.device)
+    tokens = tokens[:, :-1]
+    attention_mask = attention_mask[:, :-1]
 
     # Get the masks and postition ids.
     attention_mask, position_ids = get_attention_mask_and_position_ids(
         tokens, attention_mask
     )
 
-    return tokens, labels, loss_mask, attention_mask, position_ids
+    return tokens, labels, label_mask, attention_mask, position_ids
 
 
-def loss_func(loss_mask, output_tensor):
+def loss_func(label_mask, output_tensor):
     losses = output_tensor.float()
-    loss_mask = loss_mask.view(-1).float()
-    loss = torch.sum(losses.view(-1) * loss_mask) / loss_mask.sum()
-    # batch_fill_rate = loss_mask.sum()/losses.nelement()
+    label_mask = label_mask.view(-1).float()
+    loss = torch.sum(losses.view(-1) * label_mask) / label_mask.sum()
+    # batch_fill_rate = label_mask.sum()/losses.nelement()
     # Reduce loss for logging.
     averaged_loss = average_losses_across_data_parallel_group([loss])
     return loss, {"lm loss": averaged_loss[0]}
@@ -168,17 +167,17 @@ def forward_step(data_iterator, model):
 
     # Get the batch.
     timers("batch-generator", log_level=2).start()
-    tokens, labels, loss_mask, attention_mask, position_ids = get_batch(data_iterator)
+    tokens, labels, label_mask, attention_mask, position_ids = get_batch(data_iterator)
     timers("batch-generator").stop()
 
     output_tensor = model(tokens, position_ids, attention_mask, labels=labels)
-    return output_tensor, partial(loss_func, loss_mask)
+    return output_tensor, partial(loss_func, label_mask)
 
 
-def eval_loss_func(loss_mask, output_tensor):
+def eval_loss_func(label_mask, output_tensor):
     losses = output_tensor.float()
-    loss_mask = loss_mask.view(-1).float()
-    loss = torch.sum(losses.view(-1) * loss_mask) / loss_mask.sum()
+    label_mask = label_mask.view(-1).float()
+    loss = torch.sum(losses.view(-1) * label_mask) / label_mask.sum()
     # Reduce loss for logging.
     averaged_loss = average_losses_across_data_parallel_group([loss])
     return loss, {"lm loss": averaged_loss[0]}
@@ -191,13 +190,13 @@ def eval_forward_step(data_iterator, model):
 
     # Get the batch.
     timers("batch-generator", log_level=2).start()
-    tokens, labels, loss_mask, attention_mask, position_ids = get_batch(data_iterator)
+    tokens, labels, label_mask, attention_mask, position_ids = get_batch(data_iterator)
     timers("batch-generator").stop()
 
     # logits = model(tokens, position_ids, attention_mask)
 
     output_tensor = model(tokens, position_ids, attention_mask, labels=labels)
-    return output_tensor, partial(eval_loss_func, loss_mask)
+    return output_tensor, partial(eval_loss_func, label_mask)
 
 
 def train_valid_test_datasets_provider(train_val_test_num_samples):
@@ -274,7 +273,9 @@ def instruction_collator(args, data):
         max_sample_length = max(len(x["text"]) for x in data)
         seq_len = min(args.seq_length, round_to_multiple_of(max_sample_length, 16))
 
-    # pad data to seq_len, create attention mask
+    seq_len += 1    # +1 to get seq_len tokens after shifting (token[t+1] is label for token[t])
+
+    # pad data, create 1D attention mask
     batch_size = len(data)
     attention_mask = torch.ones((batch_size, seq_len), dtype=torch.long)
     role = torch.full_like(attention_mask, -1)
@@ -293,9 +294,9 @@ def instruction_collator(args, data):
             input[i] = torch.from_numpy(t[:seq_len])
             role[i] = torch.from_numpy(r[:seq_len])
 
-    loss_mask = role.eq(2).long()  # assistant tokens have role == 2
+    label_mask = role.eq(2).long()  # assistant tokens have role == 2
 
-    return {"text": input, "attention_mask": attention_mask, "loss_mask": loss_mask}
+    return {"text": input, "attention_mask": attention_mask, "label_mask": label_mask}
 
 
 if __name__ == "__main__":

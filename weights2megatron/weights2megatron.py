@@ -134,7 +134,7 @@ def llama_to_megatron(weights: dict, size: int, source: str = "meta",
             weights[f"{prefix}.attention.wv.weight"]
         )
 
-        # free mem of original weights
+        # release references to original weights (free mem)
         del weights[f"{prefix}.feed_forward.w3.weight"]
         del weights[f"{prefix}.feed_forward.w1.weight"]
         del weights[f"{prefix}.attention.wq.weight"]

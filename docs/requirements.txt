@@ -1,4 +1,4 @@
-sphinx >= 4.2
+sphinx == 7.1.0
 pydata-sphinx-theme >= 0.13.0
 myst-parser >= 2.0.0
 flask >= 2.3.0

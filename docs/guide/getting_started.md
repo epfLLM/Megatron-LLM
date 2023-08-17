@@ -42,11 +42,16 @@ First we need to install the dependencies.
    cd ../../
    ```
 
+(download_weights)=
 ## Downloading LLaMa2 weights
 
-1. Request access to the weights directly to meta: https://ai.meta.com/resources/models-and-libraries/llama-downloads/
-1. Follow the instructions given by meta to download `llama-2-7b/` weights.
-1. Make sure you have also downloaded the `tokenizer.model` file.
+1. Request access to the weights directly to meta: https://ai.meta.com/resources/models-and-libraries/llama-downloads/.
+1. Request access to the LLaMa2 huggingface model: https://huggingface.co/meta-llama/Llama-2-7b-hf.
+1. Create a new huggingface token (or use an existing one): https://huggingface.co/settings/tokens.
+1. Run the huggingface login CLI, and enter the token created on the previous step when asked:
+   ```
+   huggingface-cli login
+   ```
 
 ## Preparing the raw data
 
@@ -65,11 +70,7 @@ In this case, skip to the [data preprocessing](#data-preprocessing) section.
 :::
 
 1. Accept starcoder's terms of use via the huggingface portal: https://huggingface.co/datasets/bigcode/starcoderdata
-1. Create a new huggingface token (or use an existing one): https://huggingface.co/settings/tokens.
-1. Run the huggingface login CLI, and enter the token created on the previous step when asked:
-   ```
-   huggingface-cli login
-   ```
+1. Create a huggingface token (or use an existing one) and login using `huggingface-cli` (see [Downloading LLaMa2 weights](#download_weights) for more information).
 1. Download and save the starcoder dataset.
    In this tutorial we will use the `julia` data, but feel free to use any other subset.
    This data contains around 500M tokens.
@@ -99,7 +100,7 @@ python tools/preprocess_data.py --input=/path/to/raw.jsonl \
 	--output_prefix=/path/to/tokenized/starcoder \
 	--tokenizer_type=SentencePieceTokenizer \
 	--vocab_file=/path/to/tokenizer.model \
-	--chunk_size=1024 \
+	--chunk_size=32 \
 	--workers=16 \
 	--no_new_tokens
 ```
@@ -141,7 +142,7 @@ torchrun $DISTRIBUTED_ARGS verify_correctness.py \
 	--load=/path/to/megatron/weights/ \
 	--data_path=/path/to/tokenized/starcoder \
 	--tokenizer_type=SentencePieceTokenizer \
-	--vocab_file=/path/to/tokenizer.model \
+	--vocab_file=/path/to/megatron/weights/tokenizer.model \
 	--huggingface_cache=/path/to/meta/llama-2-7b/ \
 	--huggingface_device=cuda:1 \
 	$COMMON_ARGS $LLAMA_ARGS  # dont include LLAMA_ARGS if using Falcon
@@ -185,7 +186,7 @@ torchrun $DISTRIBUTED_ARGS finetune.py \
 	--data_path /path/to/tokenized/starcoder \
 	--model_name llama2 \
 	--tokenizer_type SentencePieceTokenizer \
-	--vocab_file /path/to/tokenizer.model \
+	--vocab_file=/path/to/megatron/weights/tokenizer.model \
 	--bf16 \
 	--use_flash_attn \
 	--micro_batch_size 5 \
@@ -245,7 +246,7 @@ from transformers import LlamaForCausalLM, LlamaTokenizer
 pipeline = transformers.pipeline(
     "text-generation",
     model=LlamaForCausalLM.from_pretrained("/path/to/hf/weights/"),
-    tokenizer=LlamaTokenizer("/path/to/tokenizer.model"),
+    tokenizer=LlamaTokenizer.from_pretrained("/path/to/hf/weights/"),
     torch_dtype=torch.bfloat16,
     device_map="auto"
 )

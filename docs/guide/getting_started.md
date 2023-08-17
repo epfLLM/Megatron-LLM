@@ -100,7 +100,7 @@ python tools/preprocess_data.py --input=/path/to/raw.jsonl \
 	--output_prefix=/path/to/tokenized/starcoder \
 	--tokenizer_type=SentencePieceTokenizer \
 	--vocab_file=/path/to/tokenizer.model \
-	--chunk_size=1024 \
+	--chunk_size=32 \
 	--workers=16 \
 	--no_new_tokens
 ```

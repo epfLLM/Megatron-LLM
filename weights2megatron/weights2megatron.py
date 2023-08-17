@@ -57,7 +57,7 @@ def falcon_to_megatron(weights: dict, size: int) -> dict:
         transformer[f"{prefix1}.attention.query_key_value.weight"] = \
             permute(weights[f"{prefix2}.self_attention.query_key_value.weight"])
         # dense
-        transformer[f"{prefix1}.self_attention.dense.weight"] = \
+        transformer[f"{prefix1}.attention.dense.weight"] = \
             weights[f"{prefix2}.self_attention.dense.weight"]
         # falcon7 and falcon40 differ in the input layernorms
         if size == 7:

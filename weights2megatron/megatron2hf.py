@@ -18,21 +18,12 @@ import json
 import warnings
 from pathlib import Path
 from tempfile import TemporaryDirectory
-<<<<<<< HEAD
-from pathlib import Path
-from tqdm.auto import trange
-
-import torch
-
-from transformers import LlamaConfig, LlamaForCausalLM, LlamaTokenizer, FalconConfig, FalconForCausalLM
-=======
 from argparse import ArgumentParser, Namespace
 sys.path.append(str(Path(__file__).parent.parent.absolute()))  # megatron is importable
 
 import torch
 from tqdm.auto import trange
 from transformers import LlamaConfig, LlamaForCausalLM, LlamaTokenizer, FalconConfig, FalconForCausalLM, AutoTokenizer
->>>>>>> main
 
 from permute_qkv import permute_qkv
 

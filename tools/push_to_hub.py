@@ -8,7 +8,7 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Push checkpoints in HF transformers format to the Huggingface Hub.",
-        epilog="Example usage: python push_to_hub.py /path/to/checkpoint --hf_repo_name myorg/model_name --dtype pf16 --auth_token hf_ba..."
+        epilog="Example usage: python push_to_hub.py /path/to/checkpoint --hf_repo_name your_org/model_name --dtype bf16 --auth_token hf_ba..."
     )
     parser.add_argument(
         "model_name",

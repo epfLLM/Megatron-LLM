@@ -1,10 +1,12 @@
 import os
 import re
 from pathlib import Path
+from typing import Optional
 from collections import OrderedDict
 
 import torch
 from tqdm.auto import tqdm
+from transformers import LlamaForCausalLM
 
 
 scale2emb = {
@@ -55,7 +57,7 @@ def init_merged_ckpt(pth_00, num_pth=8, emb_dim=8192):
     return merged_ckpt
 
 
-def merge_llama(size: int, root_dir: Path):
+def merge_meta_llama(size: int, root_dir: Path):
     paths = [path for path in root_dir.iterdir()
             if re.match(r"^consolidated\.[0-9]+\.pth$", path.name)]
     if len(paths) == 1:  # no sharded checkpoints, return everything
@@ -82,3 +84,34 @@ def merge_llama(size: int, root_dir: Path):
                     del parameter
         del llama_config
     return merged_ckpt
+
+
+def merge_hf_llama(size: int, version: int, cache_dir: Optional[Path] = None):
+    assert version == 2, "Only llama v2 available using huggingface"
+    weights = LlamaForCausalLM.from_pretrained(f"meta-llama/Llama-2-{size}b-hf", cache_dir=cache_dir).state_dict()
+    weights["tok_embeddings.weight"] = weights.pop("model.embed_tokens.weight")
+    weights["norm.weight"] = weights.pop("model.norm.weight")
+    weights["output.weight"] = weights.pop("lm_head.weight")
+    for key in list(weights.keys()):
+        if rmatch := re.match(r"^model\.(layers\.[0-9]+\.)(.+)(\.weight)$", key):
+            new_key = {
+                "self_attn.q_proj": "attention.wq",
+                "self_attn.k_proj": "attention.wk",
+                "self_attn.v_proj": "attention.wv",
+                "self_attn.o_proj": "attention.wo",
+                "mlp.gate_proj": "feed_forward.w1",
+                "mlp.down_proj": "feed_forward.w2",
+                "mlp.up_proj": "feed_forward.w3",
+                "input_layernorm": "attention_norm",
+                "post_attention_layernorm": "ffn_norm"
+            }[rmatch.group(2)]
+            weights[rmatch.group(1) + new_key + rmatch.group(3)] = weights.pop(key)
+    return weights
+
+
+def merge_llama(size: int, version: int, root_dir: Optional[Path] = None):
+    if root_dir is not None and (root_dir/"consolidated.00.pth").exists():
+        return merge_meta_llama(size, root_dir), "meta"
+    print(f"Weights at {root_dir} do not look like a meta checkpoint, assuming "
+          "huggingface cache_dir instead")
+    return merge_hf_llama(size, version, root_dir), "hf"

@@ -1,12 +1,13 @@
 import os
 import sys
+import shutil
 from pathlib import Path
 from typing import Optional
 from argparse import ArgumentParser, Namespace
 
 import torch
 from tqdm.auto import trange
-from transformers import AutoModelForCausalLM
+from transformers import AutoModelForCausalLM, LlamaTokenizer
 
 from permute_qkv import permute_qkv
 from merge_llama import merge_llama
@@ -56,7 +57,7 @@ def falcon_to_megatron(weights: dict, size: int) -> dict:
         transformer[f"{prefix1}.attention.query_key_value.weight"] = \
             permute(weights[f"{prefix2}.self_attention.query_key_value.weight"])
         # dense
-        transformer[f"{prefix1}.self_attention.dense.weight"] = \
+        transformer[f"{prefix1}.attention.dense.weight"] = \
             weights[f"{prefix2}.self_attention.dense.weight"]
         # falcon7 and falcon40 differ in the input layernorms
         if size == 7:
@@ -76,72 +77,64 @@ def falcon_to_megatron(weights: dict, size: int) -> dict:
     return {"embedding": embedding, "transformer": transformer}
 
 
-def llama_to_megatron(llama_config: dict, size: int, version: int = 1):
-    def get_wqkv(llama_config, layer_prefix, n_heads=32):
-        wq, wk, wv = llama_config[layer_prefix+'attention.wq.weight'], llama_config[layer_prefix+'attention.wk.weight'], llama_config[layer_prefix+'attention.wv.weight']
-        n_hidden_per_head = wq.shape[-1] // n_heads
-        if version == 1 or size <= 13:
-            n_kv_heads = n_heads
-        else:
-            n_kv_heads = 8
+def llama_to_megatron(weights: dict, size: int, source: str = "meta",
+                      version: int = 1) -> dict:
+    def permute(qkv_w):
+        if source == "hf":
+            return permute_qkv(qkv_w, hidden, n_heads, n_kv_heads)
+        return qkv_w
 
-        dim = wq.shape[-1]
-        # wq = wq.view(n_heads, n_hidden_per_head//2, 2, dim).transpose(1, 2).reshape(dim, dim)
-        # wk = wk.view(n_kv_heads, n_hidden_per_head//2, 2, dim).transpose(1, 2).reshape(n_kv_heads*n_hidden_per_head, dim)
-
-        wq_convert = torch.split(wq, n_hidden_per_head, dim=0)
-        wk_convert = torch.split(wk, n_hidden_per_head, dim=0)
-        wv_convert = torch.split(wv, n_hidden_per_head, dim=0)
-        assert len(wq_convert) == n_heads
-        assert len(wk_convert) == n_kv_heads
-        assert len(wv_convert) == n_kv_heads
-
-    
-        w_qkv = []
+    def rearrange_qkv(wq, wk, wv):
+        wq = torch.split(wq, n_hidden_per_head, dim=0)
+        wk = torch.split(wk, n_hidden_per_head, dim=0)
+        wv = torch.split(wv, n_hidden_per_head, dim=0)
+        assert len(wq) == n_heads
+        assert len(wk) == n_kv_heads
+        assert len(wv) == n_kv_heads
         n_qs_per_kv = n_heads//n_kv_heads
+        w_qkv = []
         for i in range(n_kv_heads):
-            w_qkv += [wq_convert[i*n_qs_per_kv + j] for j in range(n_qs_per_kv)]
-            w_qkv += [wk_convert[i], wv_convert[i]]
-        out = torch.concat(w_qkv, dim=0)
-        # out = permute_qkv(out, dim, n_heads, n_kv_heads)
-        return out
+            w_qkv += [wq[i*n_qs_per_kv + j] for j in range(n_qs_per_kv)]
+            w_qkv += [wk[i], wv[i]]
+        return permute(torch.concat(w_qkv))
 
-    # dictionary
-    scale2layer = {f"{size_}B": val for size_, val in llama_s2layer.items()}
-    scale2heads = {f"{size_}B": val for size_, val in llama_s2heads.items()}
-    megatron2llama = {
-        'attention.query_key_value': ['attention.wq', 'attention.wk', 'attention.wv'],
-        'attention.dense': ['attention.wo'],
-        'post_attention_layernorm': ['ffn_norm'],
-        'input_layernorm': ['attention_norm'],
-        'mlp.dense_h_to_4h': ['feed_forward.w3', 'feed_forward.w1'],  # gate weights come second for us
-        'mlp.dense_4h_to_h': ['feed_forward.w2'],
-    }
+    # config
+    n_layer = llama_s2layer[size]
+    hidden = llama_s2hidden[size]
+    n_heads = llama_s2heads[size]
+    n_hidden_per_head = hidden//n_heads
+    n_kv_heads = n_heads if version == 1 or size <= 13 else 8
 
-    # copy weights
-    megatron_dict = {
-        'model': {
-            'language_model': {
-                'embedding': {},
-                'transformer': {},
-                'lm_head': None
-                },
-            }
-    }
-    n_layers = scale2layer[f"{size}B"]
-    megatron_dict['model']['language_model']['embedding']['word_embeddings.weight'] = llama_config['tok_embeddings.weight']
-    megatron_dict['model']['language_model']['transformer']['final_layernorm.weight'] = llama_config['norm.weight']
-    megatron_dict['model']['language_model']['lm_head'] = llama_config['output.weight']
-    for layer_idx in trange(n_layers):
-        layer_prefix = f'layers.{layer_idx}.'
-        for megatron_param, llama_param_list in megatron2llama.items():
-            if len(llama_param_list)==1:
-                megatron_dict['model']['language_model']['transformer'][layer_prefix+megatron_param+'.weight'] = llama_config[layer_prefix+llama_param_list[0]+'.weight']
-            elif len(llama_param_list)==3:
-                megatron_dict['model']['language_model']['transformer'][layer_prefix+megatron_param+'.weight'] = get_wqkv(llama_config, layer_prefix, n_heads=scale2heads[f"{size}B"])
-            else:
-                megatron_dict['model']['language_model']['transformer'][layer_prefix+megatron_param+'.weight'] = torch.concat([llama_config[layer_prefix+w+'.weight'] for w in llama_param_list], dim=0)
-    return megatron_dict
+    # weights independent of layers
+    embedding = {"word_embeddings.weight": weights["tok_embeddings.weight"]}
+    transformer = {"final_layernorm.weight": weights["norm.weight"]}
+    lm_head = weights["output.weight"]
+
+    # get all the other weights
+    for layer in trange(n_layer, desc="Converting weights"):
+        prefix = f"layers.{layer}"
+        # identical weights
+        transformer[f"{prefix}.attention.dense.weight"] = \
+            weights[f"{prefix}.attention.wo.weight"]
+        transformer[f"{prefix}.post_attention_layernorm.weight"] = \
+            weights[f"{prefix}.ffn_norm.weight"]
+        transformer[f"{prefix}.input_layernorm.weight"] = \
+            weights[f"{prefix}.attention_norm.weight"]
+        transformer[f"{prefix}.mlp.dense_4h_to_h.weight"] = \
+            weights[f"{prefix}.feed_forward.w2.weight"]
+        # concatenate up, gate mlp weights
+        transformer[f"{prefix}.mlp.dense_h_to_4h.weight"] = torch.concat([
+            weights[f"{prefix}.feed_forward.w3.weight"],
+            weights[f"{prefix}.feed_forward.w1.weight"]
+        ])
+        # finally, qkv requires serious manipulation to get right
+        transformer[f"{prefix}.attention.query_key_value.weight"] = rearrange_qkv(
+            weights[f"{prefix}.attention.wq.weight"],
+            weights[f"{prefix}.attention.wk.weight"],
+            weights[f"{prefix}.attention.wv.weight"]
+        )
+    return {"embedding": embedding, "transformer": transformer,
+            "lm_head": lm_head}
 
 
 def main(model_name: str = "falcon", size: int = 7, out: Optional[Path] = None,
@@ -158,15 +151,15 @@ def main(model_name: str = "falcon", size: int = 7, out: Optional[Path] = None,
         hf_weights = model.state_dict()
     else:
         print("Getting llama...")
-        hf_weights = merge_llama(size, cache_dir)
+        version = 2 if "2" in model_name else 1
+        hf_weights, llama_source = merge_llama(size, version, cache_dir)
 
     # convert state dict to be megatron-compatible
     if model_name == "falcon":
         megatron_weights = falcon_to_megatron(hf_weights, size)
     else:
-        megatron_weights = llama_to_megatron(hf_weights, size,
+        megatron_weights = llama_to_megatron(hf_weights, size, llama_source,
                                              version=1 if model_name == "llama" else 2)
-        megatron_weights = megatron_weights["model"]["language_model"]
 
     # set args
     dtype = megatron_weights["embedding"]["word_embeddings.weight"].dtype
@@ -182,7 +175,7 @@ def main(model_name: str = "falcon", size: int = 7, out: Optional[Path] = None,
                      "hidden_dropout": 0.0,
                      "parallel_attn": True, "max_position_embeddings": 2048,
                      "seq_length": 2048})
-    else:
+    else:  # llama1, llama2
         args = {"num_layers": llama_s2layer[size],
                 "hidden_size": llama_s2hidden[size],
                 "num_attention_heads": llama_s2heads[size],
@@ -202,6 +195,7 @@ def main(model_name: str = "falcon", size: int = 7, out: Optional[Path] = None,
                          "layernorm_epsilon": 1e-5})
             if size >= 34:
                 args.update({"num_attention_heads_kv": 8})
+
     args.update({
         "tensor_model_parallel_size": 1,
         "pipeline_model_parallel_size": 1,
@@ -219,6 +213,16 @@ def main(model_name: str = "falcon", size: int = 7, out: Optional[Path] = None,
                   "checkpoint_version": 3.0, "args": Namespace(**args)}
     torch.save(final_dict, out/"release"/"mp_rank_00"/"model_optim_rng.pt")
     print("Saved weights in", out)
+
+    if model_name == "llama2" and llama_source == "hf":
+        tokenizer = LlamaTokenizer.from_pretrained(
+            "meta-llama/Llama-2-7b-hf", cache_dir=cache_dir
+        )
+        token_path = out/"tokenizer.model"
+        vocab_file = tokenizer.vocab_file
+        shutil.copy(vocab_file, token_path)
+        print("Saved tokenizer.model in", token_path)
+
     print("Done")
 
 

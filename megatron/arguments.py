@@ -251,6 +251,7 @@ def validate_args(args, defaults={}):
             assert args.max_position_embeddings >= args.seq_length
         if args.decoder_seq_length is not None:
             assert args.max_position_embeddings >= args.decoder_seq_length
+        assert args.rope_scaling_factor >= 1, 'rope_scaling_factor must be >= 1'
     else:
         assert args.max_position_embeddings is None
 
@@ -457,6 +458,8 @@ def _add_network_size_args(parser):
                        choices=list(PositionEmbeddingType),
                        default=PositionEmbeddingType.absolute,
                        help='Define position embedding type ("absolute" | "rotary"). "absolute" by default.')
+    group.add_argument('--rope_scaling_factor', type=float, default=1.0,
+                       help='Set the linear RoPE scaling factor for sequence interpolation.')
     # Added mainly for Falcon
     group.add_argument("--parallel_attn", action="store_true",
                        help="Whether to use parallel mlp and attn computation with a single layernorm")

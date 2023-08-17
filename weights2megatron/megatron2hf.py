@@ -11,29 +11,24 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import sys
-import argparse
 import gc
-import json
 import os
+import sys
+import json
 import warnings
+from pathlib import Path
 from tempfile import TemporaryDirectory
+from argparse import ArgumentParser, Namespace
+sys.path.append(str(Path(__file__).parent.parent.absolute()))  # megatron is importable
 
 import torch
-
-from transformers import LlamaConfig, LlamaForCausalLM, LlamaTokenizer
+from tqdm.auto import trange
+from transformers import LlamaConfig, LlamaForCausalLM, LlamaTokenizer, FalconConfig, FalconForCausalLM, AutoTokenizer
 
 from permute_qkv import permute_qkv
 
+from megatron.tokenizer import build_tokenizer
 
-try:
-    from transformers import LlamaTokenizerFast
-except ImportError as e:
-    warnings.warn(e)
-    warnings.warn(
-        "The converted tokenizer will be the `slow` tokenizer. To use the fast, update your `tokenizers` library and re-run the tokenizer conversion"
-    )
-    LlamaTokenizerFast = None
 
 """
 Sample usage:
@@ -63,39 +58,42 @@ def write_json(text, path):
 
 
 def convert_wqkv(llama_mega, layer_idx=0, n_heads=32, n_heads_kv=8):
-    mega_qkv = llama_mega["transformer"][f'layers.{layer_idx}.attention.query_key_value.weight']
-    n_hidden_per_head = mega_qkv.shape[1]//n_heads
-    # mega_qkv = permute_qkv(mega_qkv, mega_qkv.shape[1], n_heads, n_heads_kv, revert=True)
-    mega_qkv_chunk = torch.split(mega_qkv, n_hidden_per_head, dim=0)
+    qkv_w = llama_mega["transformer"][f'layers.{layer_idx}.attention.query_key_value.weight']
+    n_hidden = qkv_w.size(1)
+    hidden_dim = n_hidden//n_heads
+    qkv_w = permute_qkv(qkv_w, n_hidden, n_heads, n_heads_kv, revert=True)
 
-    wq_proj, wk_proj, wv_proj = [], [], []
-    for i,chk in enumerate(mega_qkv_chunk):
-        if i%3 == 0:
-            wq_proj.append(chk)
-        elif i%3 == 1:
-            wk_proj.append(chk)
-        else:
-            wv_proj.append(chk)
+    n_qs_per_kv = n_heads//n_heads_kv
+    n_groups = qkv_w.size(0)//hidden_dim//(n_qs_per_kv + 2)
+    qkv_w = list(torch.split(qkv_w, hidden_dim, dim=0))
 
-    wq_proj = torch.concat(wq_proj, dim=0)
-    wk_proj = torch.concat(wk_proj, dim=0)
-    wv_proj = torch.concat(wv_proj, dim=0)
+    wq, wk, wv = [], [], []
+    for group in range(n_groups):
+        for qs in range(n_qs_per_kv):
+            wq.append(qkv_w[0])
+            del qkv_w[0]
+            wk.append(qkv_w[0])
+            del qkv_w[0]
+        wv.append(qkv_w[0])
+        del qkv_w[0]
+    assert len(qkv_w) == 0
 
-    return wq_proj, wk_proj, wv_proj
+    wq = torch.concat(wq, dim=0)
+    wk = torch.concat(wk, dim=0)
+    wv = torch.concat(wv, dim=0)
+    return wq, wk, wv
+
 
 def convert_ffn(llama_mega, layer_idx=0, n_dense=11008):
     mega_ffn = llama_mega["transformer"][f'layers.{layer_idx}.mlp.dense_h_to_4h.weight']
     ffn_w3, ffn_w1 = mega_ffn.split(n_dense, dim=0)
     return ffn_w1, ffn_w3
 
-def write_model(model_path, 
-                input_base_path, 
+
+def write_llama_model(model_path,
+                input_base_path,
                 num_output_shards=2,
                 norm_eps=1e-05):
-
-    # permute for sliced rotary
-    def permute(w):
-        return w.view(n_heads, n_hidden // n_heads // 2, 2, n_hidden).transpose(1, 2).reshape(n_hidden, n_hidden)
 
     # Preliminaries
     print(f"Fetching all parameters from the checkpoint at {input_base_path}.")
@@ -108,7 +106,9 @@ def write_model(model_path,
     print(f"Fetching iteration {iteration}")
 
     # Load weights
-    loaded = torch.load(os.path.join(input_base_path, iteration, 'mp_rank_00', 'model_optim_rng.pt'), map_location="cpu")
+    base_path = Path(input_base_path)/iteration
+    assert len(list(base_path.glob("mp_rank_*"))) == 1, "Unshard your model with checkpoint_util.py first!"
+    loaded = torch.load(base_path/"mp_rank_00"/"model_optim_rng.pt", map_location="cpu")
     args = loaded['args']
     loaded = loaded['model']['language_model']
     if 'transformer' not in loaded:  # normalize key names
@@ -144,8 +144,8 @@ def write_model(model_path,
                                         layer_idx=layer_i, 
                                         n_dense=n_dense)
             state_dict = {
-                f"model.layers.{layer_i}.self_attn.q_proj.weight": permute(wq_proj),
-                f"model.layers.{layer_i}.self_attn.k_proj.weight": permute(wk_proj),
+                f"model.layers.{layer_i}.self_attn.q_proj.weight": wq_proj,
+                f"model.layers.{layer_i}.self_attn.k_proj.weight": wk_proj,
                 f"model.layers.{layer_i}.self_attn.v_proj.weight": wv_proj,
                 f"model.layers.{layer_i}.self_attn.o_proj.weight": loaded["transformer"][f"layers.{layer_i}.attention.dense.weight"],
                 f"model.layers.{layer_i}.mlp.gate_proj.weight": ffn_w1,
@@ -204,43 +204,248 @@ def write_model(model_path,
     model.save_pretrained(model_path, max_shard_size=max_num_params_per_shard)
 
 
-def write_tokenizer(tokenizer_path, input_tokenizer_path):
-    # Initialize the tokenizer based on the `spm` model
-    tokenizer_class = LlamaTokenizer if LlamaTokenizerFast is None else LlamaTokenizerFast
-    print(f"Saving a {tokenizer_class.__name__} to {tokenizer_path}.")
-    tokenizer = tokenizer_class(input_tokenizer_path)
-    tokenizer.save_pretrained(tokenizer_path)
+def write_falcon_model(
+    model_path: str,
+    input_base_path: str,
+    num_output_shards: int = 2,
+    safe_serialization: bool = True,
+):
+    # Preliminaries
+    print(f"Fetching all parameters from the checkpoint at {input_base_path}.")
+    input_base_path = Path(input_base_path)
+    iteration = (input_base_path / "latest_checkpointed_iteration.txt").read_text()
+    if iteration != "release":
+        iteration = f"iter_{int(iteration):07d}"
+    print(f"Fetching iteration {iteration}")
+
+    # Load weights
+    loaded = torch.load(
+        input_base_path / iteration / "mp_rank_00" / "model_optim_rng.pt",
+        map_location="cpu",
+    )
+    args = loaded["args"]
+    loaded = loaded["model"]["language_model"]
+
+    if "transformer" not in loaded:  # normalize key names
+        loaded["transformer"] = loaded.pop("encoder")
+        loaded["embedding"]["word_embeddings.weight"] = loaded["embedding"].pop(
+            "word_embeddings"
+        )["weight"]
+        args.num_layers = args.encoder_num_layers
+
+    # Make sure the self_attention layer is called "attention" in the megatron state dict
+    for key in list(loaded["transformer"].keys()):
+        loaded["transformer"][key.replace("self_attention", "attention")] = loaded[
+            "transformer"
+        ].pop(key)
+
+    embedding = loaded["embedding"]
+    transformer = loaded["transformer"]
+
+    # Load arguments
+    n_layers = args.num_layers
+    dim = args.hidden_size
+    n_heads = args.num_attention_heads
+    n_heads_kv = args.num_attention_heads_kv
+
+    def permute(qkv_w):
+        return permute_qkv(qkv_w, dim, n_heads, n_heads_kv, revert=True)
+
+    weights = {}
+
+    # weights independent of layers (i.e. token embeddings and layernorms
+    weights["transformer.word_embeddings.weight"] = embedding["word_embeddings.weight"]
+    weights["lm_head.weight"] = weights["transformer.word_embeddings.weight"]
+    weights["transformer.ln_f.weight"] = transformer["final_layernorm.weight"]
+    weights["transformer.ln_f.bias"] = transformer["final_layernorm.bias"]
+
+    # copy weights for each transformer layer
+    for layer in trange(n_layers, desc="Converting weights"):
+        prefix1 = f"layers.{layer}"
+        prefix2 = f"transformer.h.{layer}"
+        # mlp
+        weights[f"{prefix2}.mlp.dense_h_to_4h.weight"] = transformer[
+            f"{prefix1}.mlp.dense_h_to_4h.weight"
+        ]
+        weights[f"{prefix2}.mlp.dense_4h_to_h.weight"] = transformer[
+            f"{prefix1}.mlp.dense_4h_to_h.weight"
+        ]
+
+        # qkv weights
+        weights[f"{prefix2}.self_attention.query_key_value.weight"] = permute(
+            transformer[f"{prefix1}.attention.query_key_value.weight"]
+        )
+
+        # dense
+        weights[f"{prefix2}.self_attention.dense.weight"] = transformer[
+            f"{prefix1}.attention.dense.weight"
+        ]
+
+        # falcon7 and falcon40 differ in the input layernorms
+        if n_layers <= 32:  # 7B model
+            weights[f"{prefix2}.input_layernorm.weight"] = transformer[
+                f"{prefix1}.input_layernorm.weight"
+            ]
+            weights[f"{prefix2}.input_layernorm.bias"] = transformer[
+                f"{prefix1}.input_layernorm.bias"
+            ]
+        else:
+            weights[f"{prefix2}.ln_attn.weight"] = transformer[
+                f"{prefix1}.input_layernorm.weight"
+            ]
+            weights[f"{prefix2}.ln_mlp.weight"] = transformer[
+                f"{prefix1}.mlp_layernorm.weight"
+            ]
+            weights[f"{prefix2}.ln_attn.bias"] = transformer[
+                f"{prefix1}.input_layernorm.bias"
+            ]
+            weights[f"{prefix2}.ln_mlp.bias"] = transformer[
+                f"{prefix1}.mlp_layernorm.bias"
+            ]
+
+    print("Falcon-Megatron Loaded!")
+
+    vocab_size = 65024  # default size for falcon
+    if "padded_vocab_size" in args:
+        vocab_size = args.padded_vocab_size
+
+    # creating HF falcon model
+    config = FalconConfig(
+        vocab_size=vocab_size,
+        hidden_size=args.hidden_size,
+        num_hidden_layers=args.num_layers,
+        num_attention_heads=args.num_attention_heads,
+        num_kv_heads=None
+        if args.num_attention_heads_kv == 1
+        else args.num_attention_heads_kv,
+        new_decoder_architecture=args.num_layers >= 60,
+    )
+
+    print("Creating FalconForCausalLM")
+    model = FalconForCausalLM(config=config)
+    torch_dtype = weights["lm_head.weight"].dtype
+    print(f"dtype: {torch_dtype}")
+    print("Loading state dict...")
+    model.to(torch_dtype)  # convert model to soucre dtype
+    model.load_state_dict(weights)
+    print("Done!")
+
+    param_count = 0
+    for v in weights.values():
+        param_count += v.numel()
+    print(f"param_count: {param_count:,}")
+
+    # write model
+    print(f"Saving in the Transformers format to: {model_path} ({torch_dtype})")
+    bits_per_param = torch.finfo(torch_dtype).bits
+    max_shard_size = param_count * bits_per_param // num_output_shards // 8
+    print(f"max_shard_size: {max_shard_size:,} bytes")
+    model.save_pretrained(
+        model_path,
+        max_shard_size=max_shard_size,
+        safe_serialization=safe_serialization,
+    )
+
+
+def write_tokenizer(args: Namespace):
+    if args.model in {"llama", "llama2"}:
+        try:  # try loading from huggingface
+            hf_tokenizer = LlamaTokenizer.from_pretrained("meta-llama/Llama-2-7b-hf",
+                                                          cache_dir=args.cache_dir)
+            print("LlamaTokenizer loaded from huggingface")
+            if args.vocab_file is None:
+                print("vocab_file not set, assuming same tokenizer.model used "
+                      "by llama LlamaTokenizer")
+                args.vocab_file = hf_tokenizer.vocab_file
+        except OSError:
+            assert args.vocab_file is not None
+            hf_tokenizer = LlamaTokenizer.from_pretrained(args.vocab_file)
+        args.tokenizer_type = "SentencePieceTokenizer"
+    else:
+        hf_tokenizer = AutoTokenizer.from_pretrained("tiiuae/falcon-40b", cache_dir=args.cache_dir)
+        args.tokenizer_type = "FalconTokenizer"
+
+    # add default args for megatron tokenizer
+    args.rank = 0
+    args.vocab_extra_ids = 0
+    args.new_tokens = True
+    args.make_vocab_size_divisible_by = 128
+    args.tensor_model_parallel_size = 1
+    mt_tokenizer = build_tokenizer(args)
+
+    if args.tokenizer_type == "SentencePieceTokenizer":
+        if mt_tokenizer.cls is not None:
+            hf_tokenizer.add_tokens("<CLS>", special_tokens=True)
+            hf_tokenizer.cls_token_id = mt_tokenizer.cls
+        if mt_tokenizer.sep is not None:
+            hf_tokenizer.add_tokens("<SEP>", special_tokens=True)
+            hf_tokenizer.sep_token_id = mt_tokenizer.sep
+        if mt_tokenizer.eod is not None:
+            hf_tokenizer.add_tokens("<EOD>", special_tokens=True)
+        if mt_tokenizer.mask is not None:
+            hf_tokenizer.add_tokens("<MASK>", special_tokens=True)
+            hf_tokenizer.mask_token_id = mt_tokenizer.mask
+        if mt_tokenizer.pad is not None:
+            hf_tokenizer.add_tokens("<PAD>", special_tokens=True)
+            hf_tokenizer.pad_token_id = mt_tokenizer.pad
+
+        additional_special_tokens = hf_tokenizer.additional_special_tokens
+        special_tokens = {"additional_special_tokens": additional_special_tokens}
+        if args.vocab_extra_ids_list:
+            additional_special_tokens.extend(args.vocab_extra_ids_list.split(","))
+
+        hf_tokenizer.add_special_tokens(special_tokens_dict=special_tokens, replace_additional_special_tokens=True)
+
+        additional_special_tokens_ids = [mt_tokenizer.vocab.get(t) for t in additional_special_tokens]
+        hf_tokenizer.additional_special_tokens_ids = additional_special_tokens_ids
+
+        hf_vocab = hf_tokenizer.get_vocab()
+        tokens_to_check = [
+            v for k, v in hf_tokenizer.special_tokens_map.items() if k != "additional_special_tokens"
+        ] + additional_special_tokens
+        for t in tokens_to_check:
+            a = mt_tokenizer.vocab.get(t)
+            b = hf_vocab.get(t)
+            assert a == b, f"Mismatch between megatron and huggingface tokenizer vocabularies {t}, {a}, {b}"
+    elif args.tokenizer_type == "FalconTokenizer":
+        hf_tokenizer = mt_tokenizer.tokenizer
+    else:
+        raise RuntimeError(f"Unsupported tokenizer type: {args.tokenizer_type}")
+
+    hf_tokenizer.save_pretrained(args.output_dir)
 
 
 def main():
     # make sure megatron is importable
-    sys.path.append(os.path.abspath(
-        os.path.join(os.path.dirname(__file__),
-                     os.path.pardir)))
 
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--input_dir",
-        help="Location of LLaMA_Megatron weights",
-    )
-    parser.add_argument(
-        "--num_output_shards",
-        type=int,
-        default=1,
-    )
-    
-    parser.add_argument(
-        "--output_dir",
-        help="Location to write HF model and tokenizer",
-    )
+    parser = ArgumentParser()
+    parser.add_argument("--input_dir", help="Location of LLaMA_Megatron weights",
+                        required=True)
+    parser.add_argument("--num_output_shards", type=int, default=1)
+    parser.add_argument("--model", choices={"falcon", "llama", "llama2"},
+                         default="llama2")
+    parser.add_argument("--output_dir", help="Location to write HF model and tokenizer",
+                        required=True)
+    parser.add_argument("--cache_dir", help="Huggingface cache_dir (optional)")
+    parser.add_argument("--vocab_file", type=Path, help="Path to the vocab file")
+    parser.add_argument("--vocab_extra_ids_list",
+                        help="comma separated list of special vocab ids to add to the tokenizer")
     
     args = parser.parse_args()
-    write_model(
-        model_path=args.output_dir,
-        input_base_path=args.input_dir,
-        num_output_shards=args.num_output_shards
-    )
-    
+    if args.model in {"llama", "llama2"}:
+        write_llama_model(
+            model_path=args.output_dir,
+            input_base_path=args.input_dir,
+            num_output_shards=args.num_output_shards
+        )
+    elif args.model == "falcon":
+        write_falcon_model(
+            model_path=args.output_dir,
+            input_base_path=args.input_dir,
+            num_output_shards=args.num_output_shards,
+            safe_serialization=True,
+        )
+    write_tokenizer(args)
 
 if __name__ == "__main__":
     main()

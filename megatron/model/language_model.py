@@ -388,7 +388,7 @@ class TransformerLanguageModel(MegatronModule):
             self.embedding = Embedding(self.hidden_size,
                                        args.padded_vocab_size,
                                        args.max_position_embeddings,
-                                       args.hidden_dropout,
+                                       args.hidden_dropout if not args.lima_dropout else 0.0,
                                        self.init_method,
                                        self.num_tokentypes)
             self._embedding_key = 'embedding'

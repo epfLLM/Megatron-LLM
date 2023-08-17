@@ -178,6 +178,7 @@ def _load_checkpoint(queue, args):
     md.parallel_layernorm = margs.parallel_layernorm
     md.use_flash_attn = margs.use_flash_attn
     md.hidden_dropout = margs.hidden_dropout
+    md.lima_dropout = margs.lima_dropout
     md.use_bias = margs.use_bias
     md.use_rms_norm = margs.use_rms_norm
     md.ffn_hidden_size = margs.ffn_hidden_size

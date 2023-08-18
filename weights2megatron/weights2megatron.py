@@ -17,7 +17,7 @@ llama_s2layer = {7: 32, 13: 40, 30: 60, 65: 80, 70: 80}
 llama_s2heads = {7: 32, 13: 40, 30: 52, 65: 64, 70: 64}
 llama_s2dense = {7: 11008, 13: 13824, 30: 17920, 65: 22016,
                  70: 28672}  # should be (2/3)*4*d, but it isn't exaclty that
-llama_s2hidden = {7: 4096, 13: 5120, 32: 6656, 65: 8192, 70: 8192}
+llama_s2hidden = {7: 4096, 13: 5120, 30: 6656, 65: 8192, 70: 8192}
 
 
 def falcon_to_megatron(weights: dict, size: int) -> dict:

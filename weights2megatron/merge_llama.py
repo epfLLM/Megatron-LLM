@@ -58,8 +58,8 @@ def init_merged_ckpt(pth_00, num_pth=8, emb_dim=8192):
 
 
 def merge_meta_llama(size: int, root_dir: Path):
-    paths = [path for path in root_dir.iterdir()
-            if re.match(r"^consolidated\.[0-9]+\.pth$", path.name)]
+    paths = sorted(path for path in root_dir.iterdir()
+            if re.match(r"^consolidated\.[0-9]+\.pth$", path.name))
     if len(paths) == 1:  # no sharded checkpoints, return everything
         return torch.load(paths[0], map_location=torch.device("cpu"))
 

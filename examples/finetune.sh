@@ -19,6 +19,7 @@ WANDB_PROJ=none
 WANDB_ID=none
 ITERS=1000
 SEQ_LEN=none
+DATA_PATH=none
 HELP_STR="[--rank=$RANK] [--size=$SIZE] [--tp=$TP] [--pp=$PP] [--gpus=$GPUS_PER_NODE] \
 [--micro-batch=$MICRO_BATCH] [--global-batch=$GLOBAL_BATCH] [--nodes=$N_NODES] \
 [--addr=$ADDR] [--wandb] [--instruct] [--checkpoint=...] [--data=...] [--iters=$ITERS] \

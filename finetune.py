@@ -109,9 +109,9 @@ def get_batch(data_iterator):
 
     # Unpack.
     tokens = data_b["text"]
+    labels = tokens[:, 1:].contiguous()
+    tokens = tokens[:, :-1].contiguous()
     if args.data_type == "gpt":
-        labels = tokens_[:, 1:].contiguous()
-        tokens = tokens_[:, :-1].contiguous()
 
         # Get the masks and postition ids.
         attention_mask, loss_mask, position_ids = get_ltor_masks_and_position_ids(
@@ -124,14 +124,8 @@ def get_batch(data_iterator):
         return tokens, labels, loss_mask, attention_mask, position_ids
 
     # Instruction dataset.
-    labels = torch.roll(tokens, shifts=-1, dims=-1)  # TODO this is different
-    attention_mask = data_b["attention_mask"]
-    loss_mask = data_b["loss_mask"]
-    loss_mask[:, 0] = 0  # first tokens are no targets due to roll
-    loss_mask = torch.roll(loss_mask, shifts=-1, dims=-1)
-    loss_mask = loss_mask.float().to(tokens.device)
-
-    # Get the masks and postition ids.
+    attention_mask = data_b["attention_mask"][:, :-1]
+    loss_mask = data_b["loss_mask"][:, 1:].float().to(tokens.device)
     attention_mask, position_ids = get_attention_mask_and_position_ids(
         tokens, attention_mask
     )

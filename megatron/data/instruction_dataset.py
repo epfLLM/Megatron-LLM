@@ -321,6 +321,7 @@ def instruction_collator(data):
     if args.variable_seq_lengths:
         max_sample_length = max(len(x["text"]) for x in data)
         seq_len = min(args.seq_length, round_to_multiple_of(max_sample_length, 16))
+    seq_len += 1  # +1 to get seq_len tokens after shifting (token[t+1] is label for token[t])
 
     # pad data to seq_len, create attention mask
     batch_size = len(data)
@@ -328,21 +329,11 @@ def instruction_collator(data):
     role = torch.full_like(attention_mask, -1)
     input = torch.full_like(attention_mask, pad_id)
 
-    # print_rank_0("========")
-    # print_rank_0("Collator")
 
     for i, x in enumerate(data):
         t = x["text"]
         r = x["role"]
         l = len(t)
-
-        # if torch.distributed.get_rank() == 0:
-        #     tokenizer = get_tokenizer()
-        #     print("TEXT", tokenizer.detokenize(t.tolist()))
-        #     print("###")
-        #     for token_, role_ in zip(t, r):
-        #         print((token_, role_, tokenizer.detokenize([token_.item()])))
-        #     print("------")
 
         if l < seq_len:
             attention_mask[i, l:] = 0
@@ -353,7 +344,5 @@ def instruction_collator(data):
             role[i] = torch.from_numpy(r[:seq_len])
 
     loss_mask = (role == Role.assistant.value).long()  # assistant tokens have role == 2
-
-    # print_rank_0("========")
 
     return {"text": input, "attention_mask": attention_mask, "loss_mask": loss_mask}

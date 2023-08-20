@@ -133,6 +133,14 @@ def llama_to_megatron(weights: dict, size: int, source: str = "meta",
             weights[f"{prefix}.attention.wk.weight"],
             weights[f"{prefix}.attention.wv.weight"]
         )
+
+        # release references to original weights (free mem)
+        del weights[f"{prefix}.feed_forward.w3.weight"]
+        del weights[f"{prefix}.feed_forward.w1.weight"]
+        del weights[f"{prefix}.attention.wq.weight"]
+        del weights[f"{prefix}.attention.wk.weight"]
+        del weights[f"{prefix}.attention.wv.weight"]
+
     return {"embedding": embedding, "transformer": transformer,
             "lm_head": lm_head}
 

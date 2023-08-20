@@ -75,10 +75,10 @@ fi
 
 if [[ $INSTRUCT = 1 ]]; then
 	LR="2e-5"
-	TRAINED_PATH=$CHECKPOINT_PATH-pretrained
+	TRAINED_PATH=$CHECKPOINT_PATH-instructed
 else
 	LR="3e-4"
-	TRAINED_PATH=$CHECKPOINT_PATH-instructed
+	TRAINED_PATH=$CHECKPOINT_PATH-pretrained
 fi
 
 TENSORBOARD_PATH=$TRAINED_PATH/logging

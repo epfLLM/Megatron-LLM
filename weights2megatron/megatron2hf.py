@@ -72,8 +72,8 @@ def convert_wqkv(llama_mega, layer_idx=0, n_heads=32, n_heads_kv=8):
         for qs in range(n_qs_per_kv):
             wq.append(qkv_w[0])
             del qkv_w[0]
-            wk.append(qkv_w[0])
-            del qkv_w[0]
+        wk.append(qkv_w[0])
+        del qkv_w[0]
         wv.append(qkv_w[0])
         del qkv_w[0]
     assert len(qkv_w) == 0
@@ -186,6 +186,7 @@ def write_llama_model(model_path,
             num_attention_heads=n_heads,
             num_hidden_layers=n_layers,
             rms_norm_eps=norm_eps,
+            num_key_value_heads=n_heads_kv,
         )
         config.save_pretrained(tmp_model_path)
 

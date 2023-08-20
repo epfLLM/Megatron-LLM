@@ -72,8 +72,8 @@ def convert_wqkv(llama_mega, layer_idx=0, n_heads=32, n_heads_kv=8):
         for qs in range(n_qs_per_kv):
             wq.append(qkv_w[0])
             del qkv_w[0]
-            wk.append(qkv_w[0])
-            del qkv_w[0]
+        wk.append(qkv_w[0])
+        del qkv_w[0]
         wv.append(qkv_w[0])
         del qkv_w[0]
     assert len(qkv_w) == 0

@@ -187,6 +187,7 @@ def write_llama_model(model_path,
             num_hidden_layers=n_layers,
             rms_norm_eps=norm_eps,
             num_key_value_heads=n_heads_kv,
+            max_position_embeddings=args.seq_length,
         )
         config.save_pretrained(tmp_model_path)
 

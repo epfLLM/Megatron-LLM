@@ -414,6 +414,20 @@ def write_tokenizer(args: Namespace):
     else:
         raise RuntimeError(f"Unsupported tokenizer type: {args.tokenizer_type}")
 
+    # handle special token overrides
+    for override in args.override_special_tokens:
+        try:
+            key, value = override.split("=")
+            assert key in {"bos", "cls", "eos", "mask", "pad", "sep", "unk"}
+            value = mt_tokenizer.vocab[value]
+            setattr(hf_tokenizer, f"{key}_token_id", value)
+        except ValueError:
+            warnings.warn(f"Illegal override string {override}")
+        except AssertionError:
+            warnings.warn(f"Cannot override key {key}")
+        except KeyError:
+            warnings.warn(f"Token {value} not found in megatron tokenizer")
+
     hf_tokenizer.save_pretrained(args.output_dir)
 
 
@@ -429,11 +443,19 @@ def main():
     parser.add_argument("--output_dir", help="Location to write HF model and tokenizer",
                         required=True)
     parser.add_argument("--cache_dir", help="Huggingface cache_dir (optional)")
-    parser.add_argument("--vocab_file", type=Path, help="Path to the vocab file")
+    parser.add_argument("--vocab_file", type=str, help="Path to the vocab file")
     parser.add_argument("--vocab_extra_ids_list",
                         help="comma separated list of special vocab ids to add to the tokenizer")
+    parser.add_argument("--override_special_tokens", nargs="*",
+                        help=("One or more arguments to override special tokens. "
+                              "Syntax set as `key=value`, e.g. `eos=<|im_end|>`. "
+                              "Overrides available only bos, cls, eos, mask, pad, sep, unk."))
     
     args = parser.parse_args()
+
+    write_tokenizer(args)
+    exit()
+
     if args.model in {"llama", "llama2"}:
         write_llama_model(
             model_path=args.output_dir,

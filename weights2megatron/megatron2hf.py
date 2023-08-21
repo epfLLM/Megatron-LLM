@@ -452,10 +452,6 @@ def main():
                               "Overrides available only bos, cls, eos, mask, pad, sep, unk."))
     
     args = parser.parse_args()
-
-    write_tokenizer(args)
-    exit()
-
     if args.model in {"llama", "llama2"}:
         write_llama_model(
             model_path=args.output_dir,

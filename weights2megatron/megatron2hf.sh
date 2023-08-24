@@ -18,7 +18,7 @@ MEGATRON_PATH="path to Megatron-LLM directory (root directory of the repo)"
 cd $MEGATRON_PATH
 
 if [ $NUM_IN_SHARDS -gt 1 ]; then
-    python3 /pure-mlo-scratch/sfan/Megatron-LLM/tools/checkpoint_util.py \
+    python3 tools/checkpoint_util.py \
         --target_tensor_parallel_size 1 \
         --target_pipeline_parallel_size 1 \
         --load_dir $INPUT_DIR \
@@ -30,7 +30,7 @@ if [ $NUM_IN_SHARDS -gt 1 ]; then
     python3 weights2megatron/megatron2hf.py \
         --input_dir $UNSHARDED_DIR \
         --output_dir $OUTPUT_DIR --num_output_shards $NUM_OUT_SHARDS
-    rm -r $UNSHARDED_DIR
+   rm -r $UNSHARDED_DIR
 else
     python3 weights2megatron/megatron2hf.py \
         --input_dir $INPUT_DIR \

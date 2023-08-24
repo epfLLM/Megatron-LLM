@@ -459,6 +459,8 @@ def _add_network_size_args(parser):
                        help='Define position embedding type ("absolute" | "rotary"). "absolute" by default.')
     group.add_argument('--rope_scaling_factor', type=float, default=1.0,
                        help='Set the linear RoPE scaling factor for sequence interpolation.')
+    group.add_argument('--rope_theta', type=float, default=10000.0,
+                       help='Set RoPE theta base (llama/llama2: 1e4, codellama: 1e6).')
     # Added mainly for Falcon
     group.add_argument("--parallel_attn", action="store_true",
                        help="Whether to use parallel mlp and attn computation with a single layernorm")

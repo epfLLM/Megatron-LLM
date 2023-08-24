@@ -110,6 +110,7 @@ def write_llama_model(model_path,
     assert len(list(base_path.glob("mp_rank_*"))) == 1, "Unshard your model with checkpoint_util.py first!"
     loaded = torch.load(base_path/"mp_rank_00"/"model_optim_rng.pt", map_location="cpu")
     args = loaded['args']
+
     loaded = loaded['model']['language_model']
     if 'transformer' not in loaded:  # normalize key names
         loaded["transformer"] = loaded.pop("encoder")

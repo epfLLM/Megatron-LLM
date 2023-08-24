@@ -20,10 +20,11 @@ WANDB_ID=none
 ITERS=1000
 SEQ_LEN=none
 DATA_PATH=none
+TRAINED_PATH=none
 HELP_STR="[--rank=$RANK] [--size=$SIZE] [--tp=$TP] [--pp=$PP] [--gpus=$GPUS_PER_NODE] \
 [--micro-batch=$MICRO_BATCH] [--global-batch=$GLOBAL_BATCH] [--nodes=$N_NODES] \
 [--addr=$ADDR] [--wandb] [--instruct] [--checkpoint=...] [--data=...] [--iters=$ITERS] \
-[--wandb-proj=none] [--wandb-id=none] [--seq-len=...] [--help]"
+[--wandb-proj=none] [--wandb-id=none] [--seq-len=...] [--out=...] [--help]"
 
 
 # define help function
@@ -64,6 +65,7 @@ while [[ $# -gt 0 ]]; do
 		--data) DATA_PATH=$2; shift; shift;;
 		--iters) ITERS=$2; shift; shift;;
 		--seq-len) SEQ_LEN=$2; shift; shift;;
+		--out) TRAINED_PATH=$2; shift; shift;;
 		*) echo unknown argument $1; help; exit 1;;
 	esac
 done
@@ -76,10 +78,16 @@ fi
 
 if [[ $INSTRUCT = 1 ]]; then
 	LR="2e-5"
-	TRAINED_PATH=$CHECKPOINT_PATH-instructed
+	MIN_LR="2e-6"
+	if [[ $TRAINED_PATH = none ]]; then
+		TRAINED_PATH=$CHECKPOINT_PATH-instructed
+	fi
 else
 	LR="3e-4"
-	TRAINED_PATH=$CHECKPOINT_PATH-pretrained
+	MIN_LR="3e-4"
+	if [[ $TRAINED_PATH = none ]]; then
+		TRAINED_PATH=$CHECKPOINT_PATH-pretrained
+	fi
 fi
 
 TENSORBOARD_PATH=$TRAINED_PATH/logging
@@ -105,7 +113,6 @@ elif [[ $MODEL = llama ]] || [[ $MODEL = llama2 ]]; then
 			DATA_PATH=/pure-mlo-scratch/alhernan/data/orca/orca
 		fi
 		EXTRA_IDS="$EXTRA_IDS,<|im_start|>,<|im_end|>\""
-       		EXTRA_ARGS="$EXTRA_ARGS --data_type instruction"
 	else
 		if [[ $DATA_PATH = none ]]; then
 			DATA_PATH=/pure-mlo-scratch/data/tokenized/pubmed-all/pubmed-all-llama_text_document
@@ -149,11 +156,11 @@ COMMON_ARGS="--use_flash_attn --no_bias_gelu_fusion
              --eval_iters 10 --hidden_dropout 0.0 --position_embedding_type rotary
 	     --no_bias_dropout_fusion --use_checkpoint_args --train_iters $ITERS
 	     --attention_dropout 0.0 --adam_beta1 0.9 --adam_beta2 0.95 --adam_eps 1e-5
-	     --lr_decay_style cosine --lr_warmup_fraction 0.1 --lr $LR --min_lr 1e-6
+	     --lr_decay_style cosine --lr_warmup_fraction 0.1 --lr $LR --min_lr $MIN_LR
 	     --weight_decay 0.1 --sequence_parallel --recompute_granularity selective"
 
 if [[ $INSTRUCT = 1 ]]; then
-	COMMON_ARGS="$COMMON_ARGS --finetune"
+	COMMON_ARGS="$COMMON_ARGS --finetune --variable_seq_lengths --data_type instruction"
 fi
 
 if [[ $WANDB = 1 ]]; then
@@ -174,6 +181,7 @@ echo ADDR=$ADDR
 echo N_NODES=$N_NODES
 echo DATA_PATH=$DATA_PATH
 echo CHECKPOINT_PATH=$CHECKPOINT_PATH
+echo TRAINED_PATH=$TRAINED_PATH
 echo MODEL=$MODEL
 echo TP=$TP
 echo PP=$PP
@@ -198,4 +206,4 @@ CUDA_DEVICE_MAX_CONNECTIONS=1 OMP_NUM_THREADS=16 torchrun $DISTRIBUTED_ARGS fine
        --micro_batch_size $MICRO_BATCH \
        --num_workers=2 \
        $EXTRA_ARGS \
-       $COMMON_ARGS \
+       $COMMON_ARGS

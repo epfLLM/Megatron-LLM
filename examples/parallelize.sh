@@ -2,7 +2,7 @@
 
 # assert correct usage
 if [[ $# -ne 4 ]]; then
-	echo "Usage: $0 <llama/llama2/falcon> <7,13,30,40,65,70> <tp> <pp>"
+	echo "Usage: $0 <llama/llama2/codellama/falcon> <7,13,30,40,65,70> <tp> <pp>"
 	exit 1
 fi
 
@@ -18,13 +18,15 @@ PIPELINE_PARALLELISM=$4
 EXTRA_ARGS=""
 if [[ $MODEL = falcon ]]; then
 	#TRUE_VOCAB_SIZE=65024
-       TRUE_VOCAB_SIZE=65026       # 2 new tokens: <|im_start|>,<|im_end|>
+	TRUE_VOCAB_SIZE=65026       # 2 new tokens: <|im_start|>,<|im_end|>
 elif [[ $MODEL = llama ]] || [[ $MODEL = llama2 ]]; then
 	#TRUE_VOCAB_SIZE=32017  # 17 new tokens
-       TRUE_VOCAB_SIZE=32007  # 7 new tokens:  <CLS>,<SEP>,EOD>,<MASK>,<PAD>,<|im_start|>,<|im_end|>
+	TRUE_VOCAB_SIZE=32007  # 7 new tokens:  <CLS>,<SEP>,EOD>,<MASK>,<PAD>,<|im_start|>,<|im_end|>
 	if (( $SIZE > 60 )); then
 		EXTRA_ARGS="--bf16"
 	fi
+elif [[ $MODEL = codellama ]]; then
+	TRUE_VOCAB_SIZE=32023  # 32016 + 7 new tokens:  <CLS>,<SEP>,EOD>,<MASK>,<PAD>,<|im_start|>,<|im_end|>
 fi
 
 

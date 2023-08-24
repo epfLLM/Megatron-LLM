@@ -2,7 +2,7 @@
 
 # assert correct usage
 if [[ $# -ne 2 ]]; then
-	echo "Usage: $0 <llama/llama2/falcon> <7,13,30,34,40,65,70>"
+	echo "Usage: $0 <llama/llama2/codellama/falcon> <7,13,30,34,40,65,70>"
 	exit 1
 fi
 
@@ -21,6 +21,8 @@ elif [[ $MODEL = llama ]]; then
 elif [[ $MODEL = llama2 ]]; then
 	#CACHE=/home/ubuntu/llama2/Llama-2-${SIZE}b/
 	CACHE=/pure-mlo-scratch/akoepf/llama2/Llama-2-${SIZE}b/
+elif [[ $MODEL = codellama ]]; then
+	CACHE=/pure-mlo-scratch/akoepf/codellama/CodeLlama-${SIZE}b/
 else
 	echo "Model should be either llama or falcon, not $MODEL"
 	exit 1

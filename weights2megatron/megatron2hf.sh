@@ -3,10 +3,10 @@
 PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python
 NUM_IN_SHARDS=4
 NUM_OUT_SHARDS=8
-INPUT_DIR=/pure-mlo-scratch/akoepf/checkpoints/llama2-13b-tp4-pp2-megacode2_oasst
-UNSHARDED_DIR=/pure-mlo-scratch/akoepf/checkpoints/tmp-unsharded-megacode2_oasst
-OUTPUT_DIR=/pure-mlo-scratch/akoepf/checkpoints/llama2-13b-megacode2-oasst-hf
-MEGATRON_PATH=/root/koepf/epfl-megatron
+INPUT_DIR=/pure-mlo-scratch/akoepf/checkpoints/llama2-70b-tp8-pp4-oasst_sft10
+UNSHARDED_DIR=/pure-mlo-scratch/akoepf/checkpoints/tmp-unsharded-oasst_sft10
+OUTPUT_DIR=/pure-mlo-scratch/akoepf/checkpoints/llama2-70b-oasst-sft10-hf
+MEGATRON_PATH=/pure-mlo-scratch/akoepf/code/epfl-megatron
 VOCAB_SIZE=32007
 
 # NUM_IN_SHARDS="#NUM of shards of megatron checkpoints"
@@ -31,7 +31,7 @@ if [ $NUM_IN_SHARDS -gt 1 ]; then
     python3 weights2megatron/megatron2hf.py \
         --input_dir $UNSHARDED_DIR \
         --output_dir $OUTPUT_DIR --num_output_shards $NUM_OUT_SHARDS
-    rm -r $UNSHARDED_DIR
+   # rm -r $UNSHARDED_DIR
 else
     python3 weights2megatron/megatron2hf.py \
         --input_dir $INPUT_DIR \

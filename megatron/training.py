@@ -390,9 +390,12 @@ def _setup_model_and_optimizer(model_provider_func,
 
 
 def train_step(forward_step_func, data_iterator,
-               model, optimizer, opt_param_scheduler, args):
+               model, optimizer, opt_param_scheduler, iteration, args):
     """Single training step."""
     timers = get_timers()
+    skip_iter = iteration in args.skip_iters
+    if skip_iter:
+        print_all_nodes("IMPORTANT! Skipping backprop for this iteration!")
 
     # Set grad to zero.
     if args.DDP_impl == 'local' and args.use_contiguous_buffers_in_local_ddp:
@@ -407,7 +410,7 @@ def train_step(forward_step_func, data_iterator,
     fwd_bwd_timers = timers if args.timing_log_level > 1 else None
     losses_reduced = forward_backward_func(
         forward_step_func, data_iterator, model,
-        optimizer, fwd_bwd_timers, forward_only=False)
+        optimizer, fwd_bwd_timers, forward_only=skip_iter)
     timers('forward-backward').stop()
 
     # Empty unused memory.
@@ -415,12 +418,17 @@ def train_step(forward_step_func, data_iterator,
         torch.cuda.empty_cache()
 
     # Reduce gradients.
-    optimizer.reduce_model_grads(args, timers)
+    if skip_iter:
+        update_successful = False
+        grad_norm = None
+        num_zeros_in_grad = None
+    else:
+        optimizer.reduce_model_grads(args, timers)
 
-    # Update parameters.
-    timers('optimizer', log_level=1).start(barrier=args.barrier_with_L1_time)
-    update_successful, grad_norm, num_zeros_in_grad = optimizer.step(args, timers)
-    timers('optimizer').stop()
+        # Update parameters.
+        timers('optimizer', log_level=1).start(barrier=args.barrier_with_L1_time)
+        update_successful, grad_norm, num_zeros_in_grad = optimizer.step(args, timers)
+        timers('optimizer').stop()
 
     # Gather params.
     if update_successful:
@@ -671,7 +679,7 @@ def _train(args, forward_step_func,
                        train_data_iterator,
                        model,
                        optimizer,
-                       opt_param_scheduler, args)
+                       opt_param_scheduler, iteration, args)
         iteration += 1
         args.consumed_train_samples += mpu.get_data_parallel_world_size() * \
                                        args.micro_batch_size * \

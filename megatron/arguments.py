@@ -632,6 +632,9 @@ def _add_training_args(parser):
                        help='Total number of iterations to train over all '
                        'training runs. Note that either train_iters or '
                        'train_samples should be provided.')
+    group.add_argument('--skip_iters', type=int, nargs='*', default=[],
+                        help=('One or more iterations to ignore. Neither the forward '
+                              'nor backward pass will be computed for this iterations'))
     group.add_argument('--train_samples', type=int, default=None,
                        help='Total number of samples to train over all '
                        'training runs. Note that either train_iters or '

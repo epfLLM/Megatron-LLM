@@ -312,6 +312,10 @@ def build_train_valid_test_datasets(data_prefix: Optional[str],
         return train_dataset, valid_dataset, test_dataset
 
 
+def round_to_multiple_of(x: int, y: int) -> int:
+        return ((x + y - 1) // y) * y
+
+
 def instruction_collator(data):
     args = get_args()
     tokenizer = get_tokenizer()

@@ -150,14 +150,19 @@ def get_batch(data_iterator):
     return tokens, labels, label_mask, attention_mask, position_ids
 
 
-def loss_func(label_mask, output_tensor):
-    losses = output_tensor.float()
+def loss_func(labels, label_mask, outputs):
+    output_tensor, max_indices = outputs
+
+    matching = torch.masked_fill(labels == max_indices, label_mask == 0, False)
+    accuracy = torch.count_nonzero(matching) / torch.count_nonzero(label_mask)
+    averaged_accuracy = average_losses_across_data_parallel_group([accuracy])
+
+    losses = output_tensor.view(-1).float()
     label_mask = label_mask.view(-1).float()
-    loss = torch.sum(losses.view(-1) * label_mask) / label_mask.sum()
-    # batch_fill_rate = label_mask.sum()/losses.nelement()
-    # Reduce loss for logging.
+    loss = torch.sum(losses * label_mask) / label_mask.sum()
     averaged_loss = average_losses_across_data_parallel_group([loss])
-    return loss, {"lm loss": averaged_loss[0]}
+
+    return loss, {"lm loss": averaged_loss[0], "lm accuracy": averaged_accuracy[0]}
 
 
 def forward_step(data_iterator, model):
@@ -170,33 +175,8 @@ def forward_step(data_iterator, model):
     tokens, labels, label_mask, attention_mask, position_ids = get_batch(data_iterator)
     timers("batch-generator").stop()
 
-    output_tensor = model(tokens, position_ids, attention_mask, labels=labels)
-    return output_tensor, partial(loss_func, label_mask)
-
-
-def eval_loss_func(label_mask, output_tensor):
-    losses = output_tensor.float()
-    label_mask = label_mask.view(-1).float()
-    loss = torch.sum(losses.view(-1) * label_mask) / label_mask.sum()
-    # Reduce loss for logging.
-    averaged_loss = average_losses_across_data_parallel_group([loss])
-    return loss, {"lm loss": averaged_loss[0]}
-
-
-def eval_forward_step(data_iterator, model):
-    """Forward step."""
-    args = get_args()
-    timers = get_timers()
-
-    # Get the batch.
-    timers("batch-generator", log_level=2).start()
-    tokens, labels, label_mask, attention_mask, position_ids = get_batch(data_iterator)
-    timers("batch-generator").stop()
-
-    # logits = model(tokens, position_ids, attention_mask)
-
-    output_tensor = model(tokens, position_ids, attention_mask, labels=labels)
-    return output_tensor, partial(eval_loss_func, label_mask)
+    outputs = model(tokens, position_ids, attention_mask, labels=labels)
+    return outputs, partial(loss_func, labels, label_mask)
 
 
 def train_valid_test_datasets_provider(train_val_test_num_samples):
@@ -306,11 +286,10 @@ if __name__ == "__main__":
     pretrain(
         args,
         instruction_train_valid_test_datasets_provider,
-        # train_valid_test_datasets_provider,
         model_provider,
         ModelType.encoder_or_decoder,
         forward_step,
-        eval_forward_step_func=eval_forward_step,
+        eval_forward_step_func=forward_step,
         collate_fn=partial(instruction_collator, args),
     )
     print(f"Done {dt.datetime.now(dt.timezone.utc)}")

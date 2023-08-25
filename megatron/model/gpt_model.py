@@ -31,6 +31,10 @@ def post_language_model_processing(lm_output, labels, logit_weights,
     else:
         # [b s] => [s b]
         labels = labels.transpose(0,1).contiguous()
+
+        # get indices of max logit per position for downstream accuracy computation
+        _, max_indices = output.max(dim=-1)
+
         if fp16_lm_cross_entropy:
             assert output.dtype == torch.half
             loss = tensor_parallel.vocab_parallel_cross_entropy(output, labels)
@@ -39,7 +43,8 @@ def post_language_model_processing(lm_output, labels, logit_weights,
         
         # [s b] => [b, s]
         loss = loss.transpose(0,1).contiguous()
-        return loss
+        max_indices = max_indices.transpose(0,1).contiguous()
+        return loss, max_indices
 
 
 class GPTModel(MegatronModule):

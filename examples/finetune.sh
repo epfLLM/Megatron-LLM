@@ -69,7 +69,7 @@ elif [[ $MODEL = llama ]] || [[ $MODEL = llama2 ]] || [[ $MODEL = codellama ]]; 
 	TOKENIZER=SentencePieceTokenizer
 	EXTRA_ARGS='--vocab_file=/pure-mlo-scratch/llama/tokenizer.model --use_rms_norm
 	            --glu_activation swiglu --no_tie_embed_logits
-		    --vocab_extra_ids_list "[bib_ref],[/bib_ref],[fig_ref],[/fig_ref],[bib],[/bib],[fig],[/fig],[table],[/table],[formula],[/formula]"'
+	            --vocab_extra_ids_list "[bib_ref],[/bib_ref],[fig_ref],[/fig_ref],[bib],[/bib],[fig],[/fig],[table],[/table],[formula],[/formula]"'
 	if [[ $MODEL = codellama ]]; then
 		EXTRA_ARGS="$EXTRA_ARGS --vocab_file=/pure-mlo-scratch/codellama/CodeLlama-7b/tokenizer.model --rope_theta 1e6"
 	else
@@ -98,14 +98,14 @@ else
 	exit 1
 fi
 COMMON_ARGS="--use_flash_attn --no_bias_gelu_fusion
-			--seq_length $SEQ_LEN --max_position_embeddings $SEQ_LEN
-			--log_interval 1 --save_interval 50 --eval_interval 50
-			--eval_iters 10 --hidden_dropout 0.0 --position_embedding_type rotary
-			--no_bias_dropout_fusion --use_checkpoint_args --train_iters 10000
-			--attention_dropout 0.0 --adam_beta1 0.9 --adam_beta2 0.95 --adam_eps 1e-5
-			--lr_decay_style cosine --lr_warmup_iters 2000 --lr $LR --min_lr 1e-6
-			--weight_decay 0.1 --sequence_parallel --recompute_granularity selective
-			--log_timers_to_tensorboard --rope_scaling_factor 1.0"
+             --seq_length $SEQ_LEN --max_position_embeddings $SEQ_LEN
+             --log_interval 1 --save_interval 50 --eval_interval 50
+             --eval_iters 10 --hidden_dropout 0.0 --position_embedding_type rotary
+             --no_bias_dropout_fusion --use_checkpoint_args --train_iters 10000
+             --attention_dropout 0.0 --adam_beta1 0.9 --adam_beta2 0.95 --adam_eps 1e-5
+             --lr_decay_style cosine --lr_warmup_iters 2000 --lr $LR --min_lr 1e-6
+             --weight_decay 0.1 --sequence_parallel --recompute_granularity selective
+             --log_timers_to_tensorboard --rope_scaling_factor 1.0"
 
 if [[ $WANDB = 1 ]]; then
 	COMMON_ARGS="$COMMON_ARGS --wandb_logger"

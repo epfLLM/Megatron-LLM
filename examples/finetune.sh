@@ -17,6 +17,7 @@ CHECKPOINT_PATH=none
 DATA=none
 WANDB_PROJ=none
 WANDB_ID=none
+WANDB_ENTITY=none
 ITERS=1000
 SEQ_LEN=none
 DATA_PATH=none
@@ -24,7 +25,7 @@ TRAINED_PATH=none
 HELP_STR="[--rank=$RANK] [--size=$SIZE] [--tp=$TP] [--pp=$PP] [--gpus=$GPUS_PER_NODE] \
 [--micro-batch=$MICRO_BATCH] [--global-batch=$GLOBAL_BATCH] [--nodes=$N_NODES] \
 [--addr=$ADDR] [--wandb] [--instruct] [--checkpoint=...] [--data=...] [--iters=$ITERS] \
-[--wandb-proj=none] [--wandb-id=none] [--seq-len=...] [--out=...] [--help]"
+[--wandb-proj=none] [--wandb-id=none] [--wandb-entity=none] [--seq-len=...] [--out=...] [--help]"
 
 
 # define help function
@@ -60,6 +61,7 @@ while [[ $# -gt 0 ]]; do
 		--wandb) WANDB=1; shift;;
 		--wandb-project) WANDB_PROJ=$2; shift; shift;;
 		--wandb-id) WANDB_ID=$2; shift; shift;;
+		--wandb-entity) WANDB_ENTITY=$2; shift; shift;;
 		--instruct) INSTRUCT=1; shift;;
 		--checkpoint) CHECKPOINT_PATH=$2; shift; shift;;
 		--data) DATA_PATH=$2; shift; shift;;
@@ -130,7 +132,6 @@ elif [[ $MODEL = llama ]] || [[ $MODEL = llama2 ]]; then
 		if [[ $SEQ_LEN = none ]]; then
 			SEQ_LEN=4096
 		fi
-		EXTRA_ARGS="$EXTRA_ARGS --layernorm_epsilon 1e-6"
 		EXTRA_ARGS="$EXTRA_ARGS --layernorm_epsilon 1e-5"
 		if (( $SIZE > 13 )); then  # llama 2, 34B and 70B
 			LR="1.5e-4"
@@ -152,15 +153,22 @@ else
 fi
 COMMON_ARGS="--use_flash_attn --no_bias_gelu_fusion
 	     --seq_length $SEQ_LEN --max_position_embeddings $SEQ_LEN
-             --log_interval 1 --save_interval 200 --eval_interval 200
+             --log_interval 1 --save_interval 800 --eval_interval 200
              --eval_iters 10 --hidden_dropout 0.0 --position_embedding_type rotary
-	     --no_bias_dropout_fusion --use_checkpoint_args --train_iters $ITERS
+	     --no_bias_dropout_fusion --use_checkpoint_args
 	     --attention_dropout 0.0 --adam_beta1 0.9 --adam_beta2 0.95 --adam_eps 1e-5
 	     --lr_decay_style cosine --lr_warmup_fraction 0.1 --lr $LR --min_lr $MIN_LR
 	     --weight_decay 0.1 --sequence_parallel --recompute_granularity selective"
 
 if [[ $INSTRUCT = 1 ]]; then
-	COMMON_ARGS="$COMMON_ARGS --finetune --variable_seq_lengths --data_type instruction"
+	COMMON_ARGS="$COMMON_ARGS --variable_seq_lengths --data_type instruction"
+	if [[ $CHECKPOINT_PATH != $TRAINED_PATH ]]; then
+		COMMON_ARGS="$COMMON_ARGS --finetune"
+	fi
+fi
+
+if [[ $CHECKPOINT_PATH != $TRAINED_PATH ]]; then
+ 	COMMON_ARGS="$COMMON_ARGS --train_iters $ITERS"
 fi
 
 if [[ $WANDB = 1 ]]; then
@@ -170,6 +178,9 @@ if [[ $WANDB = 1 ]]; then
 	fi
 	if [[ $WANDB_ID != none ]]; then
 		COMMON_ARGS="$COMMON_ARGS --wandb_id $WANDB_ID"
+	fi
+	if [[ $WANDB_ENTITY != none ]]; then
+		COMMON_ARGS="$COMMON_ARGS --wandb_entity $WANDB_ENTITY"
 	fi
 fi
 

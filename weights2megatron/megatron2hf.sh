@@ -30,7 +30,7 @@ if [ $NUM_IN_SHARDS -gt 1 ]; then
     python3 weights2megatron/megatron2hf.py \
         --input_dir $UNSHARDED_DIR \
         --output_dir $OUTPUT_DIR --num_output_shards $NUM_OUT_SHARDS
-   rm -r $UNSHARDED_DIR
+    rm -r $UNSHARDED_DIR
 else
     python3 weights2megatron/megatron2hf.py \
         --input_dir $INPUT_DIR \

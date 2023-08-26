@@ -1,15 +1,14 @@
 """Processing data for instruction tuning.
 Example:
-python instruct/preprocess_data.py --input=/pure-mlo-scratch/alhernan/data/medmc/medmc-v1.jsonl \
-        --output_prefix=/pure-mlo-scratch/alhernan/data/medmc/medmc-v1 \
-	    --tokenizer_type=SentencePieceTokenizer \
-	    --vocab_file=/pure-mlo-scratch/llama/tokenizer.model \
-        --chunk_size=32 --workers=32 \
-        --vocab_extra_ids_list "[bib_ref],[/bib_ref],[fig_ref],[/fig_ref],[bib],[/bib],[fig],[/fig],[table],[/table],[formula],[/formula],<|im_start|>,<|im_end|>" \
-        --question_key=input \
-        --answer_key=output \
-        --system_key=instruction
-        # --vocab_extra_ids_list "[bib_ref],[/bib_ref],[fig_ref],[/fig_ref],[bib],[/bib],[fig],[/fig],[table],[/table],[formula],[/formula]"
+python instruct/preprocess_instruct_data.py --input=/pure-mlo-scratch/alhernan/data/medmc/medmc-v1.jsonl \
+    --output_prefix=/pure-mlo-scratch/alhernan/data/medmc/medmc-v1 \
+    --tokenizer_type=SentencePieceTokenizer \
+    --vocab_file=/pure-mlo-scratch/llama/tokenizer.model \
+    --chunk_size=32 --workers=32 \
+    --vocab_extra_ids_list "[bib_ref],[/bib_ref],[fig_ref],[/fig_ref],[bib],[/bib],[fig],[/fig],[table],[/table],[formula],[/formula],<|im_start|>,<|im_end|>" \
+    --question_key=input \
+    --answer_key=output \
+    --system_key=instruction
 """
 
 import sys

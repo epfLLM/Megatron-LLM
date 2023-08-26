@@ -27,13 +27,13 @@ def post_language_model_processing(lm_output, labels, logit_weights,
 
     if labels is None:
         # [s b h] => [b s h]
-        return output.transpose(0,1).contiguous()
+        return output.transpose(0, 1).contiguous()
     else:
         # [b s] => [s b]
-        labels = labels.transpose(0,1).contiguous()
+        labels = labels.transpose(0, 1).contiguous()
 
         # get indices of max logit per position for downstream accuracy computation
-        _, max_indices = output.max(dim=-1)
+        max_indices = tensor_parallel.vocab_parallel_max_indices(output)
 
         if fp16_lm_cross_entropy:
             assert output.dtype == torch.half
@@ -42,8 +42,8 @@ def post_language_model_processing(lm_output, labels, logit_weights,
             loss = tensor_parallel.vocab_parallel_cross_entropy(output.float(), labels)
         
         # [s b] => [b, s]
-        loss = loss.transpose(0,1).contiguous()
-        max_indices = max_indices.transpose(0,1).contiguous()
+        loss = loss.transpose(0, 1).contiguous()
+        max_indices = max_indices.transpose(0, 1).contiguous()
         return loss, max_indices
 
 

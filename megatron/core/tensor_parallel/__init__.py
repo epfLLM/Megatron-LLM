@@ -1,4 +1,8 @@
-from .cross_entropy import vocab_parallel_cross_entropy
+from .cross_entropy import (
+    vocab_parallel_cross_entropy,
+    vocab_parallel_max_indices
+)
+
 from .data import broadcast_data
 
 from .layers import (
@@ -36,6 +40,7 @@ from .utils import (
 __all__ = [
     # cross_entropy.py
     "vocab_parallel_cross_entropy",
+    "vocab_parallel_max_indices",
     # data.py
     "broadcast_data",
     #layers.py

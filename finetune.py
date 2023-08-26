@@ -184,38 +184,6 @@ def forward_step(data_iterator, model):
     tokens, labels, loss_mask, attention_mask, position_ids = get_batch(data_iterator)
     timers("batch-generator").stop()
 
-    if torch.distributed.get_rank() == 0 and False:
-        tokenizer = get_tokenizer()
-        print()
-        print("=====")
-        print("Batch")
-        print("Tokens:", tokens.size())
-        print("Labels:", labels.size())
-        print("loss_mask:", loss_mask.size())
-        print("attention_mask:", attention_mask.size())
-        print("position_ids:", position_ids.size())
-        for i in range(tokens.size(0)):
-            if i > 0:
-                print()
-            print("----")
-            print("Sample", i)
-            n_pads = 0
-            for j in range(tokens.size(1)):
-                is_pad = tokens[i, j].item() == tokenizer._pad_id
-                if is_pad:
-                    n_pads += 1
-                else:
-                    if n_pads > 0:
-                        print("<PAD> x", n_pads)
-                    n_pads = 0
-                    print(tokenizer.detokenize([tokens[i, j].item()]), tokens[i, j].item(),
-                          labels[i, j].item(), loss_mask[i, j].item(), position_ids[i, j].item())
-            if n_pads > 0:
-                print("<PAD> x", n_pads)
-        print("====")
-        print()
-
-
     output_tensor = model(tokens, position_ids, attention_mask,
                           labels=labels)
     return output_tensor, partial(loss_func, loss_mask)

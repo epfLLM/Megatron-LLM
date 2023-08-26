@@ -266,4 +266,5 @@ for sequence in sequences:
    - `examples/finetune.sh`
    - `examples/verify.sh`
 1. Take a look at `weights2megatron/README.md` and `tokenize-utils/README.md` for more information.
+1. See the [intruction finetuning](instruction_tuning) guide for more information on how to finetune your pretrained model to follow instructions.
 1. Take a look at our [FAQ](faq) section.

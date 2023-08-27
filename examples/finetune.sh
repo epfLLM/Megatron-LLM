@@ -60,7 +60,7 @@ LR="3e-4"
 CHECKPOINT_PATH=/pure-mlo-scratch/akoepf/checkpoints/${MODEL}-${SIZE}b-tp$TP-pp$PP
 #CHECKPOINT_PATH=/pure-mlo-scratch/akoepf/checkpoints/llama2-13b-tp4-pp2-megacode2_min100
 #CHECKPOINT_PATH=/pure-mlo-scratch/akoepf/checkpoints/${MODEL}-${SIZE}b-tp$TP-pp$PP-oasst_pre10
-OUTPUT_PATH=/pure-mlo-scratch/akoepf/checkpoints/${MODEL}-${SIZE}b-tp$TP-pp$PP-oaast1
+OUTPUT_PATH=/pure-mlo-scratch/akoepf/checkpoints/${MODEL}-${SIZE}b-tp$TP-pp$PP-oa_codellama
 #OUTPUT_PATH=/pure-mlo-scratch/akoepf/checkpoints/${MODEL}-${SIZE}b-tp$TP-pp$PP-oasst_sft10
 #OUTPUT_PATH=/pure-mlo-scratch/akoepf/checkpoints/${MODEL}-${SIZE}b-tp$TP-pp$PP-test_rope_scale2
 TENSORBOARD_PATH=$OUTPUT_PATH/logging
@@ -74,10 +74,11 @@ if [[ $MODEL = falcon ]]; then
 	SEQ_LEN=2048
 elif [[ $MODEL = llama ]] || [[ $MODEL = llama2 ]] || [[ $MODEL = codellama ]]; then
 	#DATA_PATH=/pure-mlo-scratch/akoepf/data/orcamegacode_best_llama2/orcamegacode_best-train
-	DATA_PATH=/pure-mlo-scratch/akoepf/data/oasst_top1_2023-07-23_llama2/oasst_top1-train
+	#DATA_PATH=/pure-mlo-scratch/akoepf/data/oasst_top1_2023-07-23_llama2/oasst_top1-train
 	#DATA_PATH=/pure-mlo-scratch/akoepf/data/oasst_pre10_min25_llama2/oasst_sft10-train
 	#DATA_PATH=/pure-mlo-scratch/akoepf/data/megacode2_min100/megacode2-train
 	#DATA_PATH=/pure-mlo-scratch/akoepf/data/megacode2_frac05/megacode2-train
+	DATA_PATH=/pure-mlo-scratch/akoepf/data/orca_megacode_oasst_best_codellama/orca_megacode_oasst_best-train
 	TOKENIZER=SentencePieceTokenizer
 	EXTRA_ARGS='--use_rms_norm
 			--glu_activation swiglu --no_tie_embed_logits
@@ -107,27 +108,29 @@ else
 	help
 	exit 1
 fi
-# COMMON_ARGS="--use_flash_attn --no_bias_gelu_fusion
-# 	--seq_length $SEQ_LEN --max_position_embeddings $SEQ_LEN
-# 	--log_interval 1 --save_interval 500 --eval_interval 50
-# 	--eval_iters 10 --hidden_dropout 0.0 --position_embedding_type rotary
-# 	--no_bias_dropout_fusion --use_checkpoint_args --train_iters 6123
-# 	--attention_dropout 0.0 --adam_beta1 0.9 --adam_beta2 0.95 --adam_eps 1e-12
-# 	--lr_decay_style cosine --lr_warmup_iters 100 --lr 1e-5 --min_lr 1e-6
-# 	--weight_decay 0.000001 --sequence_parallel --recompute_granularity selective --log_timers_to_tensorboard
-# 	--rope_scaling_factor 1.0"
-
-
-# OA lima fine-tuning:
 COMMON_ARGS="--use_flash_attn --no_bias_gelu_fusion
 	--seq_length $SEQ_LEN --max_position_embeddings $SEQ_LEN
-	--log_interval 1 --save_interval 346 --eval_interval 50
-	--eval_iters 10 --hidden_dropout 0.25 --lima_dropout --position_embedding_type rotary
-	--no_bias_dropout_fusion --use_checkpoint_args --train_iters 519
+	--log_interval 1 --save_interval 500 --eval_interval 50
+	--eval_iters 10 --hidden_dropout 0.0 --position_embedding_type rotary
+	--no_bias_dropout_fusion --use_checkpoint_args --train_iters 6123
 	--attention_dropout 0.0 --adam_beta1 0.9 --adam_beta2 0.95 --adam_eps 1e-12
 	--lr_decay_style cosine --lr_warmup_iters 100 --lr 1e-5 --min_lr 1e-6
 	--weight_decay 0.000001 --sequence_parallel --recompute_granularity selective --log_timers_to_tensorboard
-	--rope_scaling_factor 1.0 --finetune"
+	--rope_scaling_factor 1.0"
+
+
+#SEQ_LEN=1024 # temp
+
+# OA lima fine-tuning:
+# COMMON_ARGS="--use_flash_attn --no_bias_gelu_fusion
+# 	--seq_length $SEQ_LEN --max_position_embeddings $SEQ_LEN
+# 	--log_interval 1 --save_interval 346 --eval_interval 50
+# 	--eval_iters 10 --hidden_dropout 0.25 --lima_dropout --position_embedding_type rotary
+# 	--no_bias_dropout_fusion --use_checkpoint_args --train_iters 519
+# 	--attention_dropout 0.0 --adam_beta1 0.9 --adam_beta2 0.95 --adam_eps 1e-12
+# 	--lr_decay_style cosine --lr_warmup_iters 100 --lr 1e-5 --min_lr 1e-6
+# 	--weight_decay 0.000001 --sequence_parallel --recompute_granularity selective --log_timers_to_tensorboard
+# 	--rope_scaling_factor 1.0 --finetune"
 
 # COMMON_ARGS="--use_flash_attn --no_bias_gelu_fusion
 # 	     --seq_length $SEQ_LEN --max_position_embeddings $SEQ_LEN
@@ -140,7 +143,7 @@ COMMON_ARGS="--use_flash_attn --no_bias_gelu_fusion
 
 if [[ $WANDB = 1 ]]; then
 #	COMMON_ARGS="$COMMON_ARGS --wandb_logger --wandb_project epfl-mt-sft --wandb_entity open-assistant --wandb_id run42_oasst_pre10"
-	COMMON_ARGS="$COMMON_ARGS --wandb_logger --wandb_project epfl-mt-sft --wandb_entity open-assistant --wandb_id run52_oasst_codellama_7b"
+	COMMON_ARGS="$COMMON_ARGS --wandb_logger --wandb_project epfl-mt-sft --wandb_entity open-assistant --wandb_id run56_oa_llamacode"
 fi
 
 # print some args

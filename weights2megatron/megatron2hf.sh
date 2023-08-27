@@ -2,12 +2,19 @@
 
 PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python
 NUM_IN_SHARDS=4
-NUM_OUT_SHARDS=8
-INPUT_DIR=/pure-mlo-scratch/akoepf/checkpoints/llama2-70b-tp8-pp4-oasst_sft10
-UNSHARDED_DIR=/pure-mlo-scratch/akoepf/checkpoints/tmp-unsharded-oasst_sft10
-OUTPUT_DIR=/pure-mlo-scratch/akoepf/checkpoints/llama2-70b-oasst-sft10-hf
+NUM_OUT_SHARDS=7
+INPUT_DIR=/pure-mlo-scratch/akoepf/checkpoints/codellama-13b-tp4-pp2-oa_codellama
+UNSHARDED_DIR=/pure-mlo-scratch/akoepf/checkpoints/tmp-unsharded-oa_codellama
+OUTPUT_DIR=/pure-mlo-scratch/akoepf/checkpoints/codellama-13b-oasst-sft10-hf
 MEGATRON_PATH=/pure-mlo-scratch/akoepf/code/epfl-megatron
-VOCAB_SIZE=32007
+
+# llama/llama2
+#MODEL_TYPE=llama2
+#VOCAB_SIZE=32007
+
+# codellama
+VOCAB_SIZE=32023    # codellama
+MODEL_TYPE=codellama
 
 # NUM_IN_SHARDS="#NUM of shards of megatron checkpoints"
 # NUM_OUT_SHARDS="#NUM of shards of converted huggingface checkpoints"
@@ -25,15 +32,19 @@ if [ $NUM_IN_SHARDS -gt 1 ]; then
         --load_dir $INPUT_DIR \
         --save_dir $UNSHARDED_DIR \
         --megatron_path $MEGATRON_PATH \
-        --model_type llama2 \
+        --model_type $MODEL_TYPE \
         --true_vocab_size $VOCAB_SIZE \
         --bf16
     python3 weights2megatron/megatron2hf.py \
         --input_dir $UNSHARDED_DIR \
-        --output_dir $OUTPUT_DIR --num_output_shards $NUM_OUT_SHARDS
-   # rm -r $UNSHARDED_DIR
+        --output_dir $OUTPUT_DIR --num_output_shards $NUM_OUT_SHARDS --model $MODEL_TYPE \
+        --vocab_file /pure-mlo-scratch/akoepf/codellama/CodeLlama-13b/tokenizer.model \
+        --vocab_extra_ids_list "<|im_start|>,<|im_end|>"
+    rm -r $UNSHARDED_DIR
 else
     python3 weights2megatron/megatron2hf.py \
         --input_dir $INPUT_DIR \
-        --output_dir $OUTPUT_DIR --num_output_shards $NUM_OUT_SHARDS
+        --output_dir $OUTPUT_DIR --num_output_shards $NUM_OUT_SHARDS --model $MODEL_TYPE \
+        --vocab_file /pure-mlo-scratch/akoepf/codellama/CodeLlama-13b/tokenizer.model \
+        --vocab_extra_ids_list "<|im_start|>,<|im_end|>"
 fi

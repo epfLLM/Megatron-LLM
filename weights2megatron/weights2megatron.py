@@ -184,7 +184,6 @@ def main(model_name: str = "falcon", size: int = 7, out: Optional[Path] = None,
                      "parallel_attn": True, "max_position_embeddings": 2048,
                      "seq_length": 2048})
     else:  # llama1, llama2, codellama
-        padded_vocab_size = 32016 if model_name == "codellama" else 32000
         args = {"num_layers": llama_s2layer[size],
                 "hidden_size": llama_s2hidden[size],
                 "num_attention_heads": llama_s2heads[size],
@@ -192,7 +191,7 @@ def main(model_name: str = "falcon", size: int = 7, out: Optional[Path] = None,
                 "parallel_attn": False,
                 "make_vocab_size_divisible_by": 16,
                 "glu_activation": "swiglu",
-                "padded_vocab_size": padded_vocab_size,
+                "padded_vocab_size": 32000,
                 "use_rms_norm": True,
                 "tie_embed_logits": False,
                 "tokenizer_type": "SentencePieceTokenizer"}

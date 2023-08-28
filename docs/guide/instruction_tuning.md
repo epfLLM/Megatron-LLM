@@ -1,7 +1,9 @@
 # Instruction finetuning
 
-This tutorial will guide you through the basics of instruction finetuning using the Megatron-LLM codebase, using LLaMa 2 7B as the base network.
-See also the [getting started](getting_started) guide for information regarding installation of dependencies and pretraining.
+This tutorial will guide you through the basics of instruction finetuning using the Megatron-LLM codebase, using LLaMa 2 as the base network.
+See also the [getting started](getting_started) guide for information regarding installation of dependencies, pretraining, and weight preparation.
+Following said tutorial, you would be able to finetune a 7B model in this guide, but feel free to use a different size.
+In order to use Falcon, see the comments specified in the [getting started](getting_started) guide to learn more about the differences when using either model.
 
 ## Preparing raw data
 

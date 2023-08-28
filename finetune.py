@@ -14,6 +14,7 @@ from megatron.data.gpt_dataset import build_train_valid_test_datasets as gpt_bui
 from megatron.data.instruction_dataset import instruction_collator
 from megatron.data.instruction_dataset import build_train_valid_test_datasets as instruct_build_datasets
 from megatron.initialize import initialize_megatron
+from megatron.metrics import MetricInput, get_metric
 
 
 ##
@@ -165,13 +166,23 @@ def data_provider(train_val_test_num_samples):
 ##
 
 
-def loss_func(loss_mask, output_tensor):
-    losses = output_tensor.float()
+def loss_func(is_training, batch, outputs):
+    loss_mask = batch[2]
+    losses, logits = outputs
+    losses = losses.float()
     loss_mask = loss_mask.view(-1).float()
     loss = torch.sum(losses.view(-1) * loss_mask) / loss_mask.sum()
     # Reduce loss for logging.
     averaged_loss = average_losses_across_data_parallel_group([loss])
-    return loss, {'lm loss': averaged_loss[0]}
+    out_dict = {"lm loss": averaged_loss[0]}
+
+    # Calculate other metrics
+    if not is_training:
+        inputs = MetricInput(batch, logits, averaged_loss[0])
+        for metric in map(get_metric, args.metrics):
+            out_dict.update(metric(inputs))
+
+    return loss, out_dict
 
 
 def forward_step(data_iterator, model):
@@ -181,12 +192,13 @@ def forward_step(data_iterator, model):
 
     # Get the batch.
     timers("batch-generator", log_level=2).start()
-    tokens, labels, loss_mask, attention_mask, position_ids = get_batch(data_iterator)
+    batch = get_batch(data_iterator)
+    tokens, labels, loss_mask, attention_mask, position_ids = batch
     timers("batch-generator").stop()
 
     output_tensor = model(tokens, position_ids, attention_mask,
                           labels=labels)
-    return output_tensor, partial(loss_func, loss_mask)
+    return output_tensor, partial(loss_func, model.training, batch)
 
 
 ##

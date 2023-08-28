@@ -141,3 +141,35 @@ def vocab_parallel_cross_entropy(vocab_parallel_logits, target, label_smoothing=
                          default is no smoothing (=0.0)
     """
     return _VocabParallelCrossEntropy.apply(vocab_parallel_logits, target, label_smoothing)
+
+
+def vocab_parallel_max_indices(logits):
+    """
+    Performs argmax(dim=-1) over logits across tensor parallel ranks
+    Arguments:
+        logits: logits split across tensor parallel ranks
+                dimension is [sequence_length, batch_size, hidden_size]
+    """
+    world_size = get_tensor_model_parallel_world_size()
+    if world_size == 1:
+        return logits.argmax(dim=-1)
+
+    seq_length, batch_size, partition_vocab_size = logits.shape
+    max_values, max_indices = logits.max(dim=-1)
+
+    # Get the partition's vocab indices
+    get_vocab_range = VocabUtility.vocab_range_from_per_partition_vocab_size
+    rank = get_tensor_model_parallel_rank()
+    vocab_start_index, _ = get_vocab_range(partition_vocab_size, rank, world_size)
+    max_indices = max_indices + vocab_start_index
+
+    # gather max values and indices of all ranks
+    max_values_group = torch.zeros(world_size, seq_length, batch_size, dtype=logits.dtype, device=logits.device)
+    max_indices_group = torch.zeros(world_size, seq_length, batch_size, dtype=torch.int64, device=logits.device)
+    torch.distributed.all_gather_into_tensor(max_values_group, max_values, group=get_tensor_model_parallel_group())
+    torch.distributed.all_gather_into_tensor(max_indices_group, max_indices, group=get_tensor_model_parallel_group())
+
+    # find rank with maximum value for each position and gather corresponding indices
+    max_group_indices = torch.argmax(max_values_group, dim=0, keepdim=True)
+    max_indices = torch.gather(max_indices_group, dim=0, index=max_group_indices).squeeze(0)
+    return max_indices

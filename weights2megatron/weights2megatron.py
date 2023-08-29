@@ -1,4 +1,4 @@
-import os
+import re
 import sys
 import shutil
 from pathlib import Path
@@ -13,11 +13,11 @@ from permute_qkv import permute_qkv
 from merge_llama import merge_llama
 
 
-llama_s2layer = {7: 32, 13: 40, 30: 60, 65: 80, 70: 80}
-llama_s2heads = {7: 32, 13: 40, 30: 52, 65: 64, 70: 64}
-llama_s2dense = {7: 11008, 13: 13824, 30: 17920, 65: 22016,
+llama_s2layer = {7: 32, 13: 40, 30: 60, 34: 48, 65: 80, 70: 80}
+llama_s2heads = {7: 32, 13: 40, 30: 52, 34: 64, 65: 64, 70: 64}
+llama_s2dense = {7: 11008, 13: 13824, 30: 17920, 34: 22016, 65: 22016,
                  70: 28672}  # should be (2/3)*4*d, but it isn't exaclty that
-llama_s2hidden = {7: 4096, 13: 5120, 30: 6656, 65: 8192, 70: 8192}
+llama_s2hidden = {7: 4096, 13: 5120, 30: 6656, 34: 8192, 65: 8192, 70: 8192}
 
 
 def falcon_to_megatron(weights: dict, size: int) -> dict:
@@ -146,7 +146,7 @@ def llama_to_megatron(weights: dict, size: int, source: str = "meta",
 
 
 def main(model_name: str = "falcon", size: int = 7, out: Optional[Path] = None,
-         cache_dir: Optional[Path] = None, megatron_path: Optional[Path] = None):
+         cache_dir: Optional[Path] = None):
     if out is None:
         out = Path(f"falcon{size}b_megatron.pt").absolute()
 
@@ -160,7 +160,7 @@ def main(model_name: str = "falcon", size: int = 7, out: Optional[Path] = None,
     else:
         print("Getting llama...")
         version = 2 if "2" in model_name else 1
-        hf_weights, llama_source = merge_llama(size, version, cache_dir)
+        hf_weights, llama_source = merge_llama(size, version, root_dir=cache_dir)
 
     # convert state dict to be megatron-compatible
     if model_name == "falcon":
@@ -183,13 +183,13 @@ def main(model_name: str = "falcon", size: int = 7, out: Optional[Path] = None,
                      "hidden_dropout": 0.0,
                      "parallel_attn": True, "max_position_embeddings": 2048,
                      "seq_length": 2048})
-    else:  # llama1, llama2
+    else:  # llama1, llama2, codellama
         args = {"num_layers": llama_s2layer[size],
                 "hidden_size": llama_s2hidden[size],
                 "num_attention_heads": llama_s2heads[size],
                 "ffn_hidden_size": llama_s2dense[size],
                 "parallel_attn": False,
-                "make_vocab_size_divisible_by": 1,
+                "make_vocab_size_divisible_by": 16,
                 "glu_activation": "swiglu",
                 "padded_vocab_size": 32000,
                 "use_rms_norm": True,
@@ -198,11 +198,21 @@ def main(model_name: str = "falcon", size: int = 7, out: Optional[Path] = None,
         if model_name == "llama":
             args.update({"max_position_embeddings": 2048, "seq_length": 2048,
                          "layernorm_epsilon": 1e-6})
-        else:  # llama2
+        elif model_name == "llama2":
             args.update({"max_position_embeddings": 4096, "seq_length": 4096,
                          "layernorm_epsilon": 1e-5})
             if size >= 34:
                 args.update({"num_attention_heads_kv": 8})
+        elif model_name == "codellama":
+            args.update({"max_position_embeddings": 16384, "seq_length": 16384,
+                         "layernorm_epsilon": 1e-5, "rope_theta": 1e6})
+            if size >= 34:
+                args.update({"num_attention_heads_kv": 8})
+            if size < 34 and not re.match(r"CodeLlama-\d+b-Python", cache_dir):
+                args.update({"padded_vocab_size": 32016})
+        else:
+            sys.exit(f"Model name has to be llama, llama2 or codellama, not {model_name}.")
+
 
     args.update({
         "tensor_model_parallel_size": 1,
@@ -237,7 +247,7 @@ def main(model_name: str = "falcon", size: int = 7, out: Optional[Path] = None,
 if __name__ == "__main__":
     parser = ArgumentParser(description="Convert Huggingface falcon weights to "
                                         "megatron-compatible weights")
-    parser.add_argument("model", choices={"falcon", "llama", "llama2"})
+    parser.add_argument("model", choices={"falcon", "llama", "llama2", "codellama"})
     parser.add_argument("--size", default=7, choices={7, 13, 30, 34, 40, 65, 70}, type=int,
                         help="The size of the model")
     parser.add_argument("--out", type=Path,
@@ -246,8 +256,6 @@ if __name__ == "__main__":
                         help=("Directory to store the huggingface weights, or "
                               "in case of the llama model, where to look for "
                               "the consolidated.xx.pth"))
-    parser.add_argument("--megatron-path", type=Path,
-                        help="Path where to find megatron code")
     args = parser.parse_args()
 
     # small arg verification
@@ -255,7 +263,9 @@ if __name__ == "__main__":
         assert args.size in {7, 40}
     elif args.model == "llama":
         assert args.size in {7, 13, 30, 65}
+    elif args.model == "codellama":
+        assert args.size in {7, 13, 34}
     else:
         assert args.size in {7, 13, 70}
 
-    main(args.model, args.size, args.out, args.cache_dir, args.megatron_path)
+    main(args.model, args.size, args.out, args.cache_dir)

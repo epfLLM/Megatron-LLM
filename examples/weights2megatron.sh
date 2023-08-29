@@ -2,7 +2,7 @@
 
 # assert correct usage
 if [[ $# -ne 2 ]]; then
-	echo "Usage: $0 <llama/llama2/falcon> <7,13,30,34,40,65,70>"
+	echo "Usage: $0 <llama/llama2/codellama/falcon> <7,13,30,34,40,65,70>"
 	exit 1
 fi
 
@@ -14,13 +14,15 @@ SIZE=$2
 
 # determine cache directory (either raw llama or huggingface cache)
 if [[ $MODEL = falcon ]]; then
-	CACHE=/pure-mlo-scratch/alhernan/huggingface_cache/
+	CACHE=/pure-mlo-scratch/huggingface_cache/
 elif [[ $MODEL = llama ]]; then
 	CACHE=/pure-mlo-scratch/llama/${SIZE}B/
 elif [[ $MODEL = llama2 ]]; then
-	CACHE=/pure-mlo-scratch/alhernan/llama2/llama-2-${SIZE}b/
+	CACHE=/pure-mlo-scratch/llama2/llama-2-${SIZE}b/
+elif [[ $MODEL = codellama ]]; then
+	CACHE=/pure-mlo-scratch/codellama/CodeLlama-${SIZE}b/
 else
-	echo "Model should be either llama or falcon, not $MODEL"
+	echo "Model should be either llama, llama2, codellama or falcon, not $MODEL"
 	exit 1
 fi
 

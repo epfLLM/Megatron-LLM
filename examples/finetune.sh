@@ -19,7 +19,7 @@ HELP_STR="[--rank=$RANK] [--size=$SIZE] [--tp=$TP] [--pp=$PP] [--gpus=$GPUS_PER_
 
 # define help function
 help () {
-	echo "Usage: $0 <gpt/llama/llama2/falcon> $HELP_STR"
+	echo "Usage: $0 <gpt/llama/llama2/codellama/falcon> $HELP_STR"
 }
 
 
@@ -64,21 +64,28 @@ if [[ $MODEL = falcon ]]; then
 	TOKENIZER=FalconTokenizer
 	EXTRA_ARGS="--parallel_attn"
 	SEQ_LEN=2048
-elif [[ $MODEL = llama ]] || [[ $MODEL = llama2 ]]; then
+elif [[ $MODEL = llama ]] || [[ $MODEL = llama2 ]] || [[ $MODEL = codellama ]]; then
 	DATA_PATH=/pure-mlo-scratch/trial-runs/test/pubmed-all-llama_text_document
 	TOKENIZER=SentencePieceTokenizer
 	EXTRA_ARGS='--vocab_file=/pure-mlo-scratch/llama/tokenizer.model --use_rms_norm
 	            --glu_activation swiglu --no_tie_embed_logits
-		    --vocab_extra_ids_list "[bib_ref],[/bib_ref],[fig_ref],[/fig_ref],[bib],[/bib],[fig],[/fig],[table],[/table],[formula],[/formula]"'
+	            --vocab_extra_ids_list "[bib_ref],[/bib_ref],[fig_ref],[/fig_ref],[bib],[/bib],[fig],[/fig],[table],[/table],[formula],[/formula]"'
+	if [[ $MODEL = codellama ]]; then
+		EXTRA_ARGS="$EXTRA_ARGS --vocab_file=/pure-mlo-scratch/codellama/CodeLlama-7b/tokenizer.model --rope_theta 1e6"
+	else
+		EXTRA_ARGS="$EXTRA_ARGS --vocab_file=/pure-mlo-scratch/llama2/Llama-2-7b-hf/tokenizer.model"
+	fi
 	if [[ $MODEL == llama ]]; then
 		SEQ_LEN=2048
 		EXTRA_ARGS="$EXTRA_ARGS --layernorm_epsilon 1e-6"
-	else  # llama 2
+	elif [[ $MODEL == llama2 ]];  # llama 2
 		SEQ_LEN=4096
 		EXTRA_ARGS="$EXTRA_ARGS --layernorm_epsilon 1e-5"
-		if (( $SIZE > 13 )); then  # llama 2, 34B and 70B
-			LR="1.5e-4"
-		fi
+	else	 # codellama
+		SEQ_LEN=16384
+	fi
+	if (( $SIZE > 13 )); then  # 34B and 70B
+		LR="1.5e-4"
 	fi
 elif [[ $MODEL = gpt ]]; then
 	DATA_PATH=/scratch/wikitext-megatron/wikitext-train_text_document
@@ -91,13 +98,14 @@ else
 	exit 1
 fi
 COMMON_ARGS="--use_flash_attn --no_bias_gelu_fusion
-	     --seq_length $SEQ_LEN --max_position_embeddings $SEQ_LEN
+             --seq_length $SEQ_LEN --max_position_embeddings $SEQ_LEN
              --log_interval 1 --save_interval 50 --eval_interval 50
              --eval_iters 10 --hidden_dropout 0.0 --position_embedding_type rotary
-	     --no_bias_dropout_fusion --use_checkpoint_args --train_iters 10000
-	     --attention_dropout 0.0 --adam_beta1 0.9 --adam_beta2 0.95 --adam_eps 1e-5
-	     --lr_decay_style cosine --lr_warmup_iters 2000 --lr $LR --min_lr 1e-6
-	     --weight_decay 0.1 --sequence_parallel --recompute_granularity selective"
+             --no_bias_dropout_fusion --use_checkpoint_args --train_iters 10000
+             --attention_dropout 0.0 --adam_beta1 0.9 --adam_beta2 0.95 --adam_eps 1e-5
+             --lr_decay_style cosine --lr_warmup_iters 2000 --lr $LR --min_lr 1e-6
+             --weight_decay 0.1 --sequence_parallel --recompute_granularity selective
+             --log_timers_to_tensorboard --rope_scaling_factor 1.0"
 
 if [[ $WANDB = 1 ]]; then
 	COMMON_ARGS="$COMMON_ARGS --wandb_logger"
@@ -116,6 +124,8 @@ echo TP=$TP
 echo PP=$PP
 echo MICRO_BATCH=$MICRO_BATCH
 echo GLOBAL_BATCH=$GLOBAL_BATCH
+echo COMMON_ARGS=$COMMON_ARGS
+echo EXTRA_ARGS=$EXTRA_ARGS
 echo
 
 

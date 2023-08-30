@@ -5,7 +5,7 @@ from typing import Callable
 import torch
 
 from megatron import get_tokenizer
-from megatron.utils import average_losses_across_data_parallel_group, sum_across_data_parallel_group
+from megatron.utils import average_losses_across_data_parallel_group
 from megatron.core.tensor_parallel import vocab_parallel_max_indices
 
 
@@ -80,15 +80,11 @@ def instruct_accuracy(inputs: MetricInput) -> dict[str, int | float]:
 def count_loss_mask(inputs: MetricInput) -> dict[str, int | float]:
     count = torch.count_nonzero(inputs.loss_mask)/inputs.loss_mask.size(0)
     return {"count loss mask": count}
-    # total = sum_across_data_parallel_group([count])
-    # return {"count loss mask": total[0]}
 
 
 def count_instruct_mask(inputs: MetricInput) -> dict[str, int | float]:
     count = torch.count_nonzero(inputs.instruct_mask)/inputs.instruct_mask.size(0)
     return {"count instruct mask": count}
-    # total = sum_across_data_parallel_group([count])
-    # return {"count instruct mask": total[0]}
 
 
 METRICS = {

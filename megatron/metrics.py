@@ -1,5 +1,4 @@
 import math
-from functools import cache
 from typing import Callable
 
 import torch
@@ -16,42 +15,39 @@ class MetricInput:
          self.position_ids) = batch
         self.output = output
         self.loss = loss
+        # lazy parameters
+        self._max_indices = None
+        self._instruct_mask = None
 
-    # lazy parameters
     @property
-    @cache
     def max_indices(self) -> torch.Tensor:
-        return vocab_parallel_max_indices(self.output)
+        if self._max_indices is None:
+            self._max_indices = vocab_parallel_max_indices(self.output)
+        return self._max_indices
 
     @property
-    @cache
     def instruct_mask(self) -> torch.Tensor:
-        # like loss_mask but ignoring the <|im_end|> and <|im_start|>role\n too
-        tokenizer = get_tokenizer()
-        im_start_id, = tokenizer.tokenize("<|im_start|>")
-        im_end_id, = tokenizer.tokenize("<|im_end|>")
-        should_keep = torch.ones_like(self.loss_mask)
-        # mask all indices where <|im_start|> is found plus the next two tokens
-        #  (corresponds to the role and the newline)
-        i, j = torch.nonzero(self.labels == im_start_id, as_tuple=True)
-        should_keep[i, j] = 0.0
-        should_keep[i, j + 1] = 0.0
-        should_keep[i, j + 2] = 0.0
-        # mask <|im_end|> plus the next token (newline) and the next one
-        #  that is a weird space or something
-        i, j = torch.nonzero(self.labels == im_end_id, as_tuple=True)
-        should_keep[i, j] = 0.0
-        should_keep[i, j + 1] = 0.0
-        should_keep[i, j + 2] = 0.0
-        # update mask
-        mask = self.loss_mask*should_keep
-        # lbl = self.labels[0][mask[0] > 0].tolist()
-        # print("<")
-        # print(lbl, '"', repr(tokenizer.detokenize(lbl)), '"')
-        # lbl = self.labels[0][self.loss_mask[0] > 0.0].tolist()
-        # print(lbl, '"', repr(tokenizer.detokenize(lbl)), '"')
-        # print(">")
-        return mask
+        if self._instruct_mask is None:
+            # like loss_mask but ignoring the <|im_end|> and <|im_start|>role\n too
+            tokenizer = get_tokenizer()
+            im_start_id, = tokenizer.tokenize("<|im_start|>")
+            im_end_id, = tokenizer.tokenize("<|im_end|>")
+            should_keep = torch.ones_like(self.loss_mask)
+            # mask all indices where <|im_start|> is found plus the next two tokens
+            #  (corresponds to the role and the newline)
+            i, j = torch.nonzero(self.labels == im_start_id, as_tuple=True)
+            should_keep[i, j] = 0.0
+            should_keep[i, j + 1] = 0.0
+            should_keep[i, j + 2] = 0.0
+            # mask <|im_end|> plus the next token (newline) and the next one
+            #  that is a weird space or something
+            i, j = torch.nonzero(self.labels == im_end_id, as_tuple=True)
+            should_keep[i, j] = 0.0
+            should_keep[i, j + 1] = 0.0
+            should_keep[i, j + 2] = 0.0
+            # update mask
+            self._instruct_mask = self.loss_mask*should_keep
+        return self._instruct_mask
 
 
 def perplexity(inputs: MetricInput) -> dict[str, int | float]:

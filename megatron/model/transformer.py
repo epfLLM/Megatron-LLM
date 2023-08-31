@@ -375,6 +375,7 @@ class ParallelAttention(MegatronModule):
             self.freqs_cis = precompute_freqs_cis(
                 dim=args.hidden_size // args.num_attention_heads,
                 end=self.seq_length,
+                theta=args.rope_theta,
                 scaling_factor=args.rope_scaling_factor,
             )
 

@@ -2,7 +2,7 @@
 
 # assert correct usage
 if [[ $# -ne 4 ]]; then
-	echo "Usage: $0 <llama/llama2/falcon> <7,13,30,40,65,70> <tp> <pp>"
+	echo "Usage: $0 <llama/llama2/codellama/falcon> <7,13,30,40,65,70> <tp> <pp>"
 	exit 1
 fi
 
@@ -23,6 +23,8 @@ elif [[ $MODEL = llama ]] || [[ $MODEL = llama2 ]]; then
 	if (( $SIZE > 60 )); then
 		EXTRA_ARGS="--bf16"
 	fi
+elif [[ $MODEL = codellama ]]; then
+	TRUE_VOCAB_SIZE=32033  # 32016 + 17 new tokens
 fi
 
 

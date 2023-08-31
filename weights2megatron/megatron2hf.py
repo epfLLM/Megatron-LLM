@@ -23,7 +23,7 @@ sys.path.append(str(Path(__file__).parent.parent.absolute()))  # megatron is imp
 
 import torch
 from tqdm.auto import trange
-from transformers import LlamaConfig, LlamaForCausalLM, LlamaTokenizer, FalconConfig, FalconForCausalLM, AutoTokenizer
+from transformers import LlamaConfig, LlamaForCausalLM, LlamaTokenizerFast, FalconConfig, FalconForCausalLM, AutoTokenizer
 
 from permute_qkv import permute_qkv
 
@@ -92,13 +92,13 @@ def convert_ffn(llama_mega, layer_idx=0, n_dense=11008):
 
 def write_llama_model(model_path,
                 input_base_path,
-                num_output_shards=2,
-                norm_eps=1e-05):
+                num_output_shards: int=2,
+                norm_eps: float=1e-05,
+                rope_theta: float=1e4):
 
     # Preliminaries
     print(f"Fetching all parameters from the checkpoint at {input_base_path}.")
     os.makedirs(model_path, exist_ok=True)
-    base = 10000.0
     with open(os.path.join(input_base_path, 'latest_checkpointed_iteration.txt')) as f:
         iteration = f.read()
     if iteration != "release":
@@ -110,6 +110,7 @@ def write_llama_model(model_path,
     assert len(list(base_path.glob("mp_rank_*"))) == 1, "Unshard your model with checkpoint_util.py first!"
     loaded = torch.load(base_path/"mp_rank_00"/"model_optim_rng.pt", map_location="cpu")
     args = loaded['args']
+
     loaded = loaded['model']['language_model']
     if 'transformer' not in loaded:  # normalize key names
         loaded["transformer"] = loaded.pop("encoder")
@@ -126,7 +127,7 @@ def write_llama_model(model_path,
     n_hidden = args.hidden_size
     hidden_per_head = n_hidden // n_heads
     intermediate_size = args.ffn_hidden_size
-    inv_freq = 1.0 / (base ** (torch.arange(0, hidden_per_head, 2).float() / hidden_per_head))
+    inv_freq = 1.0 / (rope_theta ** (torch.arange(0, hidden_per_head, 2).float() / hidden_per_head))
 
     print('Llama-Megatron Loaded!')
     param_count = 0
@@ -350,19 +351,32 @@ def write_falcon_model(
 
 
 def write_tokenizer(args: Namespace):
-    if args.model in {"llama", "llama2"}:
-        try:  # try loading from huggingface
-            hf_tokenizer = LlamaTokenizer.from_pretrained("meta-llama/Llama-2-7b-hf",
-                                                          cache_dir=args.cache_dir)
-            print("LlamaTokenizer loaded from huggingface")
-            if args.vocab_file is None:
-                print("vocab_file not set, assuming same tokenizer.model used "
-                      "by llama LlamaTokenizer")
-                args.vocab_file = hf_tokenizer.vocab_file
-        except OSError:
-            assert args.vocab_file is not None
-            hf_tokenizer = LlamaTokenizer.from_pretrained(args.vocab_file)
+    if args.model in {"llama", "llama2", "codellama"}:
         args.tokenizer_type = "SentencePieceTokenizer"
+        if args.vocab_file:
+            # prevent "single file or url is deprecated and won't be possible anymore in v5" warning,
+            # use parent directory instead
+            p = Path(args.vocab_file)
+            if p.suffix == ".model":
+                p = p.parent
+            hf_tokenizer = LlamaTokenizerFast.from_pretrained(p)
+            args.vocab_file = hf_tokenizer.vocab_file
+        else:
+            if args.model == "codellama":
+                hf_repo_name = "TheBloke/CodeLlama-13B-fp16"
+            else:
+                hf_repo_name = "meta-llama/Llama-2-7b-hf"
+            try:  # try loading from huggingface
+                hf_tokenizer = LlamaTokenizerFast.from_pretrained(hf_repo_name,
+                                                            cache_dir=args.cache_dir)
+                print("LlamaTokenizerFast loaded from huggingface")
+                print("vocab_file not set, assuming same tokenizer.model used "
+                      "by llama LlamaTokenizerFast")
+                args.vocab_file = hf_tokenizer.vocab_file
+            except OSError:
+                print(f"ERROR: Could not load tokenizer from HF repo '{hf_repo_name}'. "
+                      "Tokenizer processing failed.")
+                return
     else:
         hf_tokenizer = AutoTokenizer.from_pretrained("tiiuae/falcon-40b", cache_dir=args.cache_dir)
         args.tokenizer_type = "FalconTokenizer"
@@ -428,6 +442,8 @@ def write_tokenizer(args: Namespace):
         except KeyError:
             warnings.warn(f"Token {value} not found in megatron tokenizer")
 
+    print("Final HF Tokenizer configuration:")
+    print(hf_tokenizer)
     hf_tokenizer.save_pretrained(args.output_dir)
 
 
@@ -438,7 +454,7 @@ def main():
     parser.add_argument("--input_dir", help="Location of LLaMA_Megatron weights",
                         required=True)
     parser.add_argument("--num_output_shards", type=int, default=1)
-    parser.add_argument("--model", choices={"falcon", "llama", "llama2"},
+    parser.add_argument("--model", choices={"falcon", "llama", "llama2", "codellama"},
                          default="llama2")
     parser.add_argument("--output_dir", help="Location to write HF model and tokenizer",
                         required=True)
@@ -452,11 +468,13 @@ def main():
                               "Overrides available only bos, cls, eos, mask, pad, sep, unk."))
     
     args = parser.parse_args()
-    if args.model in {"llama", "llama2"}:
+    if args.model in {"llama", "llama2", "codellama"}:
+        rope_theta = 1e6 if args.model == "codellama" else 1e4
         write_llama_model(
             model_path=args.output_dir,
             input_base_path=args.input_dir,
-            num_output_shards=args.num_output_shards
+            num_output_shards=args.num_output_shards,
+            rope_theta=rope_theta,
         )
     elif args.model == "falcon":
         write_falcon_model(

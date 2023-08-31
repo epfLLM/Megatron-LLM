@@ -36,12 +36,21 @@ class MetricInput:
             # mask all indices where <|im_start|> is found plus the next two tokens
             #  (corresponds to the role and the newline)
             i, j = torch.nonzero(self.labels == im_start_id, as_tuple=True)
+            if torch.any(j + 2 >= should_keep.size(1)):
+                print("Error calculating instruct mask")
+                self._instruct_mask = None
+                return self._instruct_mask
             should_keep[i, j] = 0.0
             should_keep[i, j + 1] = 0.0
             should_keep[i, j + 2] = 0.0
             # mask <|im_end|> plus the next token (newline) and the next one
             #  that is a weird space or something
             i, j = torch.nonzero(self.labels == im_end_id, as_tuple=True)
+            if torch.any(j + 2 >= should_keep.size(1)):
+                print("Error calculating instruct mask")
+                self._instruct_mask = None
+                return self._instruct_mask
+            should_keep[i, j] = 0.0
             should_keep[i, j] = 0.0
             should_keep[i, j + 1] = 0.0
             should_keep[i, j + 2] = 0.0
@@ -66,9 +75,12 @@ def accuracy(inputs: MetricInput) -> dict[str, int | float]:
 # like accuracy but ignoring the <|im_end|> and <|im_start|> in the
 # accuracy calculation
 def instruct_accuracy(inputs: MetricInput) -> dict[str, int | float]:
-    matching = torch.masked_fill(inputs.labels == inputs.max_indices,
-                                 inputs.instruct_mask == 0, False)
-    accuracy = torch.count_nonzero(matching)/torch.count_nonzero(inputs.instruct_mask)
+    if inputs.instruct_mask is None:
+        accuracy = torch.tensor(torch.nan, device=inputs.labels.device)
+    else:
+        matching = torch.masked_fill(inputs.labels == inputs.max_indices,
+                                     inputs.instruct_mask == 0, False)
+        accuracy = torch.count_nonzero(matching)/torch.count_nonzero(inputs.instruct_mask)
     averaged_accuracy = average_losses_across_data_parallel_group([accuracy])
     return {"instruct accuracy": averaged_accuracy[0]}
 
@@ -79,6 +91,8 @@ def count_loss_mask(inputs: MetricInput) -> dict[str, int | float]:
 
 
 def count_instruct_mask(inputs: MetricInput) -> dict[str, int | float]:
+    if inputs.instruct_mask is None:
+        return {}
     count = torch.count_nonzero(inputs.instruct_mask)/inputs.instruct_mask.size(0)
     return {"count instruct mask": count}
 

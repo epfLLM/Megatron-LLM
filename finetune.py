@@ -31,7 +31,7 @@ def model_provider(pre_process: bool = True, post_process: bool = True):
         cls = GPTModel
     elif args.model_name == "falcon":
         cls = FalconModel
-    elif args.model_name in {"llama", "llama2"}:
+    elif args.model_name in {"llama", "llama2", "codellama"}:
         cls = partial(LlamaModel, version=1 if args.model_name == "llama" else 2)
     else:
         raise KeyError(f"Unkown model {other}")
@@ -197,7 +197,8 @@ def forward_step(data_iterator, model):
 def extra_args(parser):
     """Text generation arguments."""
     group = parser.add_argument_group(title='validation set')
-    group.add_argument("--model_name", choices={"gpt", "llama", "falcon", "llama2"},
+    group.add_argument("--model_name",
+                       choices={"gpt", "llama", "falcon", "llama2", "codellama"},
                        default="gpt")
     group.add_argument("--model_type", choices={"encoder_or_decoder", "encoder_and_decoder"},
                        default="encoder_or_decoder")

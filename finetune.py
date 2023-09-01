@@ -59,6 +59,7 @@ def model_provider(pre_process: bool = True, post_process: bool = True):
 # Dataset utilities
 ##
 
+# Heavily inspired by Andreas Köpf: https://github.com/andreaskoepf/epfl-megatron/tree/local_changes/
 def get_attention_mask_and_position_ids(data, attention_mask):
     """Build masks and position id for left to right model."""
 
@@ -124,6 +125,7 @@ def get_batch(data_iterator):
         return tokens, labels, loss_mask, attention_mask, position_ids
 
     # Instruction dataset.
+    # Heavily inspired by Andreas Köpf: https://github.com/andreaskoepf/epfl-megatron/tree/local_changes/
     attention_mask = data_b["attention_mask"][:, :-1]
     loss_mask = data_b["loss_mask"][:, 1:].float().to(tokens.device)
     attention_mask, position_ids = get_attention_mask_and_position_ids(

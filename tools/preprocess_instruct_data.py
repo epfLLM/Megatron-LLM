@@ -1,3 +1,5 @@
+# Instruction code heavily inspired by Andreas Köpf
+# source: https://github.com/andreaskoepf/epfl-megatron/tree/local_changes/
 """Processing data for instruction tuning.
 Example:
 python instruct/preprocess_instruct_data.py --input=/pure-mlo-scratch/alhernan/data/medmc/medmc-v1.jsonl \

@@ -1,3 +1,5 @@
+# Instruction code heavily inspired by Andreas Köpf
+# source: https://github.com/andreaskoepf/epfl-megatron/tree/local_changes/
 import time
 from enum import IntEnum
 from typing import Optional

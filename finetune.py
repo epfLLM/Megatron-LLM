@@ -61,7 +61,13 @@ def model_provider(pre_process: bool = True, post_process: bool = True):
 
 # Heavily inspired by Andreas Köpf: https://github.com/andreaskoepf/epfl-megatron/tree/local_changes/
 def get_attention_mask_and_position_ids(data, attention_mask):
-    """Build masks and position id for left to right model."""
+    """Build causal attention masks and position id for left to right model.
+    Builds a (batch, 1, seq, seq)-sized binary causal attention mask from
+    a (batch, seq)-sized attention mask specifying.
+    If any value in the input attention_mask is < 0.5, the output
+    attention mask will mask this position for every token, i.e. out[i, 0, :, j] = True
+    if in[i, j] < 0.5.
+    Returns attention_mask, position_ids"""
 
     # Extract batch size and sequence length.
     micro_batch_size, seq_length = data.size()

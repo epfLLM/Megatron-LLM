@@ -222,7 +222,11 @@ def main(model_name: str = "falcon", size: int = 7, out: Optional[Path] = None,
     torch.save(final_dict, out/"release"/"mp_rank_00"/"model_optim_rng.pt")
     print("Saved weights in", out)
 
-    if model_name == "llama2" and llama_source == "hf":
+    if model_name in {"llama", "llama2"} and llama_source == "hf":
+        if model_name == "llama2":
+            name = "meta-llama/Llama-2-7b-hf"
+        else:
+            name = "decapoda-research/llama-7b-hf"
         tokenizer = LlamaTokenizer.from_pretrained(
             "meta-llama/Llama-2-7b-hf", cache_dir=cache_dir
         )

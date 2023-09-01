@@ -446,17 +446,19 @@ def main():
     parser.add_argument("--vocab_file", type=str, help="Path to the vocab file")
     parser.add_argument("--vocab_extra_ids_list",
                         help="comma separated list of special vocab ids to add to the tokenizer")
-    parser.add_argument("--override_special_tokens", nargs="*",
+    parser.add_argument("--override_special_tokens", nargs="*", default=[],
                         help=("One or more arguments to override special tokens. "
                               "Syntax set as `key=value`, e.g. `eos=<|im_end|>`. "
                               "Overrides available only bos, cls, eos, mask, pad, sep, unk."))
     
     args = parser.parse_args()
     if args.model in {"llama", "llama2"}:
+        eps = 1e-6 if args.model == "llama" else 1e-5
         write_llama_model(
             model_path=args.output_dir,
             input_base_path=args.input_dir,
-            num_output_shards=args.num_output_shards
+            num_output_shards=args.num_output_shards,
+            norm_eps=eps
         )
     elif args.model == "falcon":
         write_falcon_model(

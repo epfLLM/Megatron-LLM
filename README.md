@@ -19,7 +19,7 @@ Added key features include:
 - BF16 / FP16 training
 - Support for special tokens & tokenizers
 - WandB integration
-- ROtary Position Embedding ([ROPE](https://together.ai/blog/llama-2-7b-32k)) scaling for extra large context windows
+- Rotary Position Embedding scaling ([RoPE scaling](https://together.ai/blog/llama-2-7b-32k)) for extra large context windows
 - Support for publishing your checkpoints to the huggingface hub.
 - Instruction finetuning support
 - Metrics support: Ease to add custom metrics to evaluate on the validation set while training

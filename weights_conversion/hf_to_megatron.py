@@ -281,7 +281,7 @@ def main(model_name: str = "falcon", size: int = 7, out: Optional[Path] = None,
 
 
 if __name__ == "__main__":
-    parser = ArgumentParser(description="Convert Huggingface falcon weights to "
+    parser = ArgumentParser(description="Convert Huggingface llama or falcon weights to "
                                         "megatron-compatible weights")
     parser.add_argument("model", choices={"falcon", "llama", "llama2", "codellama"})
     parser.add_argument("--size", default=7, choices={7, 13, 30, 34, 40, 65, 70}, type=int,
@@ -289,9 +289,9 @@ if __name__ == "__main__":
     parser.add_argument("--out", type=Path,
                         help="Directory to store the megatron weights (as checkpoint)")
     parser.add_argument("--cache-dir", type=Path,
-                        help=("Directory to store the huggingface weights, or "
-                              "in case of the llama model, where to look for "
-                              "the consolidated.xx.pth"))
+                        help=("Directory to use as cache for the huggingface "
+                              "weights, or in case of the llama model, the path "
+                              "of the weights privided Meta"))
     args = parser.parse_args()
 
     # small arg verification

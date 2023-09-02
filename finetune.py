@@ -120,7 +120,7 @@ def get_batch(data_iterator):
     tokens = tokens[:, :-1].contiguous()
     if args.data_type == "gpt":
 
-        # Get the masks and postition ids.
+        # Get the masks and position ids.
         attention_mask, loss_mask, position_ids = get_ltor_masks_and_position_ids(
             tokens,
             tokenizer.eod,

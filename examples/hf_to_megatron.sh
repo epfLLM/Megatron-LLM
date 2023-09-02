@@ -28,7 +28,7 @@ fi
 
 
 # finally call the script
-python weights2megatron/weights2megatron.py \
+python weights_conversion/hf_to_megatron.py \
 	$MODEL \
 	--size=$SIZE \
 	--out=/pure-mlo-scratch/alhernan/megatron-data/checkpoints/${MODEL}-${SIZE}b/ \

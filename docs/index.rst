@@ -3,7 +3,7 @@ Welcome to Megatron-LLM's documentation!
 
 .. image:: imgs/llama-falcon.png
 
-This library enables pre-training and fine-tuning of large language models (LLMs) at scale.
+The [Megatron-LLM](https://github.com/epfLLM/Megatron-LLM/) library enables pre-training and fine-tuning of large language models (LLMs) at scale.
 Our repository is a modification of the `original Megatron-LM codebase <https://github.com/NVIDIA/Megatron-LM>`_ by Nvidia.
 
 Added key features include:

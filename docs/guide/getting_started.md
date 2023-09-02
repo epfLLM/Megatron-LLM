@@ -259,6 +259,12 @@ for sequence in sequences:
     print(sequence["generated_text"])
 ```
 
+Once you are happy with your model performance, you might publish it to the huggingface hub using the `tools/push_to_hub.py` utility:
+
+```
+python tools/push_to_hub.py /path/to/hf/weights --hf_repo_name=MyRepoName/MyAwesomeModel --auth_token=MyAuthToken
+```
+
 ## What's next?
 
 1. Take a look at our example scripts to familiarize yourself with some other capabilities and hyperparameters used in the codebase, such as to train larger models:

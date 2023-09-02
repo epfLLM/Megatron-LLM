@@ -1,2 +1,2 @@
-import permute_qkv
-import merge_llama
+from . import permute_qkv
+from . import merge_llama

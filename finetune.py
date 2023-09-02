@@ -97,7 +97,7 @@ def get_batch(data_iterator):
     if args.data_type == "gpt":
         keys = ["text"]
     elif args.data_type == "instruction":
-        keys = ["text", "attention_mask", "loss_mask"]
+        keys = ["text", "attention_mask", "assistant_mask", "pad_mask"]
     else:
         raise KeyError(f"Unknown dataset type {args.data_type}")
 
@@ -126,7 +126,12 @@ def get_batch(data_iterator):
 
     # Instruction dataset.
     attention_mask = data_b["attention_mask"][:, :-1]
-    loss_mask = data_b["loss_mask"][:, 1:].float().to(tokens.device)
+    assistant_mask = data_b["assistant_mask"][:, 1:].to(tokens.device)
+    pad_mask = data_b["pad_mask"][:, 1:].to(tokens.device)
+    loss_mask = torch.full(labels.size(), args.scalar_loss_mask, dtype=torch.float,
+                           device=tokens.device)
+    loss_mask[assistant_mask == 1] = 1.0
+    loss_mask[pad_mask == 1] = 0.0
     attention_mask, position_ids = get_attention_mask_and_position_ids(
         tokens, attention_mask
     )

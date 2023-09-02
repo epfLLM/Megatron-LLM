@@ -347,6 +347,7 @@ def instruction_collator(data):
             input[i] = torch.from_numpy(t[:seq_len])
             role[i] = torch.from_numpy(r[:seq_len])
 
-    loss_mask = (role == Role.assistant.value).long()  # assistant tokens have role == 2
-
-    return {"text": input, "attention_mask": attention_mask, "loss_mask": loss_mask}
+    assistant_mask = (role == Role.assistant.value).long()
+    pad_mask = (input == pad_id).long()
+    return {"text": input, "attention_mask": attention_mask,
+            "assistant_mask": assistant_mask, "pad_mask": pad_mask}

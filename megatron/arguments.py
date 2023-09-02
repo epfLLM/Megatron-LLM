@@ -928,6 +928,10 @@ def _add_data_args(parser):
                        help='Maximum sequence length to process.')
     group.add_argument('--variable_seq_lengths', action='store_true', default=None,
                        help='Enable variable sequence lengths.')
+    group.add_argument('--scalar_loss_mask', type=float, default=0.0,
+                       help=('Scalar to multiply the loss of the "masked out" '
+                             'tokens. Set to zero (default) to completely '
+                             'remove the loss of said tokens'))
     group.add_argument('--encoder_seq_length', type=int, default=None,
                        help='Maximum encoder sequence length to process.'
                        'This should be exclusive of --seq_length')

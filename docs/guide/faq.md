@@ -140,3 +140,18 @@ torchrun \
 ```{seealso}
 The file `examples/finetune.sh` gives the full picture of the arguments used to train either LLaMa.
 ```
+
+## I'm getting a `17300 Bus error (core dumped)` error!
+
+If you are using a docker container and you get this error when sharding a large model, you might need to increase the shared memory size.
+This is done via the command line option `--shm-size=128gb`.
+
+## I'm getting a `ImportError: cannot import name 'helpers' from 'megatron.data'` error!
+
+You need to compile the `helpers` module:
+
+```
+cd megatron/data
+make
+cd ../../
+```

@@ -121,7 +121,7 @@ If you are using falcon, use `FalconTokenizer` instead of `SentencePieceTokenize
 In order to use pretrained weights in the Megatron-LLM codebase, we will need to convert the official weights provided to be compatible with Megatron.
 To do so, run:
 ```
-python weights2megatron/weights2megatron.py llama2 --size=7 \
+python weights_conversion/hf_to_megatron.py llama2 --size=7 \
 	--out=/path/to/megatron/weights/ --cache-dir=/path/to/llama-2-7b/
 ```
 
@@ -230,10 +230,10 @@ python tools/checkpoint_util.py \
 	--bf16
 ```
 
-We provide a Megatron to Huggingface conversion utility for easier deployment: `weights2megatron/megatron2hf.py`.
+We provide a Megatron to Huggingface conversion utility for easier deployment: `weights_conversion/megatron_to_hf.py`.
 Run:
 ```
-python weights2megatron/megatron2hf.py --input_dir=/path/to/unsharded/trained/weights/ \
+python weights_conversion/megatron_to_hf.py --input_dir=/path/to/unsharded/trained/weights/ \
 	--output_dir=/path/to/hf/weights/
 ```
 

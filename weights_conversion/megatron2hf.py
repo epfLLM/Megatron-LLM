@@ -25,7 +25,7 @@ import torch
 from tqdm.auto import trange
 from transformers import LlamaConfig, LlamaForCausalLM, LlamaTokenizerFast, FalconConfig, FalconForCausalLM, AutoTokenizer
 
-from permute_qkv import permute_qkv
+from utils.permute_qkv import permute_qkv
 
 from megatron.tokenizer import build_tokenizer
 

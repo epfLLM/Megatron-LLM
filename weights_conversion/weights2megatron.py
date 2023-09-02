@@ -9,8 +9,8 @@ import torch
 from tqdm.auto import trange
 from transformers import AutoModelForCausalLM, LlamaTokenizer
 
-from permute_qkv import permute_qkv
-from merge_llama import merge_llama
+from utils.permute_qkv import permute_qkv
+from utils.merge_llama import merge_llama
 
 
 llama_s2layer = {7: 32, 13: 40, 30: 60, 34: 48, 65: 80, 70: 80}

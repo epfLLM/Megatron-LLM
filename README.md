@@ -9,8 +9,8 @@ This library enables pre-training and fine-tuning of large language models (LLMs
 Our repository is a modification of the [original Megatron-LM codebase](https://github.com/NVIDIA/Megatron-LM) by Nvidia.
 
 Added key features include:
-- [Llama](https://arxiv.org/abs/2302.13971), [Llama 2](https://arxiv.org/abs/2307.09288) and [Falcon](https://huggingface.co/tiiuae) support
-- support training of large models (70B Llama2, 65B Llama1 and 40B Falcon) on commodity hardware on multiple nodes
+- [LLaMa](https://arxiv.org/abs/2302.13971), [LLaMa 2](https://arxiv.org/abs/2307.09288), [Falcon](https://huggingface.co/tiiuae), and [Code Llama](https://arxiv.org/abs/2308.12950) support
+- Support training of large models (70B Llama 2, 65B Llama 1 and 40B Falcon) on commodity hardware on multiple nodes.
 - 3-way parallelism: tensor parallel, pipeline parallel and data parallel training (inherited from Megatron)
 - grouped-query attention (GQA) and multi-query attention (MQA)
 - Rotary Position Embeddings (RoPE) [was added independently by the Megatron project subsequent to us]
@@ -19,6 +19,9 @@ Added key features include:
 - BF16 / FP16 training
 - Support for special tokens & tokenizers
 - WandB integration
+- ROtary Position Embedding ([ROPE](https://together.ai/blog/llama-2-7b-32k)) scaling for extra large context windows
+- Instruction finetuning support
+- Metrics support: Ease to add custom metrics to evaluate on the validation set while training
 
 # Documentation
 

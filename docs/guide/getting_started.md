@@ -121,7 +121,7 @@ If you are using falcon, use `FalconTokenizer` instead of `SentencePieceTokenize
 In order to use pretrained weights in the Megatron-LLM codebase, we will need to convert the official weights provided to be compatible with Megatron.
 To do so, run:
 ```
-python weights2megatron/weights2megatron.py llama2 --size=7 \
+python weights_conversion/hf_to_megatron.py llama2 --size=7 \
 	--out=/path/to/megatron/weights/ --cache-dir=/path/to/llama-2-7b/
 ```
 
@@ -230,10 +230,10 @@ python tools/checkpoint_util.py \
 	--bf16
 ```
 
-We provide a Megatron to Huggingface conversion utility for easier deployment: `weights2megatron/megatron2hf.py`.
+We provide a Megatron to Huggingface conversion utility for easier deployment: `weights_conversion/megatron_to_hf.py`.
 Run:
 ```
-python weights2megatron/megatron2hf.py --input_dir=/path/to/unsharded/trained/weights/ \
+python weights_conversion/megatron_to_hf.py --input_dir=/path/to/unsharded/trained/weights/ \
 	--output_dir=/path/to/hf/weights/
 ```
 
@@ -259,12 +259,18 @@ for sequence in sequences:
     print(sequence["generated_text"])
 ```
 
+Once you are happy with your model performance, you might publish it to the huggingface hub using the `tools/push_to_hub.py` utility:
+
+```
+python tools/push_to_hub.py /path/to/hf/weights --hf_repo_name=MyRepoName/MyAwesomeModel --auth_token=MyAuthToken
+```
+
 ## What's next?
 
-1. Take a look at our example scripts to familiarize yourself with some other capabilities and hyperparameters used in the codebase, such as to train larger models:
+1. Take a look at our example scripts to familiarize yourself with some other capabilities and hyperparameters used in the codebase, such as to train (pretrain or finetune) larger models:
    - `examples/parallelize.sh`
    - `examples/finetune.sh`
    - `examples/verify.sh`
-1. Take a look at `weights2megatron/README.md` and `tokenize-utils/README.md` for more information.
-1. See the [intruction finetuning](instruction_tuning) guide for more information on how to finetune your pretrained model to follow instructions.
+1. See the [intruction finetuning](instruction_tuning) guide for more information on how to finetune a pretrained model to follow instructions.
 1. Take a look at our [FAQ](faq) section.
+1. See [Weights conversion](weights_conversion) for more information on the `hf_to_megatron.py` and `megatron_to_hf.py` scripts.

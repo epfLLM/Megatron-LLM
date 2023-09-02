@@ -32,7 +32,7 @@ def vocab(pytestconfig) -> Path:
 @pytest.fixture(scope="session")
 def root_dir(pytestconfig) -> TemporaryDirectory:
     prefix = pytestconfig.getoption("tmp_dir")
-    prefix = None if prefix is None else str(prefix)
+    prefix = None if prefix is None else str(prefix/"tmp")
     return TemporaryDirectory(prefix=prefix)
 
 

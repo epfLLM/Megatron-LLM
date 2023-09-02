@@ -108,7 +108,8 @@ class WandbTBShim(object):
                    name=config.name,
                    notes=config.notes,
                    resume=config.resume,
-                   id=config.run_id
+                   id=config.run_id,
+                   dir=config.local_dir
                 )
         self._last_step = None
         self._log_accum = {}

@@ -129,7 +129,7 @@ python weights2megatron/weights2megatron.py llama2 --size=7 \
 ## Correctness verification (optional)
 
 To make sure the weight conversion ran successfully we run the `verify_correctness.py` script.
-This will run simultaneously the official Falcon implementation and the Megatron codebase.
+This will run simultaneously the official LLaMa 2 implementation and the Megatron codebase.
 Make sure to adjust the arguments to your convenience:
 ```bash
 # arguments required by `torchrun`
@@ -137,7 +137,7 @@ DISTRIBUTED_ARGS="--nproc_per_node 1 --nnodes 1 --node_rank 0 --master_addr loca
 LLAMA_ARGS="--use_rms_norm --glu_activation swiglu --no_tie_embed_logits --no_new_tokens --layernorm_epsilon 1e-5"
 COMMON_ARGS="--hidden_dropout 0.0 --attention_dropout 0.0 --no_bias_gelu_fusion"
 torchrun $DISTRIBUTED_ARGS verify_correctness.py \
-	--model_name=falcon \
+	--model_name=llama2 \
 	--model_size=7 \
 	--load=/path/to/megatron/weights/ \
 	--data_path=/path/to/tokenized/starcoder \
@@ -266,4 +266,5 @@ for sequence in sequences:
    - `examples/finetune.sh`
    - `examples/verify.sh`
 1. Take a look at `weights2megatron/README.md` and `tokenize-utils/README.md` for more information.
+1. See the [intruction finetuning](instruction_tuning) guide for more information on how to finetune your pretrained model to follow instructions.
 1. Take a look at our [FAQ](faq) section.

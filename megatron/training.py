@@ -56,7 +56,8 @@ def pretrain(args,
              model_provider_func,
              model_type: ModelType,
              forward_step_func,
-             process_non_loss_data_func=None):
+             process_non_loss_data_func=None,
+             collate_fn=None):
     """Main training program.
 
     This function will run the followings in the order provided:
@@ -114,8 +115,8 @@ def pretrain(args,
     if args.virtual_pipeline_model_parallel_size is not None:
         all_data_iterators = [
             build_train_valid_test_data_iterators(
-                train_valid_test_dataset_provider, args)
-            for _ in range(len(model))
+                train_valid_test_dataset_provider, args, collate_fn=collate_fn
+            ) for _ in range(len(model))
         ]
         train_data_iterator = [di[0] for di in all_data_iterators]
         valid_data_iterator = [di[1] for di in all_data_iterators]
@@ -123,7 +124,7 @@ def pretrain(args,
     else:
         train_data_iterator, valid_data_iterator, test_data_iterator \
             = build_train_valid_test_data_iterators(
-                train_valid_test_dataset_provider, args)
+                train_valid_test_dataset_provider, args, collate_fn=collate_fn)
     timers('train/valid/test-data-iterators-setup').stop()
     print_datetime('after dataloaders are built')
 
@@ -389,9 +390,12 @@ def _setup_model_and_optimizer(model_provider_func,
 
 
 def train_step(forward_step_func, data_iterator,
-               model, optimizer, opt_param_scheduler, args):
+               model, optimizer, opt_param_scheduler, iteration, args):
     """Single training step."""
     timers = get_timers()
+    skip_iter = iteration in args.skip_iters
+    if skip_iter:
+        print_all_nodes("IMPORTANT! Skipping backprop for this iteration!")
 
     # Set grad to zero.
     if args.DDP_impl == 'local' and args.use_contiguous_buffers_in_local_ddp:
@@ -406,7 +410,7 @@ def train_step(forward_step_func, data_iterator,
     fwd_bwd_timers = timers if args.timing_log_level > 1 else None
     losses_reduced = forward_backward_func(
         forward_step_func, data_iterator, model,
-        optimizer, fwd_bwd_timers, forward_only=False)
+        optimizer, fwd_bwd_timers, forward_only=skip_iter)
     timers('forward-backward').stop()
 
     # Empty unused memory.
@@ -414,12 +418,17 @@ def train_step(forward_step_func, data_iterator,
         torch.cuda.empty_cache()
 
     # Reduce gradients.
-    optimizer.reduce_model_grads(args, timers)
+    if skip_iter:
+        update_successful = False
+        grad_norm = None
+        num_zeros_in_grad = None
+    else:
+        optimizer.reduce_model_grads(args, timers)
 
-    # Update parameters.
-    timers('optimizer', log_level=1).start(barrier=args.barrier_with_L1_time)
-    update_successful, grad_norm, num_zeros_in_grad = optimizer.step(args, timers)
-    timers('optimizer').stop()
+        # Update parameters.
+        timers('optimizer', log_level=1).start(barrier=args.barrier_with_L1_time)
+        update_successful, grad_norm, num_zeros_in_grad = optimizer.step(args, timers)
+        timers('optimizer').stop()
 
     # Gather params.
     if update_successful:
@@ -670,7 +679,7 @@ def _train(args, forward_step_func,
                        train_data_iterator,
                        model,
                        optimizer,
-                       opt_param_scheduler, args)
+                       opt_param_scheduler, iteration, args)
         iteration += 1
         args.consumed_train_samples += mpu.get_data_parallel_world_size() * \
                                        args.micro_batch_size * \
@@ -853,7 +862,7 @@ def cyclic_iter(iter):
 
 
 def build_train_valid_test_data_iterators(build_train_valid_test_datasets_provider: Callable,
-                                          args: argparse.Namespace):
+                                          args: argparse.Namespace, collate_fn=None):
     (train_dataloader, valid_dataloader, test_dataloader) = (None, None, None)
     print_rank_0('> building train, validation, and test datasets ...')
 
@@ -891,10 +900,10 @@ def build_train_valid_test_data_iterators(build_train_valid_test_datasets_provid
 
         # Build dataloders.
         train_dataloader = build_pretraining_data_loader(
-            train_ds, args.consumed_train_samples)
+            train_ds, args.consumed_train_samples, collate_fn=collate_fn)
         valid_dataloader = build_pretraining_data_loader(
-            valid_ds, args.consumed_valid_samples)
-        test_dataloader = build_pretraining_data_loader(test_ds, 0)
+            valid_ds, args.consumed_valid_samples, collate_fn=collate_fn)
+        test_dataloader = build_pretraining_data_loader(test_ds, 0, collate_fn=collate_fn)
 
         # Flags to know if we need to do training/validation/testing.
         do_train = train_dataloader is not None and args.train_iters > 0

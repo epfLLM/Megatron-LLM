@@ -268,3 +268,4 @@ for sequence in sequences:
 1. See the [How to tokenize a dataset?](tokenization) section for more information on the tokenization process.
 1. Take a look at `weights2megatron/README.md` and `tokenize-utils/README.md` for more information.
 1. Take a look at our [FAQ](faq) section.
+1. See [Weights conversion](weights_conversion) for more information on the `hf_to_megatron.py` and `megatron_to_hf.py` scripts.

@@ -449,7 +449,7 @@ def main():
     parser.add_argument("--vocab_file", type=str, help="Path to the vocab file")
     parser.add_argument("--vocab_extra_ids_list",
                         help="comma separated list of special vocab ids to add to the tokenizer")
-    parser.add_argument("--override_special_tokens", nargs="*",
+    parser.add_argument("--override_special_tokens", nargs="*", default=[],
                         help=("One or more arguments to override special tokens. "
                               "Syntax set as `key=value`, e.g. `eos=<|im_end|>`. "
                               "Overrides available only bos, cls, eos, mask, pad, sep, unk."))

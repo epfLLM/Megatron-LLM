@@ -265,5 +265,6 @@ for sequence in sequences:
    - `examples/parallelize.sh`
    - `examples/finetune.sh`
    - `examples/verify.sh`
+1. See the [How to tokenize a dataset?](tokenization) section for more information on the tokenization process.
 1. Take a look at `weights2megatron/README.md` and `tokenize-utils/README.md` for more information.
 1. Take a look at our [FAQ](faq) section.

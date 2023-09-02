@@ -4,4 +4,6 @@
 
 getting_started
 faq
+tokenization
+weights_conversion
 ```

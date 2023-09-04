@@ -32,7 +32,7 @@ def model_provider(pre_process: bool = True, post_process: bool = True):
         cls = GPTModel
     elif args.model_name == "falcon":
         cls = FalconModel
-    elif args.model_name in {"llama", "llama2"}:
+    elif args.model_name in {"llama", "llama2", "codellama"}:
         cls = partial(LlamaModel, version=1 if args.model_name == "llama" else 2)
     else:
         raise KeyError(f"Unkown model {other}")
@@ -60,8 +60,15 @@ def model_provider(pre_process: bool = True, post_process: bool = True):
 # Dataset utilities
 ##
 
+# Heavily inspired by Andreas Köpf: https://github.com/andreaskoepf/epfl-megatron/tree/local_changes/
 def get_attention_mask_and_position_ids(data, attention_mask):
-    """Build masks and position id for left to right model."""
+    """Build causal attention masks and position id for left to right model.
+    Builds a (batch, 1, seq, seq)-sized binary causal attention mask from
+    a (batch, seq)-sized attention mask specifying.
+    If any value in the input attention_mask is < 0.5, the output
+    attention mask will mask this position for every token, i.e. out[i, 0, :, j] = True
+    if in[i, j] < 0.5.
+    Returns attention_mask, position_ids"""
 
     # Extract batch size and sequence length.
     micro_batch_size, seq_length = data.size()
@@ -114,7 +121,7 @@ def get_batch(data_iterator):
     tokens = tokens[:, :-1].contiguous()
     if args.data_type == "gpt":
 
-        # Get the masks and postition ids.
+        # Get the masks and position ids.
         attention_mask, loss_mask, position_ids = get_ltor_masks_and_position_ids(
             tokens,
             tokenizer.eod,
@@ -125,6 +132,7 @@ def get_batch(data_iterator):
         return tokens, labels, loss_mask, attention_mask, position_ids
 
     # Instruction dataset.
+    # Heavily inspired by Andreas Köpf: https://github.com/andreaskoepf/epfl-megatron/tree/local_changes/
     attention_mask = data_b["attention_mask"][:, :-1]
     assistant_mask = data_b["assistant_mask"][:, 1:].to(tokens.device)
     pad_mask = data_b["pad_mask"][:, 1:].to(tokens.device)
@@ -214,7 +222,8 @@ def forward_step(data_iterator, model):
 def extra_args(parser):
     """Text generation arguments."""
     group = parser.add_argument_group(title='validation set')
-    group.add_argument("--model_name", choices={"gpt", "llama", "falcon", "llama2"},
+    group.add_argument("--model_name",
+                       choices={"gpt", "llama", "falcon", "llama2", "codellama"},
                        default="gpt")
     group.add_argument("--model_type", choices={"encoder_or_decoder", "encoder_and_decoder"},
                        default="encoder_or_decoder")

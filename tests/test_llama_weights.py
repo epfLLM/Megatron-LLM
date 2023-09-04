@@ -32,7 +32,7 @@ def vocab(pytestconfig) -> Path:
 @pytest.fixture(scope="session")
 def root_dir(pytestconfig) -> TemporaryDirectory:
     prefix = pytestconfig.getoption("tmp_dir")
-    prefix = None if prefix is None else str(prefix)
+    prefix = None if prefix is None else str(prefix/"tmp")
     return TemporaryDirectory(prefix=prefix)
 
 
@@ -118,7 +118,7 @@ def shard(load_dir: Path, save_dir: Path, tp: int = 1, pp: int = 1):
 
 
 def mega2hf(load_dir: Path, out_dir: Path):
-    with Popen(["python", "weights2megatron/megatron2hf.py",
+    with Popen(["python", "weights_conversion/megatron_to_hf.py",
                 f"--input_dir={load_dir}", f"--output_dir={out_dir}"]) as proc:
         assert proc.wait() == 0
 
@@ -134,7 +134,7 @@ class TestLlamaWeights:
     def test_meta2mega(self, llama_meta2mega: Path, llama_meta: Path,
                        cache_dir: Optional[Path], data: Path, vocab: Path):
         assert not llama_meta2mega.exists()
-        with Popen(["python", Path("weights2megatron")/"weights2megatron.py",
+        with Popen(["python", Path("weights_conversion")/"hf_to_megatron.py",
                     "llama2", "--size=7", f"--out={llama_meta2mega}",
                     f"--cache-dir={llama_meta}"]) as proc:
             assert proc.wait() == 0
@@ -145,7 +145,7 @@ class TestLlamaWeights:
     def test_hf2mega(self, llama_hf2mega: Path, cache_dir: Optional[Path],
                      data: Path, vocab_hf2mega: Path):
         assert not llama_hf2mega.exists()
-        cmd = ["python", Path("weights2megatron")/"weights2megatron.py",
+        cmd = ["python", Path("weights_conversion")/"hf_to_megatron.py",
                "llama2", "--size=7", f"--out={llama_hf2mega}"]
         if cache_dir is not None:
             cmd.append(f"--cache-dir={cache_dir}")

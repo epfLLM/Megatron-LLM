@@ -35,7 +35,7 @@ HELP_STR="[--rank=$RANK] [--size=$SIZE] [--tp=$TP] [--pp=$PP] [--gpus=$GPUS_PER_
 
 # define help function
 help () {
-	echo "Usage: $0 <gpt/llama/llama2/falcon> $HELP_STR"
+	echo "Usage: $0 <gpt/llama/llama2/codellama/falcon> $HELP_STR"
 }
 
 
@@ -113,8 +113,7 @@ if [[ $MODEL = falcon ]]; then
 	if [[ $SEQ_LEN = none ]]; then
 		SEQ_LEN=2048
 	fi
-elif [[ $MODEL = llama ]] || [[ $MODEL = llama2 ]]; then
-	# closing " missing intentionally
+elif [[ $MODEL = llama ]] || [[ $MODEL = llama2 ]] || [[ $MODEL = codellama ]]; then
 	EXTRA_IDS="[bib_ref],[/bib_ref],[fig_ref],[/fig_ref],[bib],[/bib],[fig],[/fig],[table],[/table],[formula],[/formula]"
 	EXTRA_ARGS="--vocab_file=/pure-mlo-scratch/llama/tokenizer.model --use_rms_norm
 	            --glu_activation swiglu --no_tie_embed_logits"
@@ -134,15 +133,23 @@ elif [[ $MODEL = llama ]] || [[ $MODEL = llama2 ]]; then
 		if [[ $SEQ_LEN = none ]]; then
 			SEQ_LEN=2048
 		fi
+		EXTRA_ARGS="$EXTRA_ARGS --vocab_file=/pure-mlo-scratch/llama2/Llama-2-7b-hf/tokenizer.model"
 		EXTRA_ARGS="$EXTRA_ARGS --layernorm_epsilon 1e-6"
-	else  # llama 2
+	elif [[ $MODEL == llama 2 ]];
 		if [[ $SEQ_LEN = none ]]; then
 			SEQ_LEN=4096
 		fi
+		EXTRA_ARGS="$EXTRA_ARGS --vocab_file=/pure-mlo-scratch/llama2/Llama-2-7b-hf/tokenizer.model"
 		EXTRA_ARGS="$EXTRA_ARGS --layernorm_epsilon 1e-5"
 		if (( $SIZE > 13 )); then  # llama 2, 34B and 70B
 			LR="1.5e-4"
 		fi
+	else  # codellama
+		if [[ $SEQ_LEN = none ]]; then
+			SEQ_LEN=16384
+		fi
+		EXTRA_ARGS="$EXTRA_ARGS --vocab_file=/pure-mlo-scratch/codellama/CodeLlama-7b/tokenizer.model --rope_theta 1e6"
+	fi
 	fi
 elif [[ $MODEL = gpt ]]; then
 	if [[ $DATA_PATH = none ]]; then
@@ -158,12 +165,6 @@ else
 	help
 	exit 1
 fi
-
-if [[ $USR_LR != none ]]; then
-	LR=$USR_LR
-	MIN_LR=$USR_MIN_LR
-fi
-
 COMMON_ARGS="--use_flash_attn --no_bias_gelu_fusion
 	     --seq_length $SEQ_LEN --max_position_embeddings $SEQ_LEN
              --log_interval 1 --save_interval 800 --eval_interval 200
@@ -172,7 +173,8 @@ COMMON_ARGS="--use_flash_attn --no_bias_gelu_fusion
 	     --attention_dropout 0.0 --adam_beta1 0.9 --adam_beta2 0.95 --adam_eps 1e-5
 	     --lr_decay_style cosine --lr_warmup_fraction 0.1 --lr $LR --min_lr $MIN_LR
 	     --weight_decay 0.1 --sequence_parallel --recompute_granularity selective
-	     --log_timers_to_tensorboard --scalar_loss_mask=$LOSS_MASK"
+	     --log_timers_to_tensorboard --scalar_loss_mask=$LOSS_MASK
+	     --rope_scaling_factor 1.0""
 
 
 if [[ $INSTRUCT = 1 ]]; then
@@ -222,6 +224,8 @@ echo PP=$PP
 echo MICRO_BATCH=$MICRO_BATCH
 echo GLOBAL_BATCH=$GLOBAL_BATCH
 echo INSTRUCT=$INSTRUCT
+echo COMMON_ARGS=$COMMON_ARGS
+echo EXTRA_ARGS=$EXTRA_ARGS
 echo
 
 

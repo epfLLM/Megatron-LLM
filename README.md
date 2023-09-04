@@ -12,13 +12,13 @@ Added key features include:
 - [Llama](https://arxiv.org/abs/2302.13971), [Llama 2](https://arxiv.org/abs/2307.09288), [Code Llama](https://arxiv.org/abs/2308.12950) and [Falcon](https://huggingface.co/tiiuae) support
 - support training of large models (70B Llama 2, 65B Llama 1, 34B Code Llama, and 40B Falcon) on commodity hardware on multiple nodes
 - 3-way parallelism: tensor parallel, pipeline parallel and data parallel training (inherited from Megatron)
-- pretraining and instruct tuning support
+- full pretraining, finetuning and instruct tuning support
+- Support for special tokens & tokenizers
 - grouped-query attention (GQA) and multi-query attention (MQA)
 - Rotary Position Embeddings (RoPE), RMS layer norm, Lima dropout
 - [RoPE scaling](https://together.ai/blog/llama-2-7b-32k) for longer attention context support
 - FlashAttention 2
 - BF16 / FP16 training
-- Support for special tokens & tokenizers
 - WandB integration
 - Metrics support: Ease to add custom metrics to evaluate on the validation set while training
 - Conversion to and from Hugging Face hub

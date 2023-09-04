@@ -1,3 +1,5 @@
+# Instruction code heavily inspired by Andreas Köpf
+# source: https://github.com/andreaskoepf/epfl-megatron/tree/local_changes/
 import time
 from enum import IntEnum
 from typing import Optional
@@ -347,6 +349,7 @@ def instruction_collator(data):
             input[i] = torch.from_numpy(t[:seq_len])
             role[i] = torch.from_numpy(r[:seq_len])
 
+    # assistant tokens are masked out in the loss for finetuning (can be changed if better with or without...)
     loss_mask = (role == Role.assistant.value).long()  # assistant tokens have role == 2
 
     return {"text": input, "attention_mask": attention_mask, "loss_mask": loss_mask}

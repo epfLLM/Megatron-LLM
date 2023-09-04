@@ -1,3 +1,5 @@
+# Instruction code heavily inspired by Andreas Köpf
+# source: https://github.com/andreaskoepf/epfl-megatron/tree/local_changes/
 """Processing data for instruction tuning.
 Example:
 python instruct/preprocess_instruct_data.py --input=/pure-mlo-scratch/alhernan/data/medmc/medmc-v1.jsonl \
@@ -140,7 +142,7 @@ def get_args():
                        help='comma separated list of special vocab ids to add to the tokenizer')
     group.add_argument("--no_new_tokens", action="store_false", dest="new_tokens",
                        help=("Whether to add special tokens (e.g. CLS, MASK, etc) "
-                             "in the sentenciepiece tokenizer or not"))
+                             "in the sentencepiece tokenizer or not"))
     args = parser.parse_args()
     args.keep_empty = False
 

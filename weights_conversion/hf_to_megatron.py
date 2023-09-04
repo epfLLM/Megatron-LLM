@@ -272,13 +272,20 @@ def main(model_name: str = "falcon", size: int = 7, out: Optional[Path] = None,
     print("Saved weights in", out)
 
     if model_name in {"llama", "llama2"} and llama_source == "hf":
-        if model_name == "llama2":
-            name = "meta-llama/Llama-2-7b-hf"
-        else:
-            name = "decapoda-research/llama-7b-hf"
-        tokenizer = LlamaTokenizer.from_pretrained(
-            "meta-llama/Llama-2-7b-hf", cache_dir=cache_dir
-        )
+        tokenizer = None
+        if model_path is not None:
+            try:
+                tokenizer = LlamaTokenizer.from_pretrained(model_path, cache_dir=cache_dir)
+            except OSError:
+                warnings.warn(f"Model path {model_path} does not have a "
+                              "tokenizer, using default tokenizer instead")
+        if tokenizer is None:
+            if model_name == "llama2":
+                name = "meta-llama/Llama-2-7b-hf"
+            else:
+                name = "decapoda-research/llama-7b-hf"
+            tokenizer = LlamaTokenizer.from_pretrained(name, cache_dir=cache_dir)
+
         token_path = out/"tokenizer.model"
         vocab_file = tokenizer.vocab_file
         shutil.copy(vocab_file, token_path)

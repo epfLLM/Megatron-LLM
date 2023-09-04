@@ -15,7 +15,7 @@ from megatron.arguments import parse_args
 from megatron.initialize import initialize_megatron, set_jit_fusion_options
 from megatron.training import _setup_model_and_optimizer, build_train_valid_test_data_iterators
 
-from finetune import model_provider, extra_args, get_batch, loss_func, train_valid_test_datasets_provider
+from finetune import model_provider, extra_args, get_batch, loss_func, data_provider
 
 
 class Llama2Wrapper(nn.Module):
@@ -161,7 +161,7 @@ def main():
     # Load dataset iterator
     print("Loading dataset!")
     data_iterator, _, _ = build_train_valid_test_data_iterators(
-        train_valid_test_datasets_provider, args
+        data_provider, args
     )
 
     # Now we can start the verifications

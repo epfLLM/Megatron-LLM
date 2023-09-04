@@ -548,6 +548,7 @@ def load_args_from_checkpoint(args, load_arg='load'):
     _set_arg('glu_activation')
     _set_arg('tie_embed_logits', force=True)
     _set_arg('make_vocab_size_divisible_by', force=True)
+    _set_arg('train_iters')
     if checkpoint_version < 3.0:
         _set_arg('tensor_model_parallel_size',
                  'model_parallel_size')

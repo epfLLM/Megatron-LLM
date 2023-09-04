@@ -1,3 +1,39 @@
+"""
+Convert weights from models in other formats (primairly huggingface) to megatron checkpoints.
+
+This script supports converting Falcon, LLaMa and LLaMa 2 weights to megatron checkpoints.
+Depending on the model to convert, the inputs might differ.
+- Falcon:
+    Weights are automatically retrieved from the official implementation hosted in huggingface.
+    Thus, the `--cache-dir` argument is optional, if specified it should point to
+    the huggingface cache directory where the huggingface Falcon weights will be stored.
+    You will need to specify the `--size` argument to determine which version to download
+    (i.e. Falcon 7B or 40B).
+- LLaMa, LLaMa 2 and CodeLlama:
+    Converting llama weights can be done either fetching the weights hosted
+    in huggingface (recommended as it is the easier method) or directly from the
+    weights provided by Meta.
+    - From Meta weights (only available for LLaMa and LLaMa 2):
+        You will need to specify the `--cache-dir` to the directory where the
+        llama weights are stored.
+        This will by default have the form `xB` (e.g. 7B or 70B) for llama v1,
+        or `llama-2-xb` (e.g. llama-2-7b) for llama v2.
+    - From huggingface weights:
+        If `--cache-dir` is not specified or the directory specified does not
+        contain the format expected from Meta weights, the converter will automatically
+        retrieve the weights from huggingface, in which case the `--cache-dir` will
+        have the same semantics as with Falcon.
+
+        Note that to download llama v2 weights from huggingface, you will need to
+        login using `huggingface-cli login` with a huggingface account which has been
+        granted access to the `meta-llama/Llama-2-7b-hf` model.
+        
+
+In all cases, the megatron checkpoint will be stored in the `--out` argument.
+If a huggingface is specified, the intermediate weights (i.e. the huggingface weights)
+stored therein will not be removed when the conversion succeeds.
+"""
+
 import re
 import sys
 import shutil
@@ -9,8 +45,8 @@ import torch
 from tqdm.auto import trange
 from transformers import AutoModelForCausalLM, LlamaTokenizer
 
-from permute_qkv import permute_qkv
-from merge_llama import merge_llama
+from utils.permute_qkv import permute_qkv
+from utils.merge_llama import merge_llama
 
 
 llama_s2layer = {7: 32, 13: 40, 30: 60, 34: 48, 65: 80, 70: 80}
@@ -245,7 +281,7 @@ def main(model_name: str = "falcon", size: int = 7, out: Optional[Path] = None,
 
 
 if __name__ == "__main__":
-    parser = ArgumentParser(description="Convert Huggingface falcon weights to "
+    parser = ArgumentParser(description="Convert Huggingface llama or falcon weights to "
                                         "megatron-compatible weights")
     parser.add_argument("model", choices={"falcon", "llama", "llama2", "codellama"})
     parser.add_argument("--size", default=7, choices={7, 13, 30, 34, 40, 65, 70}, type=int,
@@ -253,9 +289,9 @@ if __name__ == "__main__":
     parser.add_argument("--out", type=Path,
                         help="Directory to store the megatron weights (as checkpoint)")
     parser.add_argument("--cache-dir", type=Path,
-                        help=("Directory to store the huggingface weights, or "
-                              "in case of the llama model, where to look for "
-                              "the consolidated.xx.pth"))
+                        help=("Directory to use as cache for the huggingface "
+                              "weights, or in case of the llama model, the path "
+                              "of the weights privided Meta"))
     args = parser.parse_args()
 
     # small arg verification

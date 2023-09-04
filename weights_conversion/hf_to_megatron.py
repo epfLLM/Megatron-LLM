@@ -224,7 +224,7 @@ def main(model_name: str = "falcon", size: int = 7, out: Optional[Path] = None,
                 "hidden_size": llama_s2hidden[size],
                 "num_attention_heads": llama_s2heads[size],
                 "ffn_hidden_size": llama_s2dense[size],
-                "parallel_attn": False,llama2_divisible_by_128
+                "parallel_attn": False,
                 "make_vocab_size_divisible_by": 128,
                 "glu_activation": "swiglu",
                 "padded_vocab_size": 32000,

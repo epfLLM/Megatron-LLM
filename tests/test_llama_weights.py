@@ -132,7 +132,7 @@ def shard(load_dir: Path, save_dir: Path, llama_v: int = 2, tp: int = 1, pp: int
 
 def mega2hf(load_dir: Path, out_dir: Path, llama_v: int):
     model_type = "llama" if llama_v == 1 else "llama2"
-    with Popen(["python", "weights2megatron/megatron2hf.py", f"--model={model_type}",
+    with Popen(["python", "weights_conversion/megatron_to_hf.py", f"--model={model_type}",
                 f"--input_dir={load_dir}", f"--output_dir={out_dir}"]) as proc:
         assert proc.wait() == 0
 
@@ -150,7 +150,7 @@ class TestLlamaWeights:
                        cache_dir: Optional[Path], data: Path, vocab: Path):
         assert not llama_meta2mega.exists()
         model_name = "llama" if llama_version == 1 else "llama2"
-        with Popen(["python", Path("weights2megatron")/"weights2megatron.py",
+        with Popen(["python", Path("weights_conversion")/"hf_to_megatron.py",
                     model_name, "--size=7", f"--out={llama_meta2mega}",
                     f"--cache-dir={llama_meta}"]) as proc:
             assert proc.wait() == 0
@@ -164,7 +164,7 @@ class TestLlamaWeights:
                      data: Path, vocab_hf2mega: Path, llama_version: int):
         assert not llama_hf2mega.exists()
         model_name = "llama" if llama_version == 1 else "llama2"
-        cmd = ["python", Path("weights2megatron")/"weights2megatron.py",
+        cmd = ["python", Path("weights_conversion")/"hf_to_megatron.py",
                model_name, "--size=7", f"--out={llama_hf2mega}"]
         if cache_dir is not None:
             cmd.append(f"--cache-dir={cache_dir}")

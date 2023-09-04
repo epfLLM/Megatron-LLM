@@ -22,10 +22,15 @@ ITERS=1000
 SEQ_LEN=none
 DATA_PATH=none
 TRAINED_PATH=none
+VAL_PATH=none
+USR_LR=none
+USR_MIN_LR=none
+LOSS_MASK=0.0
 HELP_STR="[--rank=$RANK] [--size=$SIZE] [--tp=$TP] [--pp=$PP] [--gpus=$GPUS_PER_NODE] \
 [--micro-batch=$MICRO_BATCH] [--global-batch=$GLOBAL_BATCH] [--nodes=$N_NODES] \
 [--addr=$ADDR] [--wandb] [--instruct] [--checkpoint=...] [--data=...] [--iters=$ITERS] \
-[--wandb-proj=none] [--wandb-id=none] [--wandb-entity=none] [--seq-len=...] [--out=...] [--help]"
+[--wandb-proj=none] [--wandb-id=none] [--wandb-entity=none] [--seq-len=...] \
+[--val-path=none] [--out=...] [--lr=lr minlr] [--loss-mask=$LOSS_MASK] --help]"
 
 
 # define help function
@@ -68,6 +73,9 @@ while [[ $# -gt 0 ]]; do
 		--iters) ITERS=$2; shift; shift;;
 		--seq-len) SEQ_LEN=$2; shift; shift;;
 		--out) TRAINED_PATH=$2; shift; shift;;
+		--val-path) VAL_PATH=$2; shift; shift;;
+		--lr) USR_LR=$2; USR_MIN_LR=$3; shift; shift; shift;;
+		--loss-mask) LOSS_MASK=$2; shift; shift;;
 		*) echo unknown argument $1; help; exit 1;;
 	esac
 done
@@ -107,19 +115,18 @@ if [[ $MODEL = falcon ]]; then
 	fi
 elif [[ $MODEL = llama ]] || [[ $MODEL = llama2 ]]; then
 	# closing " missing intentionally
-	EXTRA_IDS='"[bib_ref],[/bib_ref],[fig_ref],[/fig_ref],[bib],[/bib],[fig],[/fig],[table],[/table],[formula],[/formula]'
+	EXTRA_IDS="[bib_ref],[/bib_ref],[fig_ref],[/fig_ref],[bib],[/bib],[fig],[/fig],[table],[/table],[formula],[/formula]"
 	EXTRA_ARGS="--vocab_file=/pure-mlo-scratch/llama/tokenizer.model --use_rms_norm
 	            --glu_activation swiglu --no_tie_embed_logits"
 	if [[ $INSTRUCT = 1 ]]; then
 		if [[ $DATA_PATH = none ]]; then
 			DATA_PATH=/pure-mlo-scratch/alhernan/data/orca/orca
 		fi
-		EXTRA_IDS="$EXTRA_IDS,<|im_start|>,<|im_end|>\""
+		EXTRA_IDS="$EXTRA_IDS,<|im_start|>,<|im_end|>"
 	else
 		if [[ $DATA_PATH = none ]]; then
 			DATA_PATH=/pure-mlo-scratch/data/tokenized/pubmed-all/pubmed-all-llama_text_document
 		fi
-		EXTRA_IDS="$EXTRA_IDS\""
 	fi
 	TOKENIZER=SentencePieceTokenizer
 	EXTRA_ARGS="$EXTRA_ARGS --vocab_extra_ids_list $EXTRA_IDS"
@@ -151,6 +158,12 @@ else
 	help
 	exit 1
 fi
+
+if [[ $USR_LR != none ]]; then
+	LR=$USR_LR
+	MIN_LR=$USR_MIN_LR
+fi
+
 COMMON_ARGS="--use_flash_attn --no_bias_gelu_fusion
 	     --seq_length $SEQ_LEN --max_position_embeddings $SEQ_LEN
              --log_interval 1 --save_interval 800 --eval_interval 200
@@ -158,13 +171,17 @@ COMMON_ARGS="--use_flash_attn --no_bias_gelu_fusion
 	     --no_bias_dropout_fusion --use_checkpoint_args
 	     --attention_dropout 0.0 --adam_beta1 0.9 --adam_beta2 0.95 --adam_eps 1e-5
 	     --lr_decay_style cosine --lr_warmup_fraction 0.1 --lr $LR --min_lr $MIN_LR
-	     --weight_decay 0.1 --sequence_parallel --recompute_granularity selective"
+	     --weight_decay 0.1 --sequence_parallel --recompute_granularity selective
+	     --log_timers_to_tensorboard --scalar_loss_mask=$LOSS_MASK"
+
 
 if [[ $INSTRUCT = 1 ]]; then
-	COMMON_ARGS="$COMMON_ARGS --variable_seq_lengths --data_type instruction"
+	COMMON_ARGS="$COMMON_ARGS --variable_seq_lengths --data_type instruction --metrics all"
 	if [[ $CHECKPOINT_PATH != $TRAINED_PATH ]]; then
 		COMMON_ARGS="$COMMON_ARGS --finetune"
 	fi
+else
+	COMMON_ARGS="$COMMON_ARGS --metrics perplexity accuracy count_loss_mask"
 fi
 
 if [[ $CHECKPOINT_PATH != $TRAINED_PATH ]]; then
@@ -184,13 +201,19 @@ if [[ $WANDB = 1 ]]; then
 	fi
 fi
 
+if [[ $VAL_PATH = none ]]; then
+	DATA_ARGS="--data_path $DATA_PATH"
+else
+	DATA_ARGS="--train_data_path $DATA_PATH --valid_data_path $VAL_PATH"
+fi
+
 # print some args
 echo
 echo Settings:
 echo RANK=$RANK
 echo ADDR=$ADDR
 echo N_NODES=$N_NODES
-echo DATA_PATH=$DATA_PATH
+echo DATA_ARGS=$DATA_ARGS
 echo CHECKPOINT_PATH=$CHECKPOINT_PATH
 echo TRAINED_PATH=$TRAINED_PATH
 echo MODEL=$MODEL
@@ -209,7 +232,7 @@ CUDA_DEVICE_MAX_CONNECTIONS=1 OMP_NUM_THREADS=16 torchrun $DISTRIBUTED_ARGS fine
        --load $CHECKPOINT_PATH \
        --save $TRAINED_PATH \
        --tensorboard_dir $TENSORBOARD_PATH \
-       --data_path $DATA_PATH \
+       $DATA_ARGS \
        --model_name $MODEL \
        --tokenizer_type $TOKENIZER \
        --bf16 \

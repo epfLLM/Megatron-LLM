@@ -182,21 +182,24 @@ def llama_to_megatron(weights: dict, size: int, source: str = "meta",
 
 
 def main(model_name: str = "falcon", size: int = 7, out: Optional[Path] = None,
-         cache_dir: Optional[Path] = None):
+         cache_dir: Optional[Path] = None, model_path: Optional[str] = None):
     if out is None:
         out = Path(f"falcon{size}b_megatron.pt").absolute()
 
     # get weights from or specified directory
     if model_name == "falcon":
         print("Fetching weights from huggingface")
-        model = AutoModelForCausalLM.from_pretrained(f"tiiuae/falcon-{size}b",
+        if model_path is None:
+            model_path = f"tiiuae/falcon-{size}b",
+        model = AutoModelForCausalLM.from_pretrained(model_path,
                                                      trust_remote_code=True,
                                                      cache_dir=cache_dir)
         hf_weights = model.state_dict()
     else:
         print("Getting llama...")
         version = 2 if "2" in model_name else 1
-        hf_weights, llama_source = merge_llama(size, version, root_dir=cache_dir)
+        hf_weights, llama_source = merge_llama(size, version, root_dir=cache_dir,
+                                               model_path=model_path)
 
     # convert state dict to be megatron-compatible
     if model_name == "falcon":
@@ -292,6 +295,8 @@ if __name__ == "__main__":
                         help="The size of the model")
     parser.add_argument("--out", type=Path,
                         help="Directory to store the megatron weights (as checkpoint)")
+    parser.add_argument("--model-path",
+                        help="Sets model_name_or_path when fetching weights from huggingface")
     parser.add_argument("--cache-dir", type=Path,
                         help=("Directory to use as cache for the huggingface "
                               "weights, or in case of the llama model, the path "
@@ -308,4 +313,4 @@ if __name__ == "__main__":
     else:
         assert args.size in {7, 13, 70}
 
-    main(args.model, args.size, args.out, args.cache_dir)
+    main(args.model, args.size, args.out, args.cache_dir, args.model_path)

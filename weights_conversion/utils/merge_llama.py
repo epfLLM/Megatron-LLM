@@ -87,11 +87,13 @@ def merge_meta_llama(size: int, root_dir: Path):
     return merged_ckpt
 
 
-def merge_hf_llama(size: int, version: int, cache_dir: Optional[Path] = None):
-    if version == 1:
-        weights = LlamaForCausalLM.from_pretrained(f"decapoda-research/llama-{size}b-hf", cache_dir=cache_dir).state_dict()
-    else:
-        weights = LlamaForCausalLM.from_pretrained(f"meta-llama/Llama-2-{size}b-hf", cache_dir=cache_dir).state_dict()
+def merge_hf_llama(size: int, version: int, cache_dir: Optional[Path] = None,
+                   model_path: Optional[str] = None):
+    if model_path is None and version == 1:
+        model_path = f"decapoda-research/llama-{size}b-hf"
+    elif model_path is None and version == 2:
+        model_path = f"meta-llama/Llama-2-{size}b-hf"
+    weights = LlamaForCausalLM.from_pretrained(model_path, cache_dir=cache_dir).state_dict()
     weights["tok_embeddings.weight"] = weights.pop("model.embed_tokens.weight")
     weights["norm.weight"] = weights.pop("model.norm.weight")
     weights["output.weight"] = weights.pop("lm_head.weight")
@@ -112,9 +114,10 @@ def merge_hf_llama(size: int, version: int, cache_dir: Optional[Path] = None):
     return weights
 
 
-def merge_llama(size: int, version: int, root_dir: Optional[Path] = None):
+def merge_llama(size: int, version: int, root_dir: Optional[Path] = None,
+                model_path: Optional[str] = None):
     if root_dir is not None and (root_dir/"consolidated.00.pth").exists():
         return merge_meta_llama(size, root_dir), "meta"
     print(f"Weights at {root_dir} do not look like a meta checkpoint, assuming "
           "huggingface cache_dir instead")
-    return merge_hf_llama(size, version, root_dir), "hf"
+    return merge_hf_llama(size, version, root_dir, model_path), "hf"

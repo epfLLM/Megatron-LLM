@@ -456,11 +456,13 @@ def main():
     
     args = parser.parse_args()
     if args.model in {"llama", "llama2", "codellama"}:
+        eps = 1e-6 if args.model == "llama" else 1e-5
         rope_theta = 1e6 if args.model == "codellama" else 1e4
         write_llama_model(
             model_path=args.output_dir,
             input_base_path=args.input_dir,
             num_output_shards=args.num_output_shards,
+            norm_eps=eps,
             rope_theta=rope_theta,
         )
     elif args.model == "falcon":

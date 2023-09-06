@@ -27,7 +27,7 @@ def post_language_model_processing(lm_output, labels, logit_weights,
 
     if labels is None:
         # [s b h] => [b s h]
-        return output.transpose(0,1).contiguous()
+        return None, output.transpose(0,1).contiguous()
     else:
         # [b s] => [s b]
         labels = labels.transpose(0,1).contiguous()
@@ -39,7 +39,7 @@ def post_language_model_processing(lm_output, labels, logit_weights,
         
         # [s b] => [b, s]
         loss = loss.transpose(0,1).contiguous()
-        return loss
+        return loss, output.transpose(0, 1).contiguous()
 
 
 class GPTModel(MegatronModule):

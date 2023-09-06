@@ -8,6 +8,7 @@ import os
 import torch
 
 import megatron
+from megatron.metrics import METRICS
 from megatron.model.enums import PositionEmbeddingType
 
 
@@ -90,6 +91,9 @@ def validate_args(args, defaults={}):
     if args.recompute_activations:
         args.recompute_granularity = 'selective'
     del args.recompute_activations
+    if args.metrics == ["all"]:
+        args.metrics = list(METRICS)
+
 
     # Set input defaults.
     for key in defaults:
@@ -538,6 +542,8 @@ def _add_logging_args(parser):
                        help="If set, we resume logging for the id given instead of launching a new run (errors if id given and resume=False).")
     group.add_argument("--wandb_api_key",type=str,default=None,
                        help="API key for Weights & Biases, needs to be set if not set in environment variable `WANDB_API_KEY`.")
+    group.add_argument("--metrics", default=[], nargs="+", choices=list(METRICS) + ["all"],
+                       help="Metrics to report when logging")
     return parser
 
 

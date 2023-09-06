@@ -126,7 +126,7 @@ elif [[ $MODEL = llama ]] || [[ $MODEL = llama2 ]] || [[ $MODEL = codellama ]]; 
 		fi
 		EXTRA_ARGS="$EXTRA_ARGS --vocab_file=/pure-mlo-scratch/llama2/Llama-2-7b-hf/tokenizer.model"
 		EXTRA_ARGS="$EXTRA_ARGS --layernorm_epsilon 1e-6"
-	elif [[ $MODEL == llama 2 ]];
+	elif [[ $MODEL == llama2 ]]; then
 		if [[ $SEQ_LEN = none ]]; then
 			SEQ_LEN=4096
 		fi
@@ -140,7 +140,6 @@ elif [[ $MODEL = llama ]] || [[ $MODEL = llama2 ]] || [[ $MODEL = codellama ]]; 
 			SEQ_LEN=16384
 		fi
 		EXTRA_ARGS="$EXTRA_ARGS --vocab_file=/pure-mlo-scratch/codellama/CodeLlama-7b/tokenizer.model --rope_theta 1e6"
-	fi
 	fi
 elif [[ $MODEL = gpt ]]; then
 	if [[ $DATA_PATH = none ]]; then
@@ -163,7 +162,7 @@ COMMON_ARGS="--use_flash_attn --no_bias_gelu_fusion
 	     --no_bias_dropout_fusion --use_checkpoint_args
 	     --attention_dropout 0.0 --adam_beta1 0.9 --adam_beta2 0.95 --adam_eps 1e-5
 	     --lr_decay_style cosine --lr_warmup_fraction 0.1 --lr $LR --min_lr $MIN_LR
-	     --weight_decay 0.1 --sequence_parallel --recompute_granularity selective"
+	     --weight_decay 0.1 --sequence_parallel --recompute_granularity selective
              --log_timers_to_tensorboard --rope_scaling_factor 1.0"
 
 if [[ $INSTRUCT = 1 ]]; then

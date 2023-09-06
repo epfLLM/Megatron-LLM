@@ -831,8 +831,11 @@ def evaluate_and_print_results(prefix,
     string = ' validation loss at {} | '.format(prefix)
     for key in total_loss_dict:
         string += '{} value: {:.6E} | '.format(key, total_loss_dict[key].item())
-        ppl = math.exp(min(20, total_loss_dict[key].item()))
-        string += '{} PPL: {:.6E} | '.format(key, ppl)
+        if "lm loss" in key:
+            ppl = math.exp(min(20, total_loss_dict[key].item()))
+            string += '{} PPL: {:.6E} | '.format(key, ppl)
+        else:
+            ppl = None
         if writer:
             writer.add_scalar('{} validation'.format(key),
                               total_loss_dict[key].item(),
@@ -840,7 +843,7 @@ def evaluate_and_print_results(prefix,
             writer.add_scalar('{} validation vs samples'.format(key),
                               total_loss_dict[key].item(),
                               args.consumed_train_samples)
-            if args.log_validation_ppl_to_tensorboard:
+            if args.log_validation_ppl_to_tensorboard and ppl is not None:
                 writer.add_scalar('{} validation ppl'.format(key), ppl,
                                   iteration)
                 writer.add_scalar('{} validation ppl vs samples'.format(key),

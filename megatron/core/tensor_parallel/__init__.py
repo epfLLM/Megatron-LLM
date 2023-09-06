@@ -1,4 +1,4 @@
-from .cross_entropy import vocab_parallel_cross_entropy
+from .cross_entropy import vocab_parallel_cross_entropy, vocab_parallel_max_indices
 from .data import broadcast_data
 
 from .layers import (

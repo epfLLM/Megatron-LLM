@@ -88,8 +88,10 @@ def merge_meta_llama(size: int, root_dir: Path):
 
 
 def merge_hf_llama(size: int, version: int, cache_dir: Optional[Path] = None):
-    assert version == 2, "Only llama v2 available using huggingface"
-    weights = LlamaForCausalLM.from_pretrained(f"meta-llama/Llama-2-{size}b-hf", cache_dir=cache_dir).state_dict()
+    if version == 1:
+        weights = LlamaForCausalLM.from_pretrained(f"decapoda-research/llama-{size}b-hf", cache_dir=cache_dir).state_dict()
+    else:
+        weights = LlamaForCausalLM.from_pretrained(f"meta-llama/Llama-2-{size}b-hf", cache_dir=cache_dir).state_dict()
     weights["tok_embeddings.weight"] = weights.pop("model.embed_tokens.weight")
     weights["norm.weight"] = weights.pop("model.norm.weight")
     weights["output.weight"] = weights.pop("lm_head.weight")

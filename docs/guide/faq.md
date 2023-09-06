@@ -141,6 +141,19 @@ torchrun \
 The file `examples/finetune.sh` gives the full picture of the arguments used to train either LLaMa.
 ```
 
+## How to convert a LLaMa or Falcon architecture from a non-official checkpoint?
+
+If you want to convert weights from a checkpoint other than the checkpoints provided by `llama-meta` or `tiiuae`, you might use `--model-path` during conversion.
+For instance, to convert the [OpenAssistant llama2 70B](https://huggingface.co/OpenAssistant/llama2-70b-oasst-sft-v10) weights, run:
+
+```
+python weights_conversion/hf_to_megatron.py llama2 --size=70 \
+	--out=/path/to/megatron/weights/ --cache-dir=/path/to/llama-2-7b/ \
+	--model-path=OpenAssistant/llama2-70b-oasst-sft-v10
+```
+
+The `--model-path` argument should be either a local folder or the name of a model hosted on huggingface.
+
 ## I'm getting a `17300 Bus error (core dumped)` error!
 
 If you are using a docker container and you get this error when sharding a large model, you might need to increase the shared memory size.

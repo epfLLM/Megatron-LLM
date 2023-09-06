@@ -274,7 +274,7 @@ def main(model_name: str = "falcon", size: int = 7, out: Optional[Path] = None,
         else:
             name = "decapoda-research/llama-7b-hf"
         tokenizer = LlamaTokenizer.from_pretrained(
-            "meta-llama/Llama-2-7b-hf", cache_dir=cache_dir
+            name, cache_dir=cache_dir
         )
         token_path = out/"tokenizer.model"
         vocab_file = tokenizer.vocab_file

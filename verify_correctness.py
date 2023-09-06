@@ -98,9 +98,8 @@ def mega_forward(model, batch):
     tokens, labels, loss_mask, attention_mask, position_ids = batch
     assert torch.all(loss_mask)
     # we need to do two forward passes to get both the logits and the loss
-    logits = model(tokens, position_ids, attention_mask, labels=None)
-    losses = model(tokens, position_ids, attention_mask, labels=labels)
-    loss, _ = loss_func(loss_mask, losses)
+    _, logits = out = model(tokens, position_ids, attention_mask, labels=labels)
+    loss, _ = loss_func(model.training, batch, out)
     return logits, loss
 
 

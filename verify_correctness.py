@@ -56,7 +56,14 @@ def hf_provider(name: str, cache_dir: Optional[Path], device: str,
             trust_remote_code=True
         )
     elif name == "llama":
-        model = LlamaForCausalLM.from_pretrained(cache_dir)
+        try:
+            model = LlamaForCausalLM.from_pretrained(cache_dir)
+        except OSError:
+            print(f"baseline path {cache_dir} does not look like a huggingface, "
+                  "assuming it's cache_dir instead")
+            model = LlamaForCausalLM.from_pretrained(
+                f"decapoda-research/llama-{size}b-hf", cache_dir=cache_dir
+            )
     elif name == "llama2" and is_meta_llama2_path(cache_dir):
         print(f"baseline path {cache_dir} does not look like a huggingface, "
               "assuming it's raw llama2 weights instead")

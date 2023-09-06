@@ -192,6 +192,7 @@ def loss_func(is_training, batch, outputs):
     # Calculate other metrics
     if not is_training:
         inputs = MetricInput(batch, logits, averaged_loss[0])
+        args = get_args()
         for metric in map(get_metric, args.metrics):
             out_dict.update(metric(inputs))
 

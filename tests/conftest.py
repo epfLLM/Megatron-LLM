@@ -8,6 +8,8 @@ _test_failed_incremental: dict[str, dict[tuple[int, ...], str]] = {}
 def pytest_addoption(parser):
     parser.addoption("--cache_path", type=Path,
                      help="Huggingface cache path (optional)")
+    parser.addoption("--llama_path", type=Path, required=True,
+                     help="Path where the raw 7B weights are located (llama1)")
     parser.addoption("--llama2_path", type=Path, required=True,
                      help="Path where the raw llama-2-7b weights are located")
     parser.addoption("--tmp_dir", type=Path,

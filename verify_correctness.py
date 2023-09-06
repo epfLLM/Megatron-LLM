@@ -59,8 +59,8 @@ def hf_provider(name: str, cache_dir: Optional[Path], device: str,
         try:
             model = LlamaForCausalLM.from_pretrained(cache_dir)
         except OSError:
-            print(f"baseline path {cache_dir} does not look like a huggingface, "
-                  "assuming it's cache_dir instead")
+            print(f"Cache dir {cache_dir} does not look like a huggingface "
+                  "checkpoint, assuming cache_dir instead")
             model = LlamaForCausalLM.from_pretrained(
                 f"decapoda-research/llama-{size}b-hf", cache_dir=cache_dir
             )
@@ -180,8 +180,8 @@ def extra_extra_args(parser):
         "If falcon, optional: path to huggingface cache. "
         "If llama2, optional: either the huggingface cache path, or "
         "the raw weight directory given by meta. "
-        "If llama, required: either the path to converted huggingface weights "
-        "(us convert_llama_weights_to_hf.py) or the raw weight directory given by meta"
+        "If llama, optional: either the path to converted huggingface weights "
+        "(use convert_llama_weights_to_hf.py) or the huggingface cache dir."
     ))
     group.add_argument("--huggingface_device", default="cuda:1", dest="baseline_device",
                        help="Device to use for the baseline model")

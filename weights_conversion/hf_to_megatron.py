@@ -182,21 +182,24 @@ def llama_to_megatron(weights: dict, size: int, source: str = "meta",
 
 
 def main(model_name: str = "falcon", size: int = 7, out: Optional[Path] = None,
-         cache_dir: Optional[Path] = None):
+         cache_dir: Optional[Path] = None, model_path: Optional[str] = None):
     if out is None:
         out = Path(f"falcon{size}b_megatron.pt").absolute()
 
     # get weights from or specified directory
     if model_name == "falcon":
         print("Fetching weights from huggingface")
-        model = AutoModelForCausalLM.from_pretrained(f"tiiuae/falcon-{size}b",
+        if model_path is None:
+            model_path = f"tiiuae/falcon-{size}b",
+        model = AutoModelForCausalLM.from_pretrained(model_path,
                                                      trust_remote_code=True,
                                                      cache_dir=cache_dir)
         hf_weights = model.state_dict()
     else:
         print("Getting llama...")
         version = 2 if "2" in model_name else 1
-        hf_weights, llama_source = merge_llama(size, version, root_dir=cache_dir)
+        hf_weights, llama_source = merge_llama(size, version, root_dir=cache_dir,
+                                               model_path=model_path)
 
     # convert state dict to be megatron-compatible
     if model_name == "falcon":
@@ -269,13 +272,20 @@ def main(model_name: str = "falcon", size: int = 7, out: Optional[Path] = None,
     print("Saved weights in", out)
 
     if model_name in {"llama", "llama2"} and llama_source == "hf":
-        if model_name == "llama2":
-            name = "meta-llama/Llama-2-7b-hf"
-        else:
-            name = "decapoda-research/llama-7b-hf"
-        tokenizer = LlamaTokenizer.from_pretrained(
-            name, cache_dir=cache_dir
-        )
+        tokenizer = None
+        if model_path is not None:
+            try:
+                tokenizer = LlamaTokenizer.from_pretrained(model_path, cache_dir=cache_dir)
+            except OSError:
+                warnings.warn(f"Model path {model_path} does not have a "
+                              "tokenizer, using default tokenizer instead")
+        if tokenizer is None:
+            if model_name == "llama2":
+                name = "meta-llama/Llama-2-7b-hf"
+            else:
+                name = "decapoda-research/llama-7b-hf"
+            tokenizer = LlamaTokenizer.from_pretrained(name, cache_dir=cache_dir)
+
         token_path = out/"tokenizer.model"
         vocab_file = tokenizer.vocab_file
         shutil.copy(vocab_file, token_path)
@@ -292,6 +302,8 @@ if __name__ == "__main__":
                         help="The size of the model")
     parser.add_argument("--out", type=Path,
                         help="Directory to store the megatron weights (as checkpoint)")
+    parser.add_argument("--model-path",
+                        help="Sets model_name_or_path when fetching weights from huggingface")
     parser.add_argument("--cache-dir", type=Path,
                         help=("Directory to use as cache for the huggingface "
                               "weights, or in case of the llama model, the path "
@@ -308,4 +320,4 @@ if __name__ == "__main__":
     else:
         assert args.size in {7, 13, 70}
 
-    main(args.model, args.size, args.out, args.cache_dir)
+    main(args.model, args.size, args.out, args.cache_dir, args.model_path)

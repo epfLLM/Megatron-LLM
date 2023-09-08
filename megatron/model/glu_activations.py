@@ -1,13 +1,8 @@
-# Extracted from: https://github.com/bigscience-workshop/Megatron-DeepSpeed
-
-import logging
+# Adapted from: https://github.com/bigscience-workshop/Megatron-DeepSpeed
 
 import torch
 from torch import nn
 from torch.nn import functional as F
-
-
-logger = logging.getLogger(__name__)
 
 
 class _GLUBaseModule(nn.Module):
@@ -16,8 +11,7 @@ class _GLUBaseModule(nn.Module):
         self.activation_fn = activation_fn
 
     def forward(self, x):
-        # dim=-1 breaks in jit for pt<1.10
-        x1, x2 = x.chunk(2, dim=(x.ndim - 1))
+        x1, x2 = torch.chunk(x, 2, dim=-1)
         return x1 * self.activation_fn(x2)
 
 
@@ -41,10 +35,10 @@ class SwiGLU(_GLUBaseModule):
         super().__init__(F.silu)
 
 
-liglu = torch.jit.script(LiGLU())
-geglu = torch.jit.script(GEGLU())
-reglu = torch.jit.script(ReGLU())
-swiglu = torch.jit.script(SwiGLU())
+liglu = LiGLU()
+geglu = GEGLU()
+reglu = ReGLU()
+swiglu = SwiGLU()
 
 
 GLU_ACTIVATIONS = {

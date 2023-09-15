@@ -592,8 +592,7 @@ def training_log(loss_dict, total_loss_dict, learning_rate, iteration,
         elapsed_time = timers('interval-time').elapsed(barrier=True)
         elapsed_time_per_iteration = elapsed_time / total_iterations
         counters = get_counters()
-        tokens = args.data_parallel_size*counters['tokens']
-        del counters['tokens']  # reset counter for future iterations
+        tokens = counters.pop('tokens')  # reset counter for future iterations
         tokens_per_sec = tokens/(elapsed_time)
         if writer:
             if args.log_timers_to_tensorboard:

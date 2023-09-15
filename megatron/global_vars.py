@@ -4,6 +4,7 @@
 
 import os
 import sys
+from collections import defaultdict
 
 from megatron import dist_signal_handler
 from megatron.tokenizer import build_tokenizer
@@ -17,6 +18,7 @@ _GLOBAL_TENSORBOARD_WRITER = None
 _GLOBAL_ADLR_AUTORESUME = None
 _GLOBAL_TIMERS = None
 _GLOBAL_SIGNAL_HANDLER = None
+_GLOBAL_COUNTERS = None
 
 
 def get_args():
@@ -62,6 +64,12 @@ def get_timers():
     return _GLOBAL_TIMERS
 
 
+def get_counters():
+    """Return counters."""
+    _ensure_var_is_initialized(_GLOBAL_COUNTERS, 'counters')
+    return _GLOBAL_COUNTERS
+
+
 def get_signal_handler():
     _ensure_var_is_initialized(_GLOBAL_SIGNAL_HANDLER, 'signal handler')
     return _GLOBAL_SIGNAL_HANDLER
@@ -90,6 +98,7 @@ def set_global_variables(args):
     _set_tensorboard_writer(args)
     _set_adlr_autoresume(args)
     _set_timers(args)
+    _set_counters(args)
 
     if args.exit_signal_handler:
         _set_signal_handler()
@@ -176,6 +185,12 @@ def _set_timers(args):
     global _GLOBAL_TIMERS
     _ensure_var_is_not_initialized(_GLOBAL_TIMERS, 'timers')
     _GLOBAL_TIMERS = Timers(args.timing_log_level, args.timing_log_option)
+
+
+def _set_counters(args):
+    global _GLOBAL_COUNTERS
+    _ensure_var_is_not_initialized(_GLOBAL_COUNTERS, 'counters')
+    _GLOBAL_COUNTERS = defaultdict(int)
 
 
 def _ensure_var_is_initialized(var, name):

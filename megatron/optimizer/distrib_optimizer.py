@@ -381,9 +381,14 @@ class DistributedOptimizer(MixedPrecisionOptimizer):
         for model_index, model in enumerate(self.models):
             current_param_buffers = {}
             for dtype, grad_buffer in model._grad_buffers.items():
-                param_buffer = torch.tensor(grad_buffer.data.storage()._untyped(),
-                                            dtype = params_dtype,
-                                            device = grad_buffer.data.device)
+                try:
+                    param_buffer = torch.tensor(grad_buffer.data.storage().untyped(),
+                                                dtype = params_dtype,
+                                                device = grad_buffer.data.device)
+                except:
+                    param_buffer = torch.tensor(grad_buffer.data.storage()._untyped(),
+                                                dtype=params_dtype,
+                                                device=grad_buffer.data.device)
                 param_buffer = param_buffer[:grad_buffer.numel_padded]
                 current_param_buffers[dtype] = param_buffer
             self.param_buffers.append(current_param_buffers)
@@ -698,3 +703,34 @@ class DistributedOptimizer(MixedPrecisionOptimizer):
                           self.model_float16_groups)
         copy_group_params(self.shard_fp32_groups,
                           self.model_fp32_groups)
+
+
+    def _copy_model_params_to_main_params(self):
+        """
+        Copy model params to main params.
+
+        During finetuning, this method is used to reload the main params from
+        the model params. This copy does not make use of the grad buffer as
+        an intermediary.
+        """
+
+        # Utility method for copying group params.
+        def copy_group_params(model_groups, shard_main_groups):
+            for model_group, shard_main_group in zip(model_groups,
+                                                     shard_main_groups):
+                for model_param, shard_main_param in zip(model_group,
+                                                         shard_main_group):
+
+                    param_range_map = self.get_model_param_range_map(model_param)
+                    param_range = param_range_map["param"]
+                    assert param_range.size == shard_main_param.nelement()
+
+                    shard_model_param = model_param.view(-1) \
+                        [param_range.start:param_range.end]
+                    shard_main_param.data.copy_(shard_model_param)
+
+        # Copy model groups to shard groups.
+        copy_group_params(self.model_float16_groups,
+                          self.shard_fp32_from_float16_groups)
+        copy_group_params(self.model_fp32_groups,
+                          self.shard_fp32_groups)

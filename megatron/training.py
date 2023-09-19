@@ -674,6 +674,7 @@ def _train(args, forward_step_func,
     # Iterations.
     iteration = args.iteration
 
+    counters = get_counters()
     timers('interval-time', log_level=0).start(barrier=True)
     print_datetime('before the start of training step')
     report_memory_flag = True
@@ -712,10 +713,13 @@ def _train(args, forward_step_func,
         if args.eval_interval and iteration % args.eval_interval == 0 and \
            args.do_valid:
             prefix = 'iteration {}'.format(iteration)
+            current_tokens = counters['tokens']
             evaluate_and_print_results(prefix, forward_step_func,
                                        valid_data_iterator, model,
                                        iteration, process_non_loss_data_func,
                                        verbose=False, args=args)
+            counters['tokens'] = current_tokens
+
 
         # if using wandb writer, flush the stats of train_step & potentially evaluate
         writer = get_tensorboard_writer()

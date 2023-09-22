@@ -128,10 +128,10 @@ def get_batch(data_iterator):
         n_tokens = n_tokens.item()
     else:
         group = get_data_parallel_group()
-        token_counts = torch.zeros(args.data_parallel_size, dtype=torch.long,
-                                   device=tokens.device)
-        torch.distributed.all_gather_into_tensor(token_counts, n_tokens, group=group)
-        n_tokens = torch.sum(token_counts).item()
+        torch.distributed.all_reduce(
+            n_tokens, op=torch.distributed.ReduceOp.SUM, group=group
+        )
+        n_tokens = n_tokens.item()
     counters["tokens"] += n_tokens
 
     if args.data_type == "gpt":

@@ -24,6 +24,7 @@ First we need to install the dependencies.
    	-v /path/to/Megatron-LLM/:/mpt/Megatron-LLM \
    	nvcr.io/nvidia/pytorch:23.07-py3
    ```
+   Note: "if you use Torch multiprocessing for multi-threaded data loaders, the default shared memory segment size that the container runs with may not be enough. Therefore, you should increase the shared memory size by issuing ... " (from https://catalog.ngc.nvidia.com/orgs/nvidia/containers/pytorch) `--shm-size=` as an argument to above command. E.g. `--shm-size=128gb`.
 
 1. Enter the repository:
    ```

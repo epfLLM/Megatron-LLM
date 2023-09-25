@@ -5,9 +5,10 @@ from functools import partial
 
 import torch
 
-from megatron import get_args, get_tokenizer, get_timers, print_rank_0
+from megatron import get_args, get_tokenizer, get_timers, get_counters, print_rank_0
 from megatron.training import pretrain
 from megatron.core import tensor_parallel
+from megatron.core.parallel_state import get_data_parallel_group
 from megatron.model import GPTModel, ModelType, LlamaModel, FalconModel
 from megatron.utils import get_ltor_masks_and_position_ids, average_losses_across_data_parallel_group
 from megatron.data.gpt_dataset import build_train_valid_test_datasets as gpt_build_datasets
@@ -119,8 +120,21 @@ def get_batch(data_iterator):
     tokens = data_b["text"]
     labels = tokens[:, 1:].contiguous()
     tokens = tokens[:, :-1].contiguous()
-    if args.data_type == "gpt":
 
+    # Update tokens counter.
+    counters = get_counters()
+    n_tokens = torch.tensor(tokens.numel(), device=tokens.device)
+    if args.data_parallel_size == 1:
+        n_tokens = n_tokens.item()
+    else:
+        group = get_data_parallel_group()
+        torch.distributed.all_reduce(
+            n_tokens, op=torch.distributed.ReduceOp.SUM, group=group
+        )
+        n_tokens = n_tokens.item()
+    counters["tokens"] += n_tokens
+
+    if args.data_type == "gpt":
         # Get the masks and position ids.
         attention_mask, loss_mask, position_ids = get_ltor_masks_and_position_ids(
             tokens,

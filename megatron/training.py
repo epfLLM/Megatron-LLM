@@ -17,6 +17,7 @@ import megatron
 from megatron import get_args
 from megatron import get_signal_handler
 from megatron import get_timers
+from megatron import get_counters
 from megatron import get_tensorboard_writer
 from megatron import get_current_global_batch_size
 from megatron import get_num_microbatches
@@ -590,10 +591,14 @@ def training_log(loss_dict, total_loss_dict, learning_rate, iteration,
     if iteration % args.log_interval == 0:
         elapsed_time = timers('interval-time').elapsed(barrier=True)
         elapsed_time_per_iteration = elapsed_time / total_iterations
+        counters = get_counters()
+        tokens = counters.pop('tokens')  # reset counter for future iterations
+        tokens_per_sec = tokens/(elapsed_time)
         if writer:
             if args.log_timers_to_tensorboard:
                 writer.add_scalar('iteration-time',
                                   elapsed_time_per_iteration, iteration)
+                writer.add_scalar('tokens-per-sec', tokens_per_sec, iteration)
 
         log_string = ' iteration {:8d}/{:8d} |'.format(
             iteration, args.train_iters)
@@ -601,6 +606,7 @@ def training_log(loss_dict, total_loss_dict, learning_rate, iteration,
             args.consumed_train_samples)
         log_string += ' elapsed time per iteration (ms): {:.1f} |'.format(
             elapsed_time_per_iteration * 1000.0)
+        log_string += f' rate (tokens/sec): {tokens_per_sec:.2f} |'
         log_string += ' learning rate: {:.3E} |'.format(learning_rate)
         log_string += ' global batch size: {:5d} |'.format(batch_size)
         for key in total_loss_dict:
@@ -668,6 +674,7 @@ def _train(args, forward_step_func,
     # Iterations.
     iteration = args.iteration
 
+    counters = get_counters()
     timers('interval-time', log_level=0).start(barrier=True)
     print_datetime('before the start of training step')
     report_memory_flag = True
@@ -706,10 +713,13 @@ def _train(args, forward_step_func,
         if args.eval_interval and iteration % args.eval_interval == 0 and \
            args.do_valid:
             prefix = 'iteration {}'.format(iteration)
+            current_tokens = counters['tokens']
             evaluate_and_print_results(prefix, forward_step_func,
                                        valid_data_iterator, model,
                                        iteration, process_non_loss_data_func,
                                        verbose=False, args=args)
+            counters['tokens'] = current_tokens
+
 
         # if using wandb writer, flush the stats of train_step & potentially evaluate
         writer = get_tensorboard_writer()

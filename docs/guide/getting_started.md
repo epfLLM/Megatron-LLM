@@ -137,11 +137,12 @@ Make sure to adjust the arguments to your convenience:
 DISTRIBUTED_ARGS="--nproc_per_node 1 --nnodes 1 --node_rank 0 --master_addr localhost --master_port 8000"
 LLAMA_ARGS="--use_rms_norm --glu_activation swiglu --no_tie_embed_logits --no_new_tokens --layernorm_epsilon 1e-5"
 COMMON_ARGS="--hidden_dropout 0.0 --attention_dropout 0.0 --no_bias_gelu_fusion"
+
 torchrun $DISTRIBUTED_ARGS verify_correctness.py \
 	--model_name=llama2 \
 	--model_size=7 \
 	--load=/path/to/megatron/weights/ \
-	--data_path=/path/to/tokenized/starcoder \
+	--data_path=/path/to/tokenized/starcoder_text_document \  # without the .idx or .bin extension
 	--tokenizer_type=SentencePieceTokenizer \
 	--vocab_file=/path/to/megatron/weights/tokenizer.model \
 	--huggingface_cache=/path/to/meta/llama-2-7b/ \
@@ -178,19 +179,20 @@ Example usage:
 LOG_ARGS="--log_interval 1 --save_interval 100 --eval_interval 50"
 TRAIN_ARGS="--train_iters 500 --lr_decay_style cosine --lr_warmup_iters 50 --lr 3e-4 --min_lr 1e-6"
 DISTRIBUTED_ARGS="--nproc_per_node NUMBER_OF_GPUS --nnodes 1 --node_rank 0 --master_addr localhost --master_port 8000"
+
 torchrun $DISTRIBUTED_ARGS finetune.py \
-	--tensor_model_parallel_size 4 \
+	--tensor_model_parallel_size 2 \
 	--pipeline_model_parallel_size 1 \
 	--load /path/to/sharded/weights/ \
 	--save /path/to/sharded/weights/ \
 	--tensorboard_dir /path/to/sharded/weights/tensorboard/ \
-	--data_path /path/to/tokenized/starcoder \
+	--data_path /path/to/tokenized/starcoder_text_document \  # without the .idx or .bin extension
 	--model_name llama2 \
 	--tokenizer_type SentencePieceTokenizer \
 	--vocab_file=/path/to/megatron/weights/tokenizer.model \
 	--bf16 \
 	--use_flash_attn \
-	--micro_batch_size 5 \
+	--micro_batch_size 1 \
 	--global_batch_size 1000 \
 	--sequence_parallel \
 	--recompute_granularity selective \
@@ -199,7 +201,9 @@ torchrun $DISTRIBUTED_ARGS finetune.py \
 ```
 
 With the selected global batch size of 1000, and the total number of training tokens around 500M, in 500 iterations the trainer will perform approximately one epoch.
+Set your TP and PP values to the same numbers specified in the previous step.
 This will take approximately 20 hours to run on a 8x 80GB A100 cluster (DP=2, TP=4, PP=1).
+Feel free to increase the `--micro_batch_size` to speed up training.
 
 :::{note}
 
@@ -249,7 +253,7 @@ pipeline = transformers.pipeline(
     model=LlamaForCausalLM.from_pretrained("/path/to/hf/weights/"),
     tokenizer=LlamaTokenizer.from_pretrained("/path/to/hf/weights/"),
     torch_dtype=torch.bfloat16,
-    device_map="auto"
+    device="cuda"
 )
 prompt = """#= a function that returns the fibonacci number of its argument =#
 function fibonacci(n::Int)::Int

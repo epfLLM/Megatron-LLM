@@ -770,6 +770,10 @@ def _add_checkpointing_args(parser):
                        help='Do not save current rng state.')
     group.add_argument('--load', type=str, default=None,
                        help='Directory containing a model checkpoint.')
+    group.add_argument('--load_iters', type=int, default=None,
+                       help='Specify which checkpoint to load. If not '
+                          'specified, the latest checkpoint (highest iteration '
+                            'number) located in the load directory will be used.')
     group.add_argument('--no_load_optim', action='store_true', default=None,
                        help='Do not load optimizer when loading checkpoint.')
     group.add_argument('--no_load_rng', action='store_true', default=None,

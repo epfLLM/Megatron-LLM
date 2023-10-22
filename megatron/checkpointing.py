@@ -411,7 +411,7 @@ def fix_query_key_value_ordering(model, checkpoint_version):
                     " checkpoint version {}".format(checkpoint_version))
 
 
-def _load_base_checkpoint(load_dir, use_distributed_optimizer, rank0=False):
+def _load_base_checkpoint(load_dir, use_distributed_optimizer, rank0=False, specify_iteration=None):
     """ Load the base state_dict from the given directory
 
     If rank0 is true, just loads rank 0 checkpoint, ignoring arguments.
@@ -431,6 +431,13 @@ def _load_base_checkpoint(load_dir, use_distributed_optimizer, rank0=False):
     # Otherwise, read the tracker file and either set the iteration or
     # mark it as a release checkpoint.
     iteration, release = read_metadata(tracker_filename)
+    print_rank_0(f"specify_iteration {specify_iteration}")
+    if specify_iteration is not None:
+        print_rank_0(
+            f'overriding iteration {iteration} read from checkpoint with specified iteration {specify_iteration}'
+        )
+        iteration = specify_iteration
+        release = False
 
     # Checkpoint.
     if rank0:
@@ -495,7 +502,8 @@ def load_args_from_checkpoint(args, load_arg='load'):
     model_state_dict, optim_state_dict, release = \
         _load_base_checkpoint(load_dir,
                               use_distributed_optimizer=args.use_distributed_optimizer,
-                              rank0=True)
+                              rank0=True,
+                              specify_iteration=args.load_iters)
 
     # For args we only care about model state dict
     state_dict = model_state_dict
@@ -572,7 +580,8 @@ def load_checkpoint(model, optimizer, opt_param_scheduler, load_arg='load', stri
     model_state_dict, optim_state_dict, release = \
         _load_base_checkpoint(load_dir,
                               use_distributed_optimizer=args.use_distributed_optimizer,
-                              rank0=False)
+                              rank0=False,
+                              specify_iteration=args.load_iters)
 
     if model_state_dict is None:
         return 0

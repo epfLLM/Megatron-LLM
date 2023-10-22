@@ -58,6 +58,10 @@ def _load_checkpoint(queue, args):
         sys.argv += ["--bf16"]
 
     margs = megatron.arguments.parse_args()
+
+    if args.load_iters is not None:
+        margs.load_iters = args.load_iters
+
     margs = load_args_from_checkpoint(margs)
 
     # Arguments do sanity checks on the world size, but we don't care,

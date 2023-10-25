@@ -52,7 +52,7 @@ options:
                         The size of the model
   --out OUT             Directory to store the megatron weights (as checkpoint)
   --cache-dir CACHE_DIR
-                        Directory to use as cache for the huggingface weights, or in case of the llama model, the path of the weights provided Meta
+                        Directory to use as cache for the huggingface weights, or in case of the llama model, the path of the weights provided by Meta
 ```
 
 ## Megatron to huggingface: `megatron_to_hf.py`

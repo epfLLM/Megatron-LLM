@@ -2,7 +2,7 @@
 
 ## Huggingface to megatron: `hf_to_megatron.py`
 
-Convert weights from models in other formats (primairly huggingface) to megatron checkpoints.
+Convert weights from models in other formats (primarily huggingface) to megatron checkpoints.
 
 This script supports converting Falcon, LLaMa and LLaMa 2 weights to megatron checkpoints.
 Depending on the model to convert, the inputs might differ.
@@ -52,7 +52,7 @@ options:
                         The size of the model
   --out OUT             Directory to store the megatron weights (as checkpoint)
   --cache-dir CACHE_DIR
-                        Directory to use as cache for the huggingface weights, or in case of the llama model, the path of the weights privided Meta
+                        Directory to use as cache for the huggingface weights, or in case of the llama model, the path of the weights provided by Meta
 ```
 
 ## Megatron to huggingface: `megatron_to_hf.py`

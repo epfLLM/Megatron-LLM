@@ -202,12 +202,12 @@ torchrun $DISTRIBUTED_ARGS finetune.py \
 
 With the selected global batch size of 1000, and the total number of training tokens around 500M, in 500 iterations the trainer will perform approximately one epoch.
 Set your TP and PP values to the same numbers specified in the previous step.
-This will take approximately 20 hours to run on a 8x 80GB A100 cluster (DP=2, TP=4, PP=1).
+This will take approximately 20 hours to run on an 8x 80GB A100 cluster (DP=2, TP=4, PP=1).
 Feel free to increase the `--micro_batch_size` to speed up training.
 
 :::{note}
 
-To use distributed training make sure to set `nproc_per_node` to the number of GPUs per node, `nnodes` to the number of nodes in your training and `master_addr` to the addres of your master node in the `DISTRIBUTED_ARGS` variable.
+To use distributed training make sure to set `nproc_per_node` to the number of GPUs per node, `nnodes` to the number of nodes in your training and `master_addr` to the address of your master node in the `DISTRIBUTED_ARGS` variable.
 For instance, to train a two node cluster, with 8 GPUs each:
 ```
 DISTRIBUTED_ARGS="--nproc_per_node 1 --nnodes 1 --node_rank 0 --master_addr localhost --master_port 8000"

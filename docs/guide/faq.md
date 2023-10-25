@@ -6,7 +6,7 @@ When defining a new task, it is often needed to introduce tokens with special me
 For instance, let's say we want to add two tokens `[formula]` and `[/formula]` to indicate the start and end of a formula in mathematics textbooks.
 In order to include these new tokens, you need to indicate them in three different places:
 
-1. When tokenizing (`tools/preprocess_data.py`), using the flag `--vocab_extra_ids_list` with the new tokens:
+1. When tokenizing (`tools/preprocess_data.py`), use the flag `--vocab_extra_ids_list` with the new tokens:
     ```
     python tools/preprocess_data.py --vocab_extra_ids_list "[formula],[/formula]" # ...
     ```

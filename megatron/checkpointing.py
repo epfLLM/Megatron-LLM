@@ -144,9 +144,16 @@ def get_checkpoint_names(checkpoints_path, iteration, no_load_optim, use_distrib
     elif os.path.exists(distrib_model_name) or use_distributed_optimizer:
         assert use_distributed_optimizer
         assert not os.path.exists(unified_name)
-        distrib_optim_name = os.path.join(
-            common_path + "_%03d" % mpu.get_data_parallel_rank(),
-            "optim.pt")
+        try:
+            distrib_optim_name = os.path.join(
+                common_path + "_%03d" % mpu.get_data_parallel_rank(),
+                "optim.pt")
+        except:
+            
+            distrib_optim_name = os.path.join(
+                common_path + "_%03d" % 0,
+                "optim.pt")
+
         model_name = distrib_model_name
         optim_name = distrib_optim_name
     else:

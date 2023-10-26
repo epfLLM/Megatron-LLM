@@ -1078,7 +1078,10 @@ class ParallelTransformer(MegatronModule):
         return self.layers[layer_number]
 
     def _checkpointed_forward(self, hidden_states, attention_mask,
-                              encoder_output, enc_dec_attn_mask, is_first_microbatch):
+                              encoder_output, enc_dec_attn_mask,
+                              inference_params, position_ids,
+                              is_first_microbatch
+                              ):
         """Forward method with activation checkpointing."""
         def custom(start, end, is_transformer_engine=False):
             def custom_forward(*args, **kwargs):
@@ -1106,12 +1109,16 @@ class ParallelTransformer(MegatronModule):
                         self.distribute_saved_activations,
                         megatron.core.tensor_parallel.get_cuda_rng_tracker,
                         megatron.core.mpu.get_tensor_model_parallel_group(),
-                        hidden_states, attention_mask, encoder_output, enc_dec_attn_mask)
+                        hidden_states, attention_mask, encoder_output, enc_dec_attn_mask,
+                        inference_params, position_ids
+                    )
                 else:
                     hidden_states = megatron.core.tensor_parallel.checkpoint(
                         custom(l, l + self.recompute_num_layers),
                         self.distribute_saved_activations,
-                        hidden_states, attention_mask, encoder_output, enc_dec_attn_mask)
+                        hidden_states, attention_mask, encoder_output, enc_dec_attn_mask,
+                        inference_params, position_ids
+                    )
 
                 l += self.recompute_num_layers
 
@@ -1127,19 +1134,27 @@ class ParallelTransformer(MegatronModule):
                             self.distribute_saved_activations,
                             megatron.core.tensor_parallel.get_cuda_rng_tracker,
                             megatron.core.mpu.get_tensor_model_parallel_group(),
-                            hidden_states, attention_mask, encoder_output, enc_dec_attn_mask)
+                            hidden_states, attention_mask, encoder_output, enc_dec_attn_mask,
+                            inference_params, position_ids
+                            )
                     else:
                         hidden_states = megatron.core.tensor_parallel.checkpoint(
                             custom(l, l + 1),
                             self.distribute_saved_activations,
-                            hidden_states, attention_mask, encoder_output, enc_dec_attn_mask)
+                            hidden_states, attention_mask, encoder_output, enc_dec_attn_mask,
+                            inference_params, position_ids
+                        )
                 else:
                     if self.transformer_impl == 'transformer_engine':
                         hidden_states = custom(l, l + 1, is_transformer_engine=True)(
-                            hidden_states, attention_mask, encoder_output, enc_dec_attn_mask)
+                            hidden_states, attention_mask, encoder_output, enc_dec_attn_mask,
+                            inference_params, position_ids
+                        )
                     else:
                         hidden_states = custom(l, l + 1)(
-                            hidden_states, attention_mask, encoder_output, enc_dec_attn_mask)
+                            hidden_states, attention_mask, encoder_output, enc_dec_attn_mask,
+                            inference_params, position_ids
+                        )
         else:
             raise ValueError("Invalid activation recompute method.")
 
@@ -1220,6 +1235,8 @@ class ParallelTransformer(MegatronModule):
                                                                attention_mask,
                                                                encoder_output,
                                                                enc_dec_attn_mask,
+                                                               inference_params,
+                                                               position_ids,
                                                                is_first_microbatch)
                 else:
                     forward_kwargs = {

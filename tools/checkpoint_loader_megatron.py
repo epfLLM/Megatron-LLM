@@ -56,8 +56,8 @@ def _load_checkpoint(queue, args):
 
     if args.bf16:
         sys.argv += ["--bf16"]
-    if args.load_iteration is not None:
-        sys.argv += ["--load_iters", args.load_iters]
+    if args.load_iters is not None:
+        sys.argv += ["--load_iters", str(args.load_iters)]
 
     margs = megatron.arguments.parse_args()
     margs = load_args_from_checkpoint(margs)

@@ -431,7 +431,6 @@ def _load_base_checkpoint(load_dir, use_distributed_optimizer, rank0=False, spec
     # Otherwise, read the tracker file and either set the iteration or
     # mark it as a release checkpoint.
     iteration, release = read_metadata(tracker_filename)
-    print_rank_0(f"specify_iteration {specify_iteration}")
     if specify_iteration is not None:
         print_rank_0(
             f'overriding iteration {iteration} read from checkpoint with specified iteration {specify_iteration}'

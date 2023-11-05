@@ -437,7 +437,7 @@ def _load_base_checkpoint(load_dir, use_distributed_optimizer, rank0=False, spec
             f'overriding iteration {iteration} read from checkpoint with specified iteration {specify_iteration}'
         )
         iteration = specify_iteration
-        release = False
+        release = iteration == 0
 
     # Checkpoint.
     if rank0:

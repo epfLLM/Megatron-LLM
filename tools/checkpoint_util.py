@@ -125,6 +125,10 @@ def main():
                         help='Do not perform checking on the name and ordering of weights',
                         dest='checking')
     parser.add_argument('--bf16', action='store_true', help='force bfloat16 weights')
+    parser.add_argument('--load_iters', type=int, default=None,
+                    help='Specify which checkpoint to load. If not '
+                        'specified, the latest checkpoint (highest iteration '
+                        'number) located in the load directory will be used.')
 
     known_args, _ = parser.parse_known_args()
     loader = load_plugin('loader', known_args.loader)

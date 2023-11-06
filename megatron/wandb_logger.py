@@ -60,6 +60,7 @@ class WandBConfig(object):
                            log_interval=args.log_interval,
                            config=args,entity=args.wandb_entity,
                            project=args.wandb_project,
+                           name=args.wandb_name,
                            run_id=args.wandb_id,
                            resume=args.wandb_resume,
                            api_key=args.wandb_api_key,

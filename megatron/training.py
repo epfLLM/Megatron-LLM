@@ -936,6 +936,11 @@ def build_train_valid_test_data_iterators(build_train_valid_test_datasets_provid
     args.do_valid = flags[1].item()
     args.do_test = flags[2].item()
 
+    if args.eval_only:
+        args.do_train = False
+        args.do_valid = False
+        args.do_test = True
+
     # Build iterators.
     dl_type = args.dataloader_type
     assert dl_type in ['single', 'cyclic']

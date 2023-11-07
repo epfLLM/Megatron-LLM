@@ -349,9 +349,9 @@ class _SentencePieceTokenizer(AbstractTokenizer):
             self._inv_vocab[i] = t
             self._vocab[t] = i
 
-        def _add_special_token(t):
-            # if t not in self.vocab and not new_tokens:
-            #     return
+        def _add_special_token(t, force=False):
+            if t not in self.vocab and not new_tokens and not force:
+                return
             if t not in self._vocab:
                 next_id = len(self._vocab)
                 self._vocab[t] = next_id
@@ -359,23 +359,22 @@ class _SentencePieceTokenizer(AbstractTokenizer):
             self._special_tokens[t] = self._vocab[t]
             self._inv_special_tokens[self._vocab[t]] = t
 
-        if new_tokens:
-            _add_special_token('<CLS>')
-            self._cls_id = self._vocab.get('<CLS>')
-            _add_special_token('<SEP>')
-            self._sep_id = self._vocab.get('<SEP>')
-            _add_special_token('<EOD>')
-            self._eod_id = self._vocab.get('<EOD>')
-            _add_special_token('<MASK>')
-            self._mask_id = self._vocab.get('<MASK>')
+        _add_special_token('<CLS>')
+        self._cls_id = self._vocab.get('<CLS>')
+        _add_special_token('<SEP>')
+        self._sep_id = self._vocab.get('<SEP>')
+        _add_special_token('<EOD>')
+        self._eod_id = self._vocab.get('<EOD>')
+        _add_special_token('<MASK>')
+        self._mask_id = self._vocab.get('<MASK>')
 
-            pad_id = self._tokenizer.pad_id()
-            try:
-                pad_token = self._tokenizer.id_to_piece(pad_id)
-            except IndexError:
-                pad_token = '<PAD>'
-            _add_special_token(pad_token)
-            self._pad_id = self._vocab.get(pad_token)
+        pad_id = self._tokenizer.pad_id()
+        try:
+            pad_token = self._tokenizer.id_to_piece(pad_id)
+        except IndexError:
+            pad_token = '<PAD>'
+        _add_special_token(pad_token)
+        self._pad_id = self._vocab.get(pad_token)
 
         bos_id = self._tokenizer.bos_id()
         try:
@@ -399,11 +398,11 @@ class _SentencePieceTokenizer(AbstractTokenizer):
 
         for i in range(vocab_extra_ids):
             t = "<extra_id_{}>".format(i)
-            _add_special_token(t)
+            _add_special_token(t, force=True)
             self._t5_tokens += [t]
         if vocab_extra_ids_list:
             for t in vocab_extra_ids_list.split(","):
-                _add_special_token(t)
+                _add_special_token(t, force=True)
         print("Special tokens: {}".format(self._special_tokens))
 
     @property

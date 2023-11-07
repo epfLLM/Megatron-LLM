@@ -371,27 +371,27 @@ def write_tokenizer(args: Namespace):
     # add default args for megatron tokenizer
     args.rank = 0
     args.vocab_extra_ids = 0
+    args.new_tokens = True
     args.make_vocab_size_divisible_by = 128
     args.tensor_model_parallel_size = 1
     mt_tokenizer = build_tokenizer(args)
 
     if args.tokenizer_type == "SentencePieceTokenizer":
         # Do not add def special tokens if requested
-        if args.new_tokens:
-            if mt_tokenizer.cls is not None:
-                hf_tokenizer.add_tokens("<CLS>", special_tokens=True)
-                hf_tokenizer.cls_token_id = mt_tokenizer.cls
-            if mt_tokenizer.sep is not None:
-                hf_tokenizer.add_tokens("<SEP>", special_tokens=True)
-                hf_tokenizer.sep_token_id = mt_tokenizer.sep
-            if mt_tokenizer.eod is not None:
-                hf_tokenizer.add_tokens("<EOD>", special_tokens=True)
-            if mt_tokenizer.mask is not None:
-                hf_tokenizer.add_tokens("<MASK>", special_tokens=True)
-                hf_tokenizer.mask_token_id = mt_tokenizer.mask
-            if mt_tokenizer.pad is not None:
-                hf_tokenizer.add_tokens("<PAD>", special_tokens=True)
-                hf_tokenizer.pad_token_id = mt_tokenizer.pad
+        if mt_tokenizer.cls is not None:
+            hf_tokenizer.add_tokens("<CLS>", special_tokens=True)
+            hf_tokenizer.cls_token_id = mt_tokenizer.cls
+        if mt_tokenizer.sep is not None:
+            hf_tokenizer.add_tokens("<SEP>", special_tokens=True)
+            hf_tokenizer.sep_token_id = mt_tokenizer.sep
+        if mt_tokenizer.eod is not None:
+            hf_tokenizer.add_tokens("<EOD>", special_tokens=True)
+        if mt_tokenizer.mask is not None:
+            hf_tokenizer.add_tokens("<MASK>", special_tokens=True)
+            hf_tokenizer.mask_token_id = mt_tokenizer.mask
+        if mt_tokenizer.pad is not None:
+            hf_tokenizer.add_tokens("<PAD>", special_tokens=True)
+            hf_tokenizer.pad_token_id = mt_tokenizer.pad
 
         additional_special_tokens = hf_tokenizer.additional_special_tokens
         if args.vocab_extra_ids_list:
@@ -451,9 +451,6 @@ def main():
                         help=("One or more arguments to override special tokens. "
                               "Syntax set as `key=value`, e.g. `eos=<|im_end|>`. "
                               "Overrides available only bos, cls, eos, mask, pad, sep, unk."))
-    parser.add_argument("--no_new_tokens", action="store_false", dest="new_tokens",
-                       help=("Do not add special tokens (e.g. CLS, MASK, etc) "
-                             "in the sentenciepiece tokenizer"))
     
     args = parser.parse_args()
     if args.model in {"llama", "llama2", "codellama"}:

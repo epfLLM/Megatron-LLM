@@ -377,7 +377,6 @@ def write_tokenizer(args: Namespace):
     mt_tokenizer = build_tokenizer(args)
 
     if args.tokenizer_type == "SentencePieceTokenizer":
-        # Do not add def special tokens if requested
         if mt_tokenizer.cls is not None:
             hf_tokenizer.add_tokens("<CLS>", special_tokens=True)
             hf_tokenizer.cls_token_id = mt_tokenizer.cls

@@ -195,6 +195,14 @@ def main(model_name: str = "falcon", size: int = 7, out: Optional[Path] = None,
                                                      trust_remote_code=True,
                                                      cache_dir=cache_dir)
         hf_weights = model.state_dict()
+    elif model_name == "mistral":
+        print("Fetching weights from huggingface")
+        if model_path is None:
+            model_path = "mistralai/Mistral-7B-v0.1"
+        model = AutoModelForCausalLM.from_pretrained(model_path,
+                                                    trust_remote_code=True,
+                                                    cache_dir=cache_dir)
+        hf_weights = model.state_dict()
     else:
         print("Getting llama...")
         version = 2 if "2" in model_name else 1
@@ -222,6 +230,30 @@ def main(model_name: str = "falcon", size: int = 7, out: Optional[Path] = None,
                      "hidden_dropout": 0.0,
                      "parallel_attn": True, "max_position_embeddings": 2048,
                      "seq_length": 2048})
+    elif model_name == "mistral":
+        assert size == 7
+        # mistral-7b mostly uses the same args as llama-7b
+        # https://huggingface.co/mistralai/Mistral-7B-v0.1/blob/main/config.json
+        args = {
+            "num_layers": 32,
+            "hidden_size": 4096,
+            "num_attention_heads": 32,
+            "num_attention_heads_kv": 8,  # except this - GroupedAttention
+            "ffn_hidden_size": 14336,  # except this
+            "parallel_attn": False,
+            "make_vocab_size_divisible_by": 128,
+            "glu_activation": "swiglu",  # == silu
+            "padded_vocab_size": 32000,
+            "use_rms_norm": True,
+            "tie_embed_logits": False,
+            "tokenizer_type": "SentencePieceTokenizer",
+            
+            "max_position_embeddings": 32768,
+            "seq_length": 32768,
+            "layernorm_epsilon": 1e-5,
+            "rope_theta": 10000.0,
+            # "sliding_window": 4096,
+        }
     else:  # llama1, llama2, codellama
         args = {"num_layers": llama_s2layer[size],
                 "hidden_size": llama_s2hidden[size],
@@ -290,6 +322,21 @@ def main(model_name: str = "falcon", size: int = 7, out: Optional[Path] = None,
         vocab_file = tokenizer.vocab_file
         shutil.copy(vocab_file, token_path)
         print("Saved tokenizer.model in", token_path)
+    elif model_name == "mistral":
+        tokenizer = None
+        if model_path is not None:
+            try:
+                tokenizer = LlamaTokenizer.from_pretrained(model_path, cache_dir=cache_dir)
+            except OSError:
+                warnings.warn(f"Model path {model_path} does not have a "
+                              "tokenizer, using default tokenizer instead")
+        if tokenizer is None:
+            tokenizer = LlamaTokenizer.from_pretrained("mistralai/Mistral-7B-v0.1",
+                                                       cache_dir=cache_dir)
+        token_path = out/"tokenizer.model"
+        vocab_file = tokenizer.vocab_file
+        shutil.copy(vocab_file, token_path)
+        print("Saved tokenizer.model in", token_path)
 
     print("Done")
 
@@ -297,7 +344,7 @@ def main(model_name: str = "falcon", size: int = 7, out: Optional[Path] = None,
 if __name__ == "__main__":
     parser = ArgumentParser(description="Convert Huggingface llama or falcon weights to "
                                         "megatron-compatible weights")
-    parser.add_argument("model", choices={"falcon", "llama", "llama2", "codellama"})
+    parser.add_argument("model", choices={"falcon", "llama", "llama2", "codellama", "mistral"})
     parser.add_argument("--size", default=7, choices={7, 13, 30, 34, 40, 65, 70}, type=int,
                         help="The size of the model")
     parser.add_argument("--out", type=Path,
@@ -317,6 +364,8 @@ if __name__ == "__main__":
         assert args.size in {7, 13, 30, 65}
     elif args.model == "codellama":
         assert args.size in {7, 13, 34}
+    elif args.model == "mistral":
+        assert args.size in {7}
     else:
         assert args.size in {7, 13, 70}
 

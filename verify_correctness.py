@@ -48,21 +48,26 @@ def is_meta_llama2_path(path: Optional[Path]) -> bool:
 
 
 def hf_provider(name: str, cache_dir: Optional[Path], device: str,
-                size: int = 7):
+                size: int = 7, bf16: bool = False):
     print("Getting huggingface model...")
+    extra_kwargs = {}
+    if bf16:
+        extra_kwargs = {"torch_dtype": torch.bfloat16}
     if name == "falcon":
         model = AutoModelForCausalLM.from_pretrained(
             f"tiiuae/falcon-{size}b", cache_dir=cache_dir,
-            trust_remote_code=True
+            trust_remote_code=True,
+            **extra_kwargs
         )
     elif name == "llama":
         try:
-            model = LlamaForCausalLM.from_pretrained(cache_dir)
+            model = LlamaForCausalLM.from_pretrained(cache_dir, **extra_kwargs)
         except OSError:
             print(f"Cache dir {cache_dir} does not look like a huggingface "
                   "checkpoint, assuming cache_dir instead")
             model = LlamaForCausalLM.from_pretrained(
-                f"decapoda-research/llama-{size}b-hf", cache_dir=cache_dir
+                f"decapoda-research/llama-{size}b-hf", cache_dir=cache_dir,
+                **extra_kwargs
             )
     elif name == "llama2" and is_meta_llama2_path(cache_dir):
         print(f"baseline path {cache_dir} does not look like a huggingface, "
@@ -70,17 +75,19 @@ def hf_provider(name: str, cache_dir: Optional[Path], device: str,
         model = Llama2Wrapper(cache_dir)
     elif name == "llama2":
         model = LlamaForCausalLM.from_pretrained(
-            f"meta-llama/Llama-2-{size}b-hf", cache_dir=cache_dir
+            f"meta-llama/Llama-2-{size}b-hf", cache_dir=cache_dir,
+            **extra_kwargs
         )
     elif name == "mistral":
         assert size == 7, "Mistral only supports 7B model"
         try:
-            model = MistralForCausalLM.from_pretrained(cache_dir)
+            model = MistralForCausalLM.from_pretrained(cache_dir, **extra_kwargs)
         except OSError:
             print(f"Cache dir {cache_dir} does not look like a huggingface "
                   "checkpoint, assuming cache_dir instead")
             model = MistralForCausalLM.from_pretrained(
-                f"mistralai/Mistral-{size}B-v0.1", cache_dir=cache_dir
+                f"mistralai/Mistral-{size}B-v0.1", cache_dir=cache_dir,
+                **extra_kwargs
             )
     else:
         raise KeyError(f"Model {name} not implemented")
@@ -157,7 +164,7 @@ def main():
     else:
         print("NOTE: The given path does not look like a megatron checkpoint, "
               f"assuming it's a huggingface checkpoint instead (path={args.load})")
-        our_model = hf_our_provider(args.model_name, args.load, "cuda:0")
+        our_model = hf_our_provider(args.model_name, args.load, "cuda:0", bf16=args.bf16)
         our_forward = hf_forward
         args.iteration = 0
 

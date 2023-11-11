@@ -185,6 +185,8 @@ def _load_checkpoint(queue, args):
     md.glu_activation = margs.glu_activation
     md.tie_embed_logits = margs.tie_embed_logits
     md.params_dtype = margs.params_dtype
+    if hasattr(margs, "sliding_window_size"):
+        md.sliding_window_size = margs.sliding_window_size
     if margs.position_embedding_type == PositionEmbeddingType.absolute:
         md.position_embedding_type = "absolute"
     elif margs.position_embedding_type == PositionEmbeddingType.rotary:

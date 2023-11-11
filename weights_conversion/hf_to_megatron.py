@@ -181,6 +181,79 @@ def llama_to_megatron(weights: dict, size: int, source: str = "meta",
             "lm_head": lm_head}
 
 
+def mistral_to_megatron(
+    weights: dict,
+    size: int
+) -> dict:
+    assert size == 7
+    def permute(qkv_w):
+        # if source == "hf":
+        # by default, we pull mistrals weights from huggingface
+        return permute_qkv(qkv_w, hidden, n_heads, n_kv_heads)
+        # return qkv_w
+
+    def rearrange_qkv(wq, wk, wv):
+        wq = torch.split(wq, n_hidden_per_head, dim=0)
+        wk = torch.split(wk, n_hidden_per_head, dim=0)
+        wv = torch.split(wv, n_hidden_per_head, dim=0)
+        assert len(wq) == n_heads
+        assert len(wk) == n_kv_heads
+        assert len(wv) == n_kv_heads
+        n_qs_per_kv = n_heads//n_kv_heads
+        w_qkv = []
+        for i in range(n_kv_heads):
+            w_qkv += [wq[i*n_qs_per_kv + j] for j in range(n_qs_per_kv)]
+            w_qkv += [wk[i], wv[i]]
+        return permute(torch.concat(w_qkv))
+
+    # config
+    if size == 7:
+        n_layer = 32
+        hidden = 4096
+        n_heads = 32
+        n_kv_heads = 8
+    n_hidden_per_head = hidden // n_heads
+
+    # weights independent of layers
+    embedding = {"word_embeddings.weight": weights["model.embed_tokens.weight"]}
+    transformer = {"final_layernorm.weight": weights["model.norm.weight"]}
+    lm_head = weights["lm_head.weight"]
+
+    # get all the other weights
+    for layer in trange(n_layer, desc="Converting weights"):
+        prefix = f"model.layers.{layer}"
+        # identical weights
+        transformer[f"{prefix}.attention.dense.weight"] = \
+            weights[f"{prefix}.self_attn.o_proj.weight"]
+        transformer[f"{prefix}.post_attention_layernorm.weight"] = \
+            weights[f"{prefix}.post_attention_layernorm.weight"]
+        transformer[f"{prefix}.input_layernorm.weight"] = \
+            weights[f"{prefix}.input_layernorm.weight"]
+        transformer[f"{prefix}.mlp.dense_4h_to_h.weight"] = \
+            weights[f"{prefix}.mlp.down_proj.weight"]
+        # concatenate up, gate mlp weights
+        transformer[f"{prefix}.mlp.dense_h_to_4h.weight"] = torch.concat([
+            weights[f"{prefix}.mlp.up_proj.weight"],  # w3
+            weights[f"{prefix}.mlp.gate_proj.weight"]  # w1
+        ])
+        # finally, qkv requires serious manipulation to get right (probably same as llama-2)
+        transformer[f"{prefix}.attention.query_key_value.weight"] = rearrange_qkv(
+            weights[f"{prefix}.self_attn.q_proj.weight"],
+            weights[f"{prefix}.self_attn.k_proj.weight"],
+            weights[f"{prefix}.self_attn.v_proj.weight"]
+        )
+
+        # release references to original weights (free mem)
+        del weights[f"{prefix}.mlp.up_proj.weight"]
+        del weights[f"{prefix}.mlp.gate_proj.weight"]
+        del weights[f"{prefix}.self_attn.q_proj.weight"]
+        del weights[f"{prefix}.self_attn.k_proj.weight"]
+        del weights[f"{prefix}.self_attn.v_proj.weight"]
+
+    return {"embedding": embedding, "transformer": transformer,
+            "lm_head": lm_head}
+
+
 def main(model_name: str = "falcon", size: int = 7, out: Optional[Path] = None,
          cache_dir: Optional[Path] = None, model_path: Optional[str] = None):
     if out is None:
@@ -212,6 +285,8 @@ def main(model_name: str = "falcon", size: int = 7, out: Optional[Path] = None,
     # convert state dict to be megatron-compatible
     if model_name == "falcon":
         megatron_weights = falcon_to_megatron(hf_weights, size)
+    elif model_name == "mistral":
+        megatron_weights = mistral_to_megatron(hf_weights, size)
     else:
         megatron_weights = llama_to_megatron(hf_weights, size, llama_source,
                                              version=1 if model_name == "llama" else 2)
@@ -252,7 +327,7 @@ def main(model_name: str = "falcon", size: int = 7, out: Optional[Path] = None,
             "seq_length": 32768,
             "layernorm_epsilon": 1e-5,
             "rope_theta": 10000.0,
-            # "sliding_window": 4096,
+            "sliding_window_size": 4096,
         }
     else:  # llama1, llama2, codellama
         args = {"num_layers": llama_s2layer[size],

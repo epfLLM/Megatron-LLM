@@ -37,6 +37,9 @@ def model_provider(pre_process: bool = True, post_process: bool = True):
         cls = partial(LlamaModel, version=1 if args.model_name == "llama" else 2)
     elif args.model_name == "mistral":
         cls = MistralModel
+        if args.sliding_window_size != 4096:
+            print_rank_0("Mistral uses sliding window attention (set sliding_window=4096)")
+            args.sliding_window_size = 4096
     else:
         raise KeyError(f"Unkown model {args.model_name}")
 

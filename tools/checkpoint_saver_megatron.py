@@ -154,7 +154,7 @@ def save_checkpoint(queue, args):
     elif md.model_type == 'BERT':
         from pretrain_bert import model_provider
         margs.model_type = ModelType.encoder_or_decoder
-    elif md.model_type in {'falcon', 'llama', 'llama2', 'codellama'}:
+    elif md.model_type in {'falcon', 'llama', 'llama2', 'codellama', 'mistral'}:
         from finetune import model_provider
         margs.model_name = args.model_type
         margs.model_type = ModelType.encoder_or_decoder

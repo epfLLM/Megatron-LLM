@@ -476,8 +476,8 @@ def _add_network_size_args(parser):
                        help=("If set, the weights of the word embedding and lm_head "
                              "are not tied"))
     # Added for Mistral
-    group.add_argument("--sliding_window", type=int, default=None,
-                       help="Whether to use sliding window attention for Mistral")
+    group.add_argument("--sliding_window_size", type=int, default=None,
+                       help="Whether to use sliding window attention for Mistral. Default is None, which means no sliding window attention.")
     return parser
 
 

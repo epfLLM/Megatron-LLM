@@ -27,7 +27,7 @@ class MistralModel(GPTModel):
         assert not args.parallel_attn, "Mistral does not use parallel_attn"
         assert args.use_rms_norm, "Mistral uses rms_norm"
         assert not args.tie_embed_logits , "Mistral unties embedding and lm_head weights"
-        assert args.sliding_window == 4096, "Mistral uses sliding window attention (sliding_window=4096)"
+        assert args.sliding_window_size == 4096, "Mistral uses sliding window attention (sliding_window=4096)"
 
         # recomended arguments
         if not args.use_flash_attn:

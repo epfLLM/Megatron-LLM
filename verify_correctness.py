@@ -7,7 +7,7 @@ from typing import Optional
 import torch
 import llama
 from torch import nn
-from transformers import AutoModelForCausalLM, LlamaForCausalLM, LlamaTokenizer
+from transformers import AutoModelForCausalLM, LlamaForCausalLM, LlamaTokenizer, MistralForCausalLM
 from fairscale.nn.model_parallel.initialize import initialize_model_parallel
 
 from megatron import get_args, update_num_microbatches
@@ -72,6 +72,16 @@ def hf_provider(name: str, cache_dir: Optional[Path], device: str,
         model = LlamaForCausalLM.from_pretrained(
             f"meta-llama/Llama-2-{size}b-hf", cache_dir=cache_dir
         )
+    elif name == "mistral":
+        assert size == 7, "Mistral only supports 7B model"
+        try:
+            model = MistralForCausalLM.from_pretrained(cache_dir)
+        except OSError:
+            print(f"Cache dir {cache_dir} does not look like a huggingface "
+                  "checkpoint, assuming cache_dir instead")
+            model = MistralForCausalLM.from_pretrained(
+                f"mistralai/Mistral-{size}B-v0.1", cache_dir=cache_dir
+            )
     else:
         raise KeyError(f"Model {name} not implemented")
     return model.eval().requires_grad_(False).to(device)
@@ -114,7 +124,7 @@ def verify_step(our_forward, our_model, base_forward, base_model, batch):
     our_logits, our_loss = our_forward(our_model, batch)
     base_logits, base_loss = base_forward(base_model, batch)
     assert our_logits.size() == base_logits.size(), \
-            f"ours={logits1.size()}, true={logits2.size()}"
+            f"ours={our_logits.size()}, true={base_logits.size()}"
     our_logits = our_logits.cpu()
     base_logits = base_logits.cpu()
     abs_error = torch.abs(our_logits - base_logits)
@@ -192,9 +202,9 @@ def extra_extra_args(parser):
 if __name__ == "__main__":
     defaults = {"micro_batch_size": 1, "use_checkpoint_args": True, "train_iters": 10,
                 "lr": 1.0}
-    if not is_megatron_path(parse_args(extra_extra_args).load):
-        defaults.update({"encoder_num_layers": 1, "hidden_size": 1, 
-                         "num_attention_heads": 1, "seq_length": 2048,
-                         "max_position_embeddings": 2048})
+    # if not is_megatron_path(parse_args(extra_extra_args).load):
+    #     defaults.update({"encoder_num_layers": 1, "hidden_size": 1, 
+    #                      "num_attention_heads": 1, "seq_length": 2048,
+    #                      "max_position_embeddings": 2048})
     initialize_megatron(extra_extra_args, args_defaults=defaults)
     main()

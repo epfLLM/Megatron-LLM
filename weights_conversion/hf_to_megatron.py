@@ -221,34 +221,35 @@ def mistral_to_megatron(
 
     # get all the other weights
     for layer in trange(n_layer, desc="Converting weights"):
-        prefix = f"model.layers.{layer}"
+        prefix = f"layers.{layer}"
+        hf_prefix = f"model.{prefix}"
         # identical weights
         transformer[f"{prefix}.attention.dense.weight"] = \
-            weights[f"{prefix}.self_attn.o_proj.weight"]
+            weights[f"{hf_prefix}.self_attn.o_proj.weight"]
         transformer[f"{prefix}.post_attention_layernorm.weight"] = \
-            weights[f"{prefix}.post_attention_layernorm.weight"]
+            weights[f"{hf_prefix}.post_attention_layernorm.weight"]
         transformer[f"{prefix}.input_layernorm.weight"] = \
-            weights[f"{prefix}.input_layernorm.weight"]
+            weights[f"{hf_prefix}.input_layernorm.weight"]
         transformer[f"{prefix}.mlp.dense_4h_to_h.weight"] = \
-            weights[f"{prefix}.mlp.down_proj.weight"]
+            weights[f"{hf_prefix}.mlp.down_proj.weight"]
         # concatenate up, gate mlp weights
         transformer[f"{prefix}.mlp.dense_h_to_4h.weight"] = torch.concat([
-            weights[f"{prefix}.mlp.up_proj.weight"],  # w3
-            weights[f"{prefix}.mlp.gate_proj.weight"]  # w1
+            weights[f"{hf_prefix}.mlp.up_proj.weight"],  # w3
+            weights[f"{hf_prefix}.mlp.gate_proj.weight"]  # w1
         ])
         # finally, qkv requires serious manipulation to get right (probably same as llama-2)
         transformer[f"{prefix}.attention.query_key_value.weight"] = rearrange_qkv(
-            weights[f"{prefix}.self_attn.q_proj.weight"],
-            weights[f"{prefix}.self_attn.k_proj.weight"],
-            weights[f"{prefix}.self_attn.v_proj.weight"]
+            weights[f"{hf_prefix}.self_attn.q_proj.weight"],
+            weights[f"{hf_prefix}.self_attn.k_proj.weight"],
+            weights[f"{hf_prefix}.self_attn.v_proj.weight"]
         )
 
         # release references to original weights (free mem)
-        del weights[f"{prefix}.mlp.up_proj.weight"]
-        del weights[f"{prefix}.mlp.gate_proj.weight"]
-        del weights[f"{prefix}.self_attn.q_proj.weight"]
-        del weights[f"{prefix}.self_attn.k_proj.weight"]
-        del weights[f"{prefix}.self_attn.v_proj.weight"]
+        del weights[f"{hf_prefix}.mlp.up_proj.weight"]
+        del weights[f"{hf_prefix}.mlp.gate_proj.weight"]
+        del weights[f"{hf_prefix}.self_attn.q_proj.weight"]
+        del weights[f"{hf_prefix}.self_attn.k_proj.weight"]
+        del weights[f"{hf_prefix}.self_attn.v_proj.weight"]
 
     return {"embedding": embedding, "transformer": transformer,
             "lm_head": lm_head}

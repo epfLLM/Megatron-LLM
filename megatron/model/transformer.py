@@ -305,7 +305,6 @@ class ParallelAttention(MegatronModule):
         self.num_attention_heads_kv = args.num_attention_heads_kv
         self.num_attention_heads = args.num_attention_heads
         self.seq_length = args.seq_length
-        self.packed_input = args.packed_input
         if self.use_flash_attn:
             assert attention_type == AttnType.self_attn, ('FlashAttention code path only supports '
                                                           'self-attention for now')

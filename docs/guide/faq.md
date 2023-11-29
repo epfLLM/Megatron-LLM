@@ -68,14 +68,16 @@ In order to launch training on multiple nodes, you will set the appropriate argu
 
 ## What are the basic hardware requirements?
 
-In this section we give a brief overview on the minimal hardware requirements we observed during our experiments.
+A brief overview on the minimal training hardware requirements we observed during our experiments.
 
 | Model      | min VRAM | tp  | pp  |
 | :--------- | :------: | :-: | :-: |
 | LLaMa2-7B  | 2x 80GB  | 2   | 1   |
+| Mistral-7B | 4x 80GB  | 4   | 1   |
 | Falcon-40B | 16x 80GB | 8   | 2   |
 | LLaMa2-70B | 32x 80GB | 8   | 4   |
 
+Note that you might observe different values depending on the sequence length, batch size and other configurations.
 
 (shard)=
 ## How to shard and merge models?

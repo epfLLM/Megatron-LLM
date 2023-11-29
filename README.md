@@ -9,7 +9,7 @@ This library enables pre-training and fine-tuning of large language models (LLMs
 Our repository is a modification of the [original Megatron-LM codebase](https://github.com/NVIDIA/Megatron-LM) by Nvidia.
 
 Added key features include:
-- [Llama](https://arxiv.org/abs/2302.13971), [Llama 2](https://arxiv.org/abs/2307.09288), [Code Llama](https://arxiv.org/abs/2308.12950) and [Falcon](https://huggingface.co/tiiuae) support
+- [Llama](https://arxiv.org/abs/2302.13971), [Llama 2](https://arxiv.org/abs/2307.09288), [Code Llama](https://arxiv.org/abs/2308.12950), [Falcon](https://huggingface.co/tiiuae), and [Mistral](https://arxiv.org/abs/2310.06825) support.
 - support training of large models (70B Llama 2, 65B Llama 1, 34B Code Llama, and 40B Falcon) on commodity hardware on multiple nodes
 - 3-way parallelism: tensor parallel, pipeline parallel and data parallel training (inherited from Megatron)
 - full pretraining, finetuning and instruct tuning support
@@ -37,7 +37,8 @@ make html
 # Example models trained with *Megatron-LLM*
 70B Llama 2 [1](https://huggingface.co/OpenAssistant/llama2-70b-oasst-sft-v10), 
 40B Falcon [1](https://huggingface.co/OpenAssistant/falcon-40b-megacode2-oasst), 
-13B Code Llama [1](https://huggingface.co/OpenAssistant/codellama-13b-oasst-sft-v10), ... 
+13B Code Llama [1](https://huggingface.co/OpenAssistant/codellama-13b-oasst-sft-v10),
+7B and 70B Meditron LLMs [1](https://huggingface.co/epfl-llm/meditron-70b).
 (Let us know about yours!)
 
 # Citation

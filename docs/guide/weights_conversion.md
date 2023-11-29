@@ -7,12 +7,13 @@ Convert weights from models in other formats (primarily huggingface) to megatron
 This script supports converting Falcon, LLaMa and LLaMa 2 weights to megatron checkpoints.
 Depending on the model to convert, the inputs might differ.
 
-- **Falcon**:
+- **Falcon**/**Mistral**:
   Weights are automatically retrieved from the official implementation hosted in huggingface.
   Thus, the `--cache-dir` argument is optional, if specified it should point to
-  the huggingface cache directory where the huggingface Falcon weights will be stored.
+  the huggingface cache directory where the huggingface Falcon/Mistral weights will be stored.
   You will need to specify the `--size` argument to determine which version to download
   (i.e. Falcon 7B or 40B).
+  Note that mistral only has 7B weights available.
 
 - **LLaMa**, **LLaMa 2** and **CodeLlama**:
   Converting llama weights can be done either fetching the weights hosted
@@ -44,7 +45,7 @@ More information about the arguments:
 
 ```
 positional arguments:
-  {llama2,falcon,codellama,llama}
+  {llama2,falcon,codellama,llama,mistral}
 
 options:
   -h, --help            show this help message and exit

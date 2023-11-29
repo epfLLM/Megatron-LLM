@@ -314,7 +314,7 @@ def write_mistral_model(
             # update config
             config.vocab_size = vocab_size
 
-        print("Loading the checkpoint in a Llama model...")
+        print("Loading the checkpoint in a Mistral model...")
         model = MistralForCausalLM.from_pretrained(
             tmp_model_path,
             torch_dtype=torch_dtype

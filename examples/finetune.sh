@@ -35,7 +35,7 @@ HELP_STR="[--rank=$RANK] [--size=$SIZE] [--tp=$TP] [--pp=$PP] [--gpus=$GPUS_PER_
 
 # define help function
 help () {
-	echo "Usage: $0 <gpt/llama/llama2/codellama/falcon> $HELP_STR"
+	echo "Usage: $0 <gpt/llama/llama2/codellama/falcon/mistral> $HELP_STR"
 }
 
 
@@ -159,8 +159,13 @@ elif [[ $MODEL = gpt ]]; then
 	if [[ $SEQ_LEN = none ]]; then
 		SEQ_LEN=2048
 	fi
+elif [[ $MODEL = mistral ]]; then
+	TOKENIZER=SentencePieceTokenizer
+	if [[ $SEQ_LEN = none ]]; then
+		SEQ_LEN=8192
+	fi
 else
-	echo "Model should be either gpt, llama or falcon, not $MODEL"
+	echo "Model should be either gpt, llama, llama2, codellama, mistral, or falcon, not $MODEL"
 	help
 	exit 1
 fi

@@ -8,7 +8,7 @@ Our repository is a modification of the `original Megatron-LM codebase <https://
 
 Added key features include:
 
-- `LLaMa <https://arxiv.org/abs/2302.13971>`_, `LLaMa 2 <https://arxiv.org/abs/2307.09288>`_, `Falcon <https://huggingface.co/tiiuae>`_, and `Code Llama <https://together.ai/blog/llama-2-7b-32k>`_ support.
+- `LLaMa <https://arxiv.org/abs/2302.13971>`_, `LLaMa 2 <https://arxiv.org/abs/2307.09288>`_, `Falcon <https://huggingface.co/tiiuae>`_, `Code Llama <https://together.ai/blog/llama-2-7b-32k>`_ `Mistral https://arxiv.org/abs/2310.06825`_ support.
 - support training of large models (70B Llama 2, 65B Llama 1, 34B Code Llama, and 40B Falcon) on commodity hardware on multiple nodes
 - 3-way parallelism: tensor parallel, pipeline parallel and data parallel training (inherited from Megatron)
 - full pretraining, finetuning and instruct tuning support

@@ -109,7 +109,7 @@ def main():
                                      allow_abbrev=False, conflict_handler='resolve')
 
     parser.add_argument('--model_type', type=str, required=True,
-                        choices=['GPT', 'BERT', 'falcon', 'llama', 'llama2', 'codellama'],
+                        choices=['GPT', 'BERT', 'falcon', 'llama', 'llama2', 'codellama', 'mistral'],
                         help='Type of the model')
     parser.add_argument('--loader', type=str, default='megatron',
                         help='Module name to load checkpoint, should be on python path')

@@ -23,7 +23,7 @@ from megatron.model.utils import attention_mask_func, erf_gelu
 # Extracted from: https://github.com/bigscience-workshop/Megatron-DeepSpeed
 from .glu_activations import GLU_ACTIVATIONS
 from megatron.model.positional_embeddings import precompute_freqs_cis, apply_rotary_emb
-
+from flash_attn.bert_padding import pad_input, unpad_input_for_concatenated_sequences
 
 """ We use the following notation throughout this file:
      h: hidden size
@@ -301,6 +301,7 @@ class ParallelAttention(MegatronModule):
         self.params_dtype = args.params_dtype
         self.sequence_parallel = args.sequence_parallel
         self.use_flash_attn = args.use_flash_attn
+        self.sliding_window_size = args.sliding_window_size
         self.num_attention_heads_kv = args.num_attention_heads_kv
         self.num_attention_heads = args.num_attention_heads
         self.seq_length = args.seq_length
@@ -309,6 +310,14 @@ class ParallelAttention(MegatronModule):
                                                           'self-attention for now')
             assert self.attn_mask_type == AttnMaskType.causal, ('FlashAttention code path only '
                                                                 'supports causal mask for now')
+            # If sliding window is enabled, we need to make sure that the sliding window is supported.
+            if self.sliding_window_size is not None:
+                import inspect
+                # https://github.com/huggingface/transformers/blob/7e1eff7600085814eac65876d4d8a0e38c2f6ccc/src/transformers/models/mistral/modeling_mistral.py#L50C5-L50C32
+                assert "window_size" in list(inspect.signature(
+                    flash_attn.flash_attn_func
+                ).parameters), "The current flash attention version does not support sliding window attention, please update to the latest version."
+                assert self.use_flash_attn, "Sliding window attention is only supported with flash attention for now."
 
         projection_size = args.kv_channels * args.num_attention_heads
 
@@ -513,13 +522,34 @@ class ParallelAttention(MegatronModule):
                 context_layer = self.core_attention(
                     query_layer, key_layer, value_layer, attention_mask)
         else:
+            flash_attn_extra_kwargs = {}
+            # check if we need to use sliding window attention
+            # https://github.com/huggingface/transformers/blob/7ee995fd9c692761c4601ddbffa2ac2ec9f27b0b/src/transformers/models/mistral/modeling_mistral.py#L353
+            if self.sliding_window_size is not None:
+                kv_seq_len = key_layer.shape[0]
+                if kv_seq_len > self.sliding_window_size:
+                    # https://github.com/huggingface/transformers/blob/7ee995fd9c692761c4601ddbffa2ac2ec9f27b0b/src/transformers/models/mistral/modeling_mistral.py#L510C21-L510C89
+                    flash_attn_extra_kwargs["window_size"] = (
+                        self.sliding_window_size, self.sliding_window_size
+                    )
+                    # It will be truncated to the actual sequence length inside flash attention
+                    # https://github.com/Dao-AILab/flash-attention/blob/83aef842beec1037eb8c1d9c3ef3ed8aae80b091/csrc/flash_attn/src/softmax.h#L159-L161
+
             q, k, v = [rearrange(x, "s b n h -> b s n h").contiguous()
-                       for x in (query_layer, key_layer, value_layer)]
+                    for x in (query_layer, key_layer, value_layer)]
             if not self.sequence_parallel:
                 with megatron.core.tensor_parallel.get_cuda_rng_tracker().fork():
-                    context_layer = self.core_attention_flash(q, k, v, causal=True)
+                    context_layer = self.core_attention_flash(
+                        q, k, v,
+                        causal=True,
+                        **flash_attn_extra_kwargs
+                    )
             else:
-                context_layer = self.core_attention_flash(q, k, v, causal=True)
+                context_layer = self.core_attention_flash(
+                    q, k, v,
+                    causal=True,
+                    **flash_attn_extra_kwargs
+                )
             context_layer = rearrange(context_layer, 'b s n h -> s b (n h)').contiguous()
 
         # =================

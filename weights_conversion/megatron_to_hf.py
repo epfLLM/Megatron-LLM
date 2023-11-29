@@ -393,14 +393,11 @@ def write_tokenizer(args: Namespace):
             hf_tokenizer.pad_token_id = mt_tokenizer.pad
 
         additional_special_tokens = hf_tokenizer.additional_special_tokens
-        special_tokens = {"additional_special_tokens": additional_special_tokens}
         if args.vocab_extra_ids_list:
             additional_special_tokens.extend(args.vocab_extra_ids_list.split(","))
 
-        hf_tokenizer.add_special_tokens(special_tokens_dict=special_tokens, replace_additional_special_tokens=True)
-
-        additional_special_tokens_ids = [mt_tokenizer.vocab.get(t) for t in additional_special_tokens]
-        hf_tokenizer.additional_special_tokens_ids = additional_special_tokens_ids
+        for special_token in additional_special_tokens:
+            hf_tokenizer.add_special_tokens({"additional_special_tokens": [special_token]})
 
         hf_vocab = hf_tokenizer.get_vocab()
         tokens_to_check = [

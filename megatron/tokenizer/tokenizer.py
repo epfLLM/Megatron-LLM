@@ -349,8 +349,8 @@ class _SentencePieceTokenizer(AbstractTokenizer):
             self._inv_vocab[i] = t
             self._vocab[t] = i
 
-        def _add_special_token(t):
-            if t not in self.vocab and not new_tokens:
+        def _add_special_token(t, force=False):
+            if t not in self.vocab and not new_tokens and not force:
                 return
             if t not in self._vocab:
                 next_id = len(self._vocab)
@@ -392,13 +392,17 @@ class _SentencePieceTokenizer(AbstractTokenizer):
         _add_special_token(eos_token)
         self._eos_id = self._vocab.get(eos_token)
 
+        if not new_tokens:
+            # default to eos
+            self._pad_id = self._eos_id
+
         for i in range(vocab_extra_ids):
             t = "<extra_id_{}>".format(i)
-            _add_special_token(t)
+            _add_special_token(t, force=True)
             self._t5_tokens += [t]
         if vocab_extra_ids_list:
             for t in vocab_extra_ids_list.split(","):
-                _add_special_token(t)
+                _add_special_token(t, force=True)
         print("Special tokens: {}".format(self._special_tokens))
 
     @property

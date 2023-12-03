@@ -8,14 +8,14 @@ Our repository is a modification of the `original Megatron-LM codebase <https://
 
 Added key features include:
 
-- `LLaMa <https://arxiv.org/abs/2302.13971>`_, `LLaMa 2 <https://arxiv.org/abs/2307.09288>`_, `Falcon <https://huggingface.co/tiiuae>`_, and `Code Llama <https://together.ai/blog/llama-2-7b-32k>`_ support.
-- support training of large models (70B Llama 2, 65B Llama 1, 34B Code Llama, and 40B Falcon) on commodity hardware on multiple nodes
+- architectures supported: `LLaMa <https://arxiv.org/abs/2302.13971>`_, `LLaMa 2 <https://arxiv.org/abs/2307.09288>`_, `Falcon <https://huggingface.co/tiiuae>`_, `Code Llama <https://together.ai/blog/llama-2-7b-32k>`_ and `Mistral https://arxiv.org/abs/2310.06825`_.
+- support training of large models (70B Llama 2, 65B Llama 1, 34B Code Llama, 40B Falcon and Mistral) on commodity hardware on multiple nodes
 - 3-way parallelism: tensor parallel, pipeline parallel and data parallel training (inherited from Megatron)
 - full pretraining, finetuning and instruct tuning support
 - Support for special tokens & tokenizers
 - grouped-query attention (GQA) and multi-query attention (MQA)
 - Rotary Position Embeddings (RoPE), RMS layer norm, Lima dropout
-- `ROPE scaling <https://together.ai/blog/llama-2-7b-32k>`_ for longer attention context support
+- `RoPE scaling <https://together.ai/blog/llama-2-7b-32k>`_ for longer attention context support
 - FlashAttention 2
 - BF16 / FP16 training
 - WandB integration
@@ -61,6 +61,7 @@ If you use this software please cite it:
                      Andreas Köpf  and
                      Kyle Matoba  and
                      Amirkeivan Mohtashami  and
+                     Xingyao Wang  and
                      Olivia Simin Fan  and
                      Axel Marmet  and
                      Deniz Bayazit  and
@@ -69,7 +70,7 @@ If you use this software please cite it:
                      Francesco Salvi  and
                      Antoine Bosselut  and
                      Martin Jaggi},
-     title        = {epfLLM Megatron-LM},
+     title        = {epfLLM Megatron-LLM},
      year         = 2023,
      url          = {https://github.com/epfLLM/Megatron-LLM}
    }

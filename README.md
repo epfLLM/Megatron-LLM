@@ -60,7 +60,7 @@ If you use this software please cite it:
                   Francesco Salvi  and
                   Antoine Bosselut  and
                   Martin Jaggi},
-  title        = {epfLLM Megatron-LM},
+  title        = {epfLLM Megatron-LLM},
   year         = 2023,
   url          = {https://github.com/epfLLM/Megatron-LLM}
 }

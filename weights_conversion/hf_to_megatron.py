@@ -358,6 +358,8 @@ def main(model_name: str = "falcon", size: int = 7, out: Optional[Path] = None,
                 args.update({"num_attention_heads_kv": 8})
             if size < 34 and not re.match(r"CodeLlama-\d+b-Python", cache_dir):
                 args.update({"padded_vocab_size": 32016})
+            if size == 70: # The vocab size of the three versions of codellama-70b is 32016
+                args.update({"padded_vocab_size": 32016})
         else:
             sys.exit(f"Model name has to be llama, llama2 or codellama, not {model_name}.")
 
@@ -440,7 +442,7 @@ if __name__ == "__main__":
     elif args.model == "llama":
         assert args.size in {7, 13, 30, 65}
     elif args.model == "codellama":
-        assert args.size in {7, 13, 34}
+        assert args.size in {7, 13, 34, 70}
     elif args.model == "mistral":
         assert args.size in {7}
     else:

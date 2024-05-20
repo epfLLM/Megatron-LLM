@@ -35,10 +35,15 @@ make html
 ```
 
 # Example models trained with *Megatron-LLM*
-70B Llama2: [meditron 70b](https://huggingface.co/epfl-llm/meditron-70b), [llama2-70b-oasst-sft-v10](https://huggingface.co/OpenAssistant/llama2-70b-oasst-sft-v10), 
-40B Falcon: [falcon-40b-megacode2-oasst](https://huggingface.co/OpenAssistant/falcon-40b-megacode2-oasst), 
-13B Code Llama: [codellama-13b-oasst-sft-v10](https://huggingface.co/OpenAssistant/codellama-13b-oasst-sft-v10), 
-7B Llama2: [meditron 7b](https://huggingface.co/epfl-llm/meditron-7b), ...
+- [TOWER: An Open Multilingual Large Language Model for Translation-Related Tasks](https://arxiv.org/abs/2402.17733)
+- [Sailor: A suite of Open Language Models tailored for South-East Asia](https://arxiv.org/abs/2404.03608)
+- [Meditron 70b: Scaling Medical Pretraining for Large Language Models](https://huggingface.co/epfl-llm/meditron-70b)
+- [Llama2-70b-OAsst-sft-v10](https://huggingface.co/OpenAssistant/llama2-70b-oasst-sft-v10)
+- [Falcon-40b-megacode2-OAsst](https://huggingface.co/OpenAssistant/falcon-40b-megacode2-oasst)
+- [CodeLlama-13b-OAsst-sft-v10](https://huggingface.co/OpenAssistant/codellama-13b-oasst-sft-v10)
+- [Meditron 7b](https://huggingface.co/epfl-llm/meditron-7b)
+-  ...
+
 (Let us know about yours!)
 
 # Citation

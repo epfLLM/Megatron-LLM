@@ -36,6 +36,7 @@ make html
 
 # Example models trained with *Megatron-LLM*
 - [TOWER: An Open Multilingual Large Language Model for Translation-Related Tasks](https://arxiv.org/abs/2402.17733)
+- [Executable Code Actions Elicit Better LLM Agents](https://arxiv.org/abs/2402.01030)
 - [Sailor: A suite of Open Language Models tailored for South-East Asia](https://arxiv.org/abs/2404.03608)
 - [Meditron 70b: Scaling Medical Pretraining for Large Language Models](https://huggingface.co/epfl-llm/meditron-70b)
 - [Llama2-70b-OAsst-sft-v10](https://huggingface.co/OpenAssistant/llama2-70b-oasst-sft-v10)

@@ -9,6 +9,7 @@ from megatron import get_args
 from megatron import get_num_microbatches
 from megatron import p2p_communication
 from megatron.core import mpu
+from megatron.core.weight_grad_store import WeightGradStore
 from megatron.utils import unwrap_model
 from megatron.model import DistributedDataParallel as LocalDDP
 from megatron.model import Float16Module
@@ -693,13 +694,24 @@ def forward_backward_pipelining_without_interleaving(forward_step_func,
             input_tensor = input_tensors.pop(0)
             output_tensor = output_tensors.pop(0)
 
+            # For BWF pattern or in rank 0, we don't split W and B for reasons below.
+            #   1. to leverage batched p2p op (send_backward_recv_forward)
+            #   2. to overlap grad all-reduce for tensor parallel
+            #   3. to avoid redoing grad all-gather for sequence parallel
+            # Note that the order of grad accumulation is changed by this behavior,
+            # thus causing a minor precision error compared to 1F1B even it's mathematically correct.
+            WeightGradStore.split_bw = (i < rank or last_iteration) and rank > 0
             input_tensor_grad = \
                 backward_step(optimizer, input_tensor, output_tensor,
                               output_tensor_grad, timers)
+            if WeightGradStore.split_bw:
+                WeightGradStore.flush()
 
             if last_iteration:
                 input_tensor = None
                 send_backward(input_tensor_grad, recv_tensor_shapes, timers=timers)
+                if i >= rank > 0:  # delay W by rank
+                    WeightGradStore.pop()  # W
             else:
                 input_tensor = \
                     send_backward_recv_forward(
@@ -713,10 +725,16 @@ def forward_backward_pipelining_without_interleaving(forward_step_func,
 
             output_tensor_grad = recv_backward(send_tensor_shapes, timers=timers)
 
+            WeightGradStore.split_bw = rank > 0
             input_tensor_grad = \
                 backward_step(optimizer, input_tensor, output_tensor,
                               output_tensor_grad, timers)
 
             send_backward(input_tensor_grad, recv_tensor_shapes, timers=timers)
+            if WeightGradStore.split_bw:
+                WeightGradStore.flush()
+                if num_microbatches_remaining + i >= rank:
+                    WeightGradStore.pop()  # W
+        WeightGradStore.pop_all()  # W
 
     return forward_data_store
